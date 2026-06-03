@@ -1,6 +1,21 @@
-# .gitignore
-data/
-mlruns/
-.venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+# Data and Artifact Isolation (Crucial for MLOps)
+**/project-1-credit-card-fraud/data/*
+!**/project-1-credit-card-fraud/data/kaggle.json
+
+# IDE Configurations
+.vscode/
+.idea/
