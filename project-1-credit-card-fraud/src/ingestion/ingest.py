@@ -1,31 +1,33 @@
 import os
 import sys
 import zipfile
-import shutil
+import pandas as pd
 from pathlib import Path
 
+# Force Python execution space to dynamically recognize our root package structure
 def get_project_root() -> Path:
-    """Dynamically determines the project root across scripts, notebooks, and Docker."""
-    # Handle interactive environments like Jupyter notebooks where __file__ is missing
     if "ipykernel" in sys.modules or "__file__" not in globals():
-        current_dir = Path(os.getcwd()).resolve()
-    else:
-        current_dir = Path(__file__).resolve().parent
-
-    # Traverse upward until finding a unique structural anchor file
+        return Path(os.getcwd()).resolve()
+    current_dir = Path(__file__).resolve().parent
     for parent in [current_dir] + list(current_dir.parents):
-        if (parent / "requirements.txt").exists() or (parent / ".git").exists() or (parent / "src").exists():
+        if (parent / "requirements.txt").exists() or (parent / ".git").exists():
             return parent
-            
-    # Fallback to safe structural routing if no anchor file is found
     return Path(__file__).resolve().parents[2]
 
-# 1. Unified Directory Routing
 ROOT_DIR = get_project_root()
-DATA_DIR = ROOT_DIR / "data"
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+# Absolute internal package path mapping
+from src.ingestion.schemas import TransactionInputSchema, ProcessedTransactionSchema
+from src.ingestion.utils import clean_and_transform_features
+
+# Base operational layout paths matching the repository structure
+DATA_DIR = ROOT_DIR / "project-1-credit-card-fraud" / "data"
 KAGGLE_JSON = DATA_DIR / "kaggle.json"
 RAW_DATA_PATH = DATA_DIR / "creditcard.csv"
-ZIP_DATA_PATH = DATA_DIR / "creditcardfraud.zip"  # Standard Kaggle download name
+ZIP_DATA_PATH = DATA_DIR / "creditcardfraud.zip"
+PROCESSED_OUTPUT_PATH = DATA_DIR / "processed_features.parquet"
 
 def download_raw_data():
     """
@@ -50,7 +52,6 @@ def download_raw_data():
         )
 
     # 3. Secure File Permissions (Crucial requirement for Kaggle API)
-    # Sets file permissions to read/write only for the owner (600)
     try:
         if os.name != 'nt':  # Linux / macOS
             os.chmod(KAGGLE_JSON, 0o600)
@@ -65,11 +66,11 @@ def download_raw_data():
         import kaggle
         print("📥 Requesting 'mlg-ulb/creditcardfraud' from Kaggle servers...")
         
-        # We download without unzipping first to cleanly catch mid-download disruptions
+        # Download without unzipping first to cleanly catch mid-download disruptions
         kaggle.api.dataset_download_files(
             "mlg-ulb/creditcardfraud", 
             path=str(DATA_DIR), 
-            unzip=False  # Handled manually next for greater reliability
+            unzip=False
         )
 
         # 6. Safe Zip Extraction Loop
@@ -93,3 +94,50 @@ def download_raw_data():
         if ZIP_DATA_PATH.exists():
             ZIP_DATA_PATH.unlink()
         raise RuntimeError(f"❌ Ingestion Pipeline Failure: {error}") from error
+
+def run_ingestion_pipeline():
+    """
+    Executes the ingestion lifecycle stages: download, schema enforcement, 
+    feature transformation, and structured output serialization.
+    """
+    print("🚀 Starting Production Ingestion Pipeline Sequence...")
+    
+    # 1. Trigger the Secure Data Ingestion/Download Engine
+    download_raw_data()
+        
+    # 2. Data stream ingestion
+    print(f"📖 Reading raw matrix data: {RAW_DATA_PATH.name}...")
+    raw_df = pd.read_csv(RAW_DATA_PATH)
+    
+    # 3. Governance Schema Validation Contract (Input Check)
+    print("🛡️ Evaluating raw ingestion payloads against TransactionInputSchema parameters...")
+    sample_payloads = raw_df.drop('Class', axis=1, errors='ignore').head(100).to_dict(orient='records')
+    try:
+        for payload in sample_payloads:
+            TransactionInputSchema(**payload)
+        print("✅ Entry payload schema contract: VALID.")
+    except Exception as validation_err:
+        raise ValueError(f"🚨 Ingestion block structural validation breach: {validation_err}")
+
+    # 4. Feature Extraction, duplicate cleansing, and scaling mutations
+    print("⚙️ Initiating feature scaling transformations...")
+    processed_df = clean_and_transform_features(raw_df)
+    
+    # 5. Downstream Compliance Contract Check (Output Check)
+    print("🛡️ Evaluating processed dataset weights against ProcessedTransactionSchema parameters...")
+    output_sample = processed_df.head(1).to_dict(orient='records')[0]
+    try:
+        ProcessedTransactionSchema(**output_sample)
+        print("✅ Post-processing schema compliance: VALID.")
+    except Exception as final_validation_err:
+        raise ValueError(f"🚨 Downstream model configuration schema mismatch anomaly: {final_validation_err}")
+
+    # 6. Save State via Engineered Parquet Serialization
+    PROCESSED_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    print(f"💾 Serializing optimized features to: {PROCESSED_OUTPUT_PATH.resolve()}")
+    processed_df.to_parquet(PROCESSED_OUTPUT_PATH, index=False, engine='pyarrow')
+    
+    print("🏁 Ingestion Pipeline execution sequence completed cleanly with zero exceptions.")
+
+if __name__ == "__main__":
+    run_ingestion_pipeline()
