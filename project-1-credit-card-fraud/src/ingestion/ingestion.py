@@ -23,7 +23,8 @@ from src.ingestion.schemas import TransactionInputSchema, ProcessedTransactionSc
 from src.ingestion.utils import clean_and_transform_features
 
 # Base operational layout paths matching the repository structure
-DATA_DIR = ROOT_DIR / "project-1-credit-card-fraud" / "data"
+# Base operational layout paths matching the repository structure
+DATA_DIR = ROOT_DIR / "data"
 KAGGLE_JSON = DATA_DIR / "kaggle.json"
 RAW_DATA_PATH = DATA_DIR / "creditcard.csv"
 ZIP_DATA_PATH = DATA_DIR / "creditcardfraud.zip"

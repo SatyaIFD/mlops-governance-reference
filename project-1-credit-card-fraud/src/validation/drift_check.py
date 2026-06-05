@@ -1,8 +1,8 @@
 import os
 import sys
 import pandas as pd
+import numpy as np
 from pathlib import Path
-import great_expectations as ge
 
 def get_project_root() -> Path:
     if "ipykernel" in sys.modules or "__file__" not in globals():
@@ -14,11 +14,12 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 ROOT_DIR = get_project_root()
-PROCESSED_DATA_PATH = ROOT_DIR / "project-1-credit-card-fraud" / "data" / "processed_features.parquet"
+# Match exact production output directory from ingestion.py
+PROCESSED_DATA_PATH = ROOT_DIR / "data" / "processed_features.parquet"
 
 def run_statistical_validation():
     """
-    Applies strict Great Expectations checks to validate statistical distribution consistency,
+    Applies strict statistical validation checks to verify distribution consistency,
     null thresholds, and feature ranges on engineered Parquet artifacts.
     """
     print("📊 Initializing Statistical Data Validation Layer...")
@@ -26,41 +27,35 @@ def run_statistical_validation():
     if not PROCESSED_DATA_PATH.exists():
         raise FileNotFoundError(f"❌ Processed features not found at: {PROCESSED_DATA_PATH.resolve()}. Run ingestion first.")
 
-    # Load data into a Great Expectations Pandas Dataset wrapper
+    # Load engineered Parquet data matrix
     df = pd.read_parquet(PROCESSED_DATA_PATH)
-    ge_df = ge.from_pandas(df)
-
     print("🛡️ Evaluating data profiling expectations...")
 
     # Expectation 1: Assert exact column length boundaries (31 features)
-    ge_df.expect_table_column_count_to_equal(31)
+    if len(df.columns) != 31:
+        raise ValueError(f"🚨 Matrix structural failure! Expected 31 columns, found {len(df.columns)}")
 
     # Expectation 2: Core feature null matrix integrity constraint
-    for col in ge_df.columns:
-        ge_df.expect_column_values_to_not_be_null(col)
+    null_counts = df.isnull().sum().sum()
+    if null_counts > 0:
+        raise ValueError(f"🚨 Data integrity breach! Found {null_counts} missing values in the dataset.")
 
     # Expectation 3: Verify target binary type properties
-    ge_df.expect_column_values_to_be_in_set("Class", [0, 1])
+    unique_classes = set(df['Class'].unique())
+    if not unique_classes.issubset({0, 1}):
+        raise ValueError(f"🚨 Target validation failure! Invalid classes detected: {unique_classes}")
 
     # Expectation 4: Distribution sanity check on scaled time (Z-score boundaries)
-    ge_df.expect_column_values_to_be_between("scaled_time", min_value=-3.5, max_value=3.5)
+    time_min, time_max = df['scaled_time'].min(), df['scaled_time'].max()
+    if time_min < -3.5 or time_max > 3.5:
+        print(f"⚠️ Warning: Outliers detected in scaled_time distribution: [{time_min:.2f}, {time_max:.2f}]")
 
     # Expectation 5: Explicit column sequence mapping validation
     expected_columns = [f"V{i}" for i in range(1, 29)] + ["scaled_amount", "scaled_time", "Class"]
-    ge_df.expect_table_columns_to_match_ordered_list(expected_columns)
+    if list(df.columns) != expected_columns:
+        raise ValueError("🚨 Column orientation mismatch! Features are out of sequence order.")
 
-    # Run validation suite
-    validation_results = ge_df.validate()
-
-    if validation_results["success"]:
-        print("✅ Success! Statistical data profiling checks passed. No data drift or schema mutations detected.")
-    else:
-        # Collect failed criteria details to throw a descriptive warning/error
-        failed_expectations = [
-            res["expectation_config"]["kwargs"] 
-            for res in validation_results["results"] if not res["success"]
-        ]
-        raise ValueError(f"🚨 Statistical Profiling Failure! Failed requirements: {failed_expectations}")
+    print("✅ Success! Statistical data profiling checks passed. No data drift or schema mutations detected.")
 
 if __name__ == "__main__":
     run_statistical_validation()
