@@ -1,21 +1,41 @@
+# =====================================================================
 # Byte-compiled / optimized / DLL files
+# =====================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments
+# =====================================================================
+# Virtual Environments & Packages
+# =====================================================================
 .venv/
 venv/
 ENV/
 env/
+.uv/
 
-# Jupyter Notebook checkpoints
+# =====================================================================
+# Jupyter Notebook Checkpoints & Playgrounds
+# =====================================================================
 .ipynb_checkpoints/
 
-# Data and Artifact Isolation (Crucial for MLOps)
-**/project-1-credit-card-fraud/data/*
-!**/project-1-credit-card-fraud/data/kaggle.json
-
+# =====================================================================
 # IDE Configurations
+# =====================================================================
 .vscode/
 .idea/
+
+# =====================================================================
+# MLOps Pipeline State & Artifact Isolation
+# =====================================================================
+# Block mutating tracking database binary and filesystem artifacts
+mlflow.db
+mlruns/
+
+# Block large raw datasets to prevent repository bloating
+project-1-credit-card-fraud/data/*.csv
+project-1-credit-card-fraud/data/*.zip
+project-1-credit-card-fraud/data/*.parquet
+
+# ABSOLUTE SECURITY: Force-block private authentication API tokens
+project-1-credit-card-fraud/data/kaggle.json

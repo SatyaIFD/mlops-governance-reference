@@ -1,0 +1,28 @@
+# =====================================================================
+# Git LFS (Large File Storage) Configuration
+# =====================================================================
+# Track massive serialized data matrices and model weights via LFS
+*.parquet filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.csv filter=lfs diff=lfs merge=lfs -text
+
+# =====================================================================
+# Text & Line Ending Normalization
+# =====================================================================
+# Enforce LF line endings on all platform scripts to prevent 
+# Windows (CRLF) vs Linux (LF) shell execution breaks
+*.py text eol=lf
+*.sh text eol=lf
+*.ipynb text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.txt text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# =====================================================================
+# Diff Customization for Notebooks
+# =====================================================================
+# Treat Jupyter Notebooks as text but make them clearer to merge
+*.ipynb text diff=json
