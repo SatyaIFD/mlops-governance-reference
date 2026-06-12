@@ -2,28 +2,28 @@
 
 An end-to-end, reproducible Machine Learning Operations (MLOps) pipeline built for credit card fraud classification, risk auditing, and automated data drift monitoring. 
 
-This project goes beyond standard model training to implement Explainable AI (XAI) compliance audits, fairness evaluations, and statistical data monitoring routines suitable for highly regulated financial environments.
+This project transitions exploratory modeling code into modular, contract-validated software sub-packages to implement Explainable AI (XAI) compliance audits, fairness evaluations, and real-time REST API endpoints suitable for highly regulated financial environments.
 
 ---
 
 ## Architecture Overview
 
-The system transitions from exploratory analysis into automated production components across four core lifecycle stages:
+The system moves away from raw, manual notebook execution toward automated software components segmented by clear structural boundaries:
 
-1. **Ingestion & Data Engineering (`01_data_ingestion.ipynb`)**
-   Loads high-precision transactional records, enforces schema constraints, and serializes optimized analytical features into compressed columnar storage.
-2. **Experiment Tracking & Orchestration (`02_model_training.ipynb`)**
-   Orchestrates hyperparameter sweep matrices using XGBoost. All optimization paths, performance weights, and training metrics are registered directly into a centralized relational metadata database.
-3. **Fairness Auditing & Compliance (`03_fairness_and_governance.ipynb`)**
+1. **Ingestion & Data Engineering (`src/ingestion/`)**
+   Loads transactional telemetry records, handles memory-efficient type downcasting, and exports deterministic Train/Test data splits into compressed columnar storage.
+2. **Experiment Tracking & Orchestration (`src/training/`)**
+   Automates hyperparameter sweep matrices via XGBoost. All optimization paths, performance weights, and training metrics are registered directly into a centralized relational metadata database.
+3. **Fairness Auditing & Compliance (`src/governance/`)**
    Leverages game-theoretic Shapley values (`SHAP`) to map exact feature risk attribution and calculates demographic/financial disparity metrics across explicit transaction sub-segments.
-4. **Production Observability & Monitoring (`04_production_observability.ipynb` / `src/observability.py`)**
+4. **Production Observability & Monitoring (`src/monitoring/`)**
    Implements a statistical Population Stability Index (PSI) watchdog component to mathematically quantify profile distribution shifts on incoming production inference batches.
 
 ---
 
 ## Technical Specifications & Environment
 
-- **Core Frameworks:** Python 3.12+, XGBoost, MLflow, SHAP, Pytest, Pandas, PyArrow
+- **Core Frameworks:** Python 3.12+, XGBoost, MLflow, FastAPI, Uvicorn, SHAP, Pytest, Pandas, PyArrow
 - **Environment Context:** Configured for local Ubuntu Linux workspaces (`/media/storage/mlops-governance-reference`)
 - **Isolation Strategy:** All data engine tracks are entirely decoupled from physical absolute path variables using runtime package resolution (`sys.path` injection) to ensure seamless containerized migrations or automated CI/CD runs.
 
@@ -66,7 +66,7 @@ To verify that the model treats different financial sub-segments equitably, we r
 
 **Audit Conclusion (🚨 CRITICAL PRODUCTION BLOCKER):** With a metric of **0.2129**, the model exhibits severe **Disparate Impact**. It flags high-value transactions for fraud at nearly **5 times** the rate of low-value transactions. In a live banking system, this represents an unacceptable operational risk that would disproportionately disrupt high-net-worth customers, trigger a massive spike in false-positive disputes, and fail an external regulatory compliance audit. 
 
-*Remediation Plan:* This model version is blocked from production migration. The next development phase requires implementing adversarial debiasing, sample loss re-weighting during the `02_model_training` phase, or applying post-processing decision threshold adjustments to bring the Disparate Impact Ratio back within the mandatory **0.80–1.25** compliance envelope.
+*Remediation Plan:* This model version is blocked from production migration. The next development phase requires implementing adversarial debiasing, sample loss re-weighting during the `src/training/train.py` phase, or applying post-processing decision threshold adjustments to bring the Disparate Impact Ratio back within the mandatory **0.80–1.25** compliance envelope.
 
 ### 3. Data Drift Observability Validation
 Simulated live production batches featuring an adversarial shift on key features successfully tripped our tracking thresholds:
@@ -88,7 +88,18 @@ project-1-credit-card-fraud/
 │   └── 04_production_observability.ipynb
 ├── src/
 │   ├── __init__.py
-│   └── observability.py
+│   ├── ingestion/
+│   │   ├── __init__.py
+│   │   └── extract.py
+│   ├── training/
+│   │   ├── __init__.py
+│   │   └── train.py
+│   ├── inference/
+│   │   ├── __init__.py
+│   │   └── app.py
+│   └── monitoring/
+│       ├── __init__.py
+│       └── observability.py
 ├── tests/
 │   ├── __init__.py
 │   └── test_observability.py
