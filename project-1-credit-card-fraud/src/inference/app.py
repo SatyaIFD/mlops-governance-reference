@@ -70,9 +70,8 @@ def predict_fraud(payload: TransactionData):
     if model is None:
         raise HTTPException(status_code=503, detail="Inference engine is uninitialized.")
         
-    # FIX: Change 'scaled_amount' and 'scaled_time' back to the model's expected 'Amount' and 'Time'
-    # Change the structural alignment sequence to place 'Time' first and 'Amount' last to match training data positions
-    feature_names = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
+    # FIX: The model expects V1-V28 first, followed by scaled_amount, then scaled_time
+    feature_names = [f"V{i}" for i in range(1, 29)] + ["scaled_amount", "scaled_time"]
     
     # Format incoming telemetry matrix safely into an analytical dataframe
     df = pd.DataFrame([payload.features], columns=feature_names)
