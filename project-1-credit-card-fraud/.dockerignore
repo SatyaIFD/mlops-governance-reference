@@ -1,0 +1,16 @@
+# Ignore raw datasets and notebook scratchpads
+data/
+notebooks/
+
+# Ignore local environment and cache files
+.venv/
+miniconda3/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ignore Git history
+.git/
+.github/
+
+# Keep only the src/, requirements.txt, and the mlflow.db/artifacts needed to run the model
