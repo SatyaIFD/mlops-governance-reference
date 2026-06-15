@@ -4,13 +4,15 @@ Unit tests for the observability module.
 
 import os
 import sys
+import numpy as np
+import pytest
 from pathlib import Path
 
 # Dynamically inject the src container into the runtime path mapping
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 # Now your original imports will resolve seamlessly across all execution methods
-from src.observability import calculate_psi, evaluate_drift_status
+from src.monitoring.observability import calculate_psi, evaluate_drift_status
 
 def test_calculate_psi_identical_distributions():
     """Ensure that identical distributions return a PSI near zero."""
