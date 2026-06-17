@@ -12,17 +12,17 @@ This report documents the quantitative compliance validation for the Credit Card
 ---
 
 ## 2. Quantitative Fairness & Anti-Bias Audit
-To ensure compliance with the **Four-Fifths Rule** (Demographic/Statistical Parity), we executed a proxy audit segmented across transaction scale categories (`scaled_amount`), tracking whether affluent user profiles are targeted at disproportionate rates.
+To ensure compliance with the **Four-Fifths Rule** (Demographic/Statistical Parity), we executed a proxy audit segmented across transaction scale categories (`Amount`), tracking whether affluent user profiles are targeted at disproportionate rates.
 
 ### Audit Metrics Summary:
-- **Baseline Group (Low-Value Transactions):** Flagging Rate = **0.0012 (0.12%)**
-- **Protected/Proxy Group (High-Value Transactions):** Flagging Rate = **0.0057 (0.57%)**
-- **Calculated Disparate Impact Ratio:** **0.2129**
+- **Baseline Group (Low-Value Transactions):** Flagging Rate = **0.001252 (0.125%)**
+- **Protected/Proxy Group (High-Value Transactions):** Flagging Rate = **0.002271 (0.227%)**
+- **Calculated Disparate Impact Ratio:** **1.8135**
 
 ### Regulatory Compliance Evaluation:
 The industry-mandated compliance guardrail envelope requires a Disparate Impact Ratio between **0.80 and 1.25**. 
 
-A calculated score of **0.2129** demonstrates severe systemic bias. High-value transactions are flagged at nearly **5 times** the frequency of baseline transactions. Deploying this model into live production would cause immediate operational disruptions for premium wealth account tiers, trigger an unacceptable surge in false-positive complaints, and fail external compliance validation.
+A calculated score of **1.8135** demonstrates substantial systemic divergence. High-value transactions are flagged at nearly **1.8 times** the frequency of baseline transactions, creating an unmitigated production blocker.
 
 ---
 

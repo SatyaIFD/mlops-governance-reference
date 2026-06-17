@@ -15,10 +15,10 @@
 Evaluated across stratified transaction vectors containing extreme minority class imbalances (0.17% baseline presence):
 
 - **Global Accuracy:** 99.94%
-- **Precision (Positive Predictive Value):** 0.8842
-- **Recall (Sensitivity):** 0.7921
-- **F1-Score Metrics:** 0.8356
-- **ROC-AUC Score:** 0.9743
+- **Precision (Positive Predictive Value):** 0.5891
+- **Recall (Sensitivity):** 0.8000
+- **F1-Score Metrics:** 0.6786
+- **ROC-AUC Score:** 0.9734
 
 ## 4. Ethical & Training Constraints
 - **Training Constraints:** Numerical floating-point integrity is structurally locked using localized PyArrow columnar Parquet datasets.
@@ -28,3 +28,4 @@ Evaluated across stratified transaction vectors containing extreme minority clas
 - **Data Drift Watchdog:** Custom Population Stability Index (PSI) tracker with Laplace adjustment configurations ($1e^{-4}$).
 - **Warning Threshold:** `PSI > 0.10` (Triggers operational inspection logs).
 - **Critical Breaker Threshold:** `PSI > 0.25` (Triggers automatic retraining pipeline generation).
+- **Calculated Disparate Impact Ratio:** 1.8135 (🚨 Critical Production Blocker: Exceeds 1.25 Threshold)

@@ -54,10 +54,19 @@ Operating an AI model within financial risk sectors requires strict compliance t
 - **Audit Findings:** The compliance audit verified that the model relies heavily on hidden latent transaction signatures—specifically **`V14`**, **`V17`**, and **`V12`**—to isolate fraudulent patterns. Features like `Amount` carry a lower global priority weight, minimizing the risk that an ordinary high-value purchase is flagged as fraud purely due to its scale.
 
 ### 2. Quantitative Fairness & Anti-Bias Audit (Proxy Segment Review)
-To verify that the model treats different financial sub-segments equitably, we ran a proxy metric audit based on transaction scale (`scaled_amount`), tracking if affluent user profiles are penalized at disproportionate rates.
+To verify that the model treats different financial sub-segments equitably, we ran a proxy metric audit based on transaction scale (`Amount`), tracking if affluent user profiles are penalized at disproportionate rates.
 
 - **The Metric (Disparate Impact Ratio):** Calculated by dividing the selection rate (flagging rate) of the protected/unfavorable group by the selection rate of the baseline group.
 - **Regulatory Guardrail:** Industry compliance standards enforce the **Four-Fifths Rule**. A calculated ratio between **0.80 and 1.25** indicates equitable statistical parity. Anything outside this window demonstrates systematic bias.
+
+#### Critical Audit Discovery:
+- **High-Value Transaction Flagging Rate:** 0.002271 (0.227%)
+- **Low-Value Transaction Flagging Rate:** 0.001252 (0.125%)
+- **Calculated Disparate Impact Ratio:** **1.8135**
+
+**Audit Conclusion (🚨 CRITICAL PRODUCTION BLOCKER):** With a metric of **1.8135**, the model exhibits severe **Disparate Impact**. It flags high-value transactions for fraud at nearly **1.8 times** the rate of low-value transactions. In a live banking system, this represents an unacceptable operational risk that would disproportionately disrupt high-net-worth customers, trigger a massive spike in false-positive disputes, and fail an external regulatory compliance audit. 
+
+*Remediation Plan:* This model version is blocked from production migration. The next development phase requires implementing adversarial debiasing, sample loss re-weighting during the `src/training/train.py` phase, or applying post-processing decision threshold adjustments to bring the Disparate Impact Ratio back within the mandatory **0.80–1.25** compliance envelope.
 
 #### Critical Audit Discovery:
 - **High-Value Transaction Flagging Rate:** 0.0057 (0.57%)
@@ -81,6 +90,12 @@ The custom module handles zero-width bin boundaries safely via uniform linear sp
 
 ```text
 project-1-credit-card-fraud/
+├── data/
+│   └── processed/          
+├── docs/
+│   ├── gdpr_controls.md    
+│   ├── model_card.md       
+│   └── risk_assessment.md  
 ├── notebooks/
 │   ├── 01_data_ingestion.ipynb
 │   ├── 02_model_training.ipynb
@@ -89,18 +104,18 @@ project-1-credit-card-fraud/
 ├── src/
 │   ├── __init__.py
 │   ├── ingestion/
-│   │   ├── __init__.py
 │   │   └── extract.py
 │   ├── training/
-│   │   ├── __init__.py
 │   │   └── train.py
 │   ├── inference/
-│   │   ├── __init__.py
 │   │   └── app.py
-│   └── monitoring/
-│       ├── __init__.py
-│       └── observability.py
+│   ├── monitoring/
+│   │   └── observability.py
+│   └── governance/
+│       └── audit.py
 ├── tests/
-│   ├── __init__.py
-│   └── test_observability.py
+│   ├── test_inference.py
+│   ├── test_ingestion.py
+│   ├── test_observability.py
+│   └── test_governance.py
 └── README.md
