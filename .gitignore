@@ -28,14 +28,14 @@ env/
 # =====================================================================
 # MLOps Pipeline State & Artifact Isolation
 # =====================================================================
-# Block mutating tracking database binary and filesystem artifacts
 mlflow.db
 mlruns/
 
-# Block large raw datasets to prevent repository bloating
+# Block all messy uncompressed raw text datasets completely
 project-1-credit-card-fraud/data/*.csv
 project-1-credit-card-fraud/data/*.zip
-project-1-credit-card-fraud/data/*.parquet
-
-# ABSOLUTE SECURITY: Force-block private authentication API tokens
 project-1-credit-card-fraud/data/kaggle.json
+
+# ALLOW your clean, compressed validation Parquet files to pass into LFS tracking
+# (This unblocks them so .gitattributes can step in)
+!project-1-credit-card-fraud/data/processed/*.parquet
