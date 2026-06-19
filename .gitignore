@@ -31,11 +31,22 @@ env/
 mlflow.db
 mlruns/
 
-# Block all messy uncompressed raw text datasets completely
+# =====================================================================
+# Project 1 Data Security & Storage Boundaries
+# =====================================================================
 project-1-credit-card-fraud/data/*.csv
 project-1-credit-card-fraud/data/*.zip
 project-1-credit-card-fraud/data/kaggle.json
 
-# ALLOW your clean, compressed validation Parquet files to pass into LFS tracking
-# (This unblocks them so .gitattributes can step in)
+# ALLOW Project 1 clean validation Parquet files to pass into LFS tracking
 !project-1-credit-card-fraud/data/processed/*.parquet
+
+# =====================================================================
+# Project 2 Data Security & Storage Boundaries (Loan Default Showcase)
+# =====================================================================
+project-2-loan-default/data/*.csv
+project-2-loan-default/data/*.zip
+project-2-loan-default/data/kaggle.json
+
+# ALLOW Project 2 clean validation Parquet files to pass into LFS tracking
+!project-2-loan-default/data/processed/*.parquet
