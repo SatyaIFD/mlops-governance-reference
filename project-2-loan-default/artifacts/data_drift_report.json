@@ -1,0 +1,21 @@
+{
+    "drift_detected_alert": false,
+    "metrics": {
+        "CreditScore": {
+            "psi_value": 0.0003,
+            "status": "STABLE"
+        },
+        "Income": {
+            "psi_value": 0.0002,
+            "status": "STABLE"
+        },
+        "LoanAmount": {
+            "psi_value": 0.0828,
+            "status": "STABLE"
+        },
+        "DTIRatio": {
+            "psi_value": 0.0002,
+            "status": "STABLE"
+        }
+    }
+}
