@@ -1,0 +1,28 @@
+# Ignore python compilation assets
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Ignore local virtual environments
+env/
+venv/
+.env
+.venv
+oneenv/
+
+# Ignore local IDE configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore operating system garbage files
+.DS_Store
+Thumbs.db
+
+# Ignore raw/large tracking databases if we want them decoupled from base images
+# mlflow.db
+# mlruns/
