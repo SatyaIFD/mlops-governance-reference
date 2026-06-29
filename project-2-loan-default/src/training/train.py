@@ -111,5 +111,9 @@ if __name__ == "__main__":
     BASE_DIR = SRC_DIR.parents[1]
     DATA_DIR = BASE_DIR / "data" / "processed"
     
+    # EXPLICIT ALIGNMENT: Map global backend tracking store onto a shared SQLite DB file
+    db_path = BASE_DIR / "mlflow.db"
+    mlflow.set_tracking_uri(f"sqlite:///{db_path}")
+    
     trainer = LoanModelTrainer(data_dir=DATA_DIR)
     trainer.run_pipeline()
