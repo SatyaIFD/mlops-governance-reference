@@ -70,6 +70,10 @@ def load_production_model():
     SRC_DIR = Path(__file__).resolve().parent
     BASE_DIR = SRC_DIR.parents[1]
     
+    # EXPLICIT ALIGNMENT: Point to the local SQLite DB asset 
+    db_path = BASE_DIR / "mlflow.db"
+    mlflow.set_tracking_uri(f"sqlite:///{db_path}")
+    
     experiment = mlflow.get_experiment_by_name("loan_default_risk_governance")
     if not experiment:
         raise RuntimeError("❌ Cannot initialize API: 'loan_default_risk_governance' experiment does not exist.")
