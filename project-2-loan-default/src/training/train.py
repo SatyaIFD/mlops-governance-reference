@@ -103,7 +103,11 @@ class LoanModelTrainer:
             mlflow.log_metric("disparate_impact_ratio", di_ratio)
             
             # Register model binary artifact safely
-            mlflow.xgboost.log_model(model, "fair_loan_model")
+            mlflow.xgboost.log_model(
+                xgb_model=model,
+                artifact_path="fair_loan_model",
+                registered_model_name="loan_default_production_model"
+            )
             print("💾 Production run completely tracked in system registry.")
 
 if __name__ == "__main__":

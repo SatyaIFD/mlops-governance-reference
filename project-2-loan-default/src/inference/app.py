@@ -62,35 +62,25 @@ class LoanApplicationPayload(BaseModel):
 
 @app.on_event("startup")
 def load_production_model():
-    """Resolves and caches the latest active fair model from the local MLflow registry."""
+    """Resolves and caches the active model directly from the formal MLflow Registry catalog."""
     global model, feature_columns
     print("🚀 Initializing inference context...")
     
-    # Locate the active MLflow tracking directory
     SRC_DIR = Path(__file__).resolve().parent
     BASE_DIR = SRC_DIR.parents[1]
     
-    # EXPLICIT ALIGNMENT: Point to the local SQLite DB asset 
     db_path = BASE_DIR / "mlflow.db"
     mlflow.set_tracking_uri(f"sqlite:///{db_path}")
     
-    experiment = mlflow.get_experiment_by_name("loan_default_risk_governance")
-    if not experiment:
-        raise RuntimeError("❌ Cannot initialize API: 'loan_default_risk_governance' experiment does not exist.")
-        
-    runs = mlflow.search_runs(experiment_ids=[experiment.experiment_id], order_by=["attributes.start_time DESC"])
-    if runs.empty:
-        raise RuntimeError("❌ Cannot initialize API: No logged model runs found.")
-        
-    latest_run_id = runs.iloc[0]["run_id"]
-    model_uri = f"runs:/{latest_run_id}/fair_loan_model"
+    # SYSTEM UPGRADE: Target the formal production asset pointer natively
+    # Using the standardized MLflow Registry URI convention: models:/<model_name>/latest
+    model_uri = "models:/loan_default_production_model/latest"
     
-    print(f"🌲 Loading fair model binary from run ID: {latest_run_id}")
+    print(f"🌲 Loading active fair model binary from Registry catalog: {model_uri}")
     model = mlflow.xgboost.load_model(model_uri)
     
-    # Capture exact feature mapping structure expected by the frozen XGBoost model
     feature_columns = model.get_booster().feature_names
-    print("✅ Model successfully cached. Service ready for incoming payloads.")
+    print("✅ Model successfully cached from Registry. Service ready.")
 
 @app.on_event("startup")
 def verify_training_features():
