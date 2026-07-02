@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install basic system library dependencies (CORRECTED FLAG HERE)
+# Install basic system library dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \

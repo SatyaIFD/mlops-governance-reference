@@ -67,15 +67,16 @@ def load_production_model():
     print("🚀 Initializing inference context...")
     
     SRC_DIR = Path(__file__).resolve().parent
-    BASE_DIR = SRC_DIR.parents[1]
     
-    db_path = BASE_DIR / "mlflow.db"
+    # Environment-Aware Pathing: Aligns perfectly with train.py structure
+    if Path("/app").exists() and str(SRC_DIR).startswith("/app"):
+        db_path = Path("/app/mlflow.db")
+    else:
+        db_path = SRC_DIR.parents[1] / "mlflow.db" # Points to project-2-loan-default/mlflow.db
+    
     mlflow.set_tracking_uri(f"sqlite:///{db_path}")
     
-    # SYSTEM UPGRADE: Target the formal production asset pointer natively
-    # Using the standardized MLflow Registry URI convention: models:/<model_name>/latest
     model_uri = "models:/loan_default_production_model/latest"
-    
     print(f"🌲 Loading active fair model binary from Registry catalog: {model_uri}")
     model = mlflow.xgboost.load_model(model_uri)
     

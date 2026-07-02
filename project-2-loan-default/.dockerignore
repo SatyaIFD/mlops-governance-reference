@@ -23,6 +23,7 @@ oneenv/
 .DS_Store
 Thumbs.db
 
-# Ignore raw/large tracking databases if we want them decoupled from base images
-# mlflow.db
-# mlruns/
+# 🎯 DYNAMIC STRATEGY ALIGNMENT: Exclude local databases and telemetry pools
+mlflow.db
+mlruns/
+artifacts/
