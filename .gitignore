@@ -48,5 +48,8 @@ project-2-loan-default/data/*.csv
 project-2-loan-default/data/*.zip
 project-2-loan-default/data/kaggle.json
 
+# Block all generated transaction ledgers, performance drift maps, and audit reports
+project-2-loan-default/artifacts/
+
 # ALLOW Project 2 clean validation Parquet files to pass into LFS tracking
 !project-2-loan-default/data/processed/*.parquet
