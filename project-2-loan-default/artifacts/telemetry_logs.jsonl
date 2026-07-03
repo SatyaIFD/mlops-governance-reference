@@ -1,1 +1,0 @@
-{"timestamp": "2026-06-25 05:06:40", "status_code": 200, "latency_ms": 14.25, "payload_snapshot": {"Age": 24, "Income": 62000, "CreditScore": 710, "LoanAmount": 12000, "DTIRatio": 0.28}, "inference_output": {"default_probability": 0.0475, "underwriting_decision": "APPROVED", "demographic_cohort": "Protected Young Cohort"}}
