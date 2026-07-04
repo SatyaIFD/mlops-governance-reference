@@ -4,12 +4,12 @@
 ---
 
 ## ⚖️ Model Governance & Fairness Summary
-* **Demographic Parity Status:** `UNKNOWN`
-* **Disparate Impact Ratio (Young vs. Control Group):** `N/A`
+* **Demographic Parity Status:** `NON-COMPLIANT (BREACH)`
+* **Disparate Impact Ratio (Young vs. Control Group):** `0.0`
 > *Note: Compliance requires the disparate impact ratio to sit between 0.80 and 1.25 to meet the industry standard 4/5ths rule for fair lending practices.*
 
 ## 📊 Core Performance Metrics
-* **Model Accuracy Status:** `N/A`
+* **Model Accuracy Status:** `91.4% (Baseline Validation)`
 * **Underwriting Decision Mode:** Equalized Odds Mitigation Constraints Applied
 
 ## 📡 Population Stability & Production Drift

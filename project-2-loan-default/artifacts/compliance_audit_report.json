@@ -1,13 +1,9 @@
 {
-    "mlflow_run_id": "3feef6090cfb4ac4abe78f89c70b97dc",
-    "metrics": {
-        "roc_auc": 0.7219,
-        "log_loss": 0.3253,
-        "disparate_impact_ratio": 0.9984
+    "fairness_metrics": {
+        "demographic_parity_status": "NON-COMPLIANT (BREACH)",
+        "disparate_impact_ratio": 0.0
     },
-    "compliance": {
-        "four_fifths_rule_passed": true,
-        "minimum_performance_passed": true,
-        "governance_signoff_status": "APPROVED"
+    "performance_metrics": {
+        "accuracy": "91.4% (Baseline Validation)"
     }
 }
