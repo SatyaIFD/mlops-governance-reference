@@ -1,0 +1,47 @@
+name: Project 2 - Loan Default Governance Validation CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'project-2-loan-default/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'project-2-loan-default/**'
+
+jobs:
+  governance-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository Code
+      uses: actions/checkout@v4
+
+    - name: Initialize Python Runtime Environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas xgboost scikit-learn mlflow httpx
+
+    - name: Enforce Operational Directory Structures
+      run: |
+        mkdir -p project-2-loan-default/artifacts
+        mkdir -p project-2-loan-default/docs
+
+    - name: Validate Statistical Population Drift Integrity (PSI)
+      run: |
+        PYTHONPATH=. python project-2-loan-default/src/validation/drift_check.py
+
+    - name: Verify Automated Governance Card Compilation
+      run: |
+        PYTHONPATH=. python project-2-loan-default/src/governance/audit.py
+
+    - name: Audit Generated Assets Presence
+      run: |
+        test -f project-2-loan-default/artifacts/data_drift_report.json
+        test -f project-2-loan-default/docs/model_card.md
