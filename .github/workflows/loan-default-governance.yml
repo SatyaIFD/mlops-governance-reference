@@ -9,6 +9,7 @@ on:
     branches: [ main ]
     paths:
       - 'project-2-loan-default/**'
+  workflow_dispatch:
 
 jobs:
   governance-audit:
