@@ -53,3 +53,14 @@ project-2-loan-default/artifacts/
 
 # ALLOW Project 2 clean validation Parquet files to pass into LFS tracking
 !project-2-loan-default/data/processed/*.parquet
+# ==========================================
+# Apache Airflow Ephemeral & Governance State
+# ==========================================
+project-2-loan-default/airflow/airflow.db
+project-2-loan-default/airflow/airflow.db-journal
+project-2-loan-default/airflow/logs/
+project-2-loan-default/airflow/*.log
+project-2-loan-default/airflow/*.pid
+project-2-loan-default/airflow/airflow.cfg
+project-2-loan-default/airflow/webserver_config.py
+*.log
