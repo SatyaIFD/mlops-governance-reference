@@ -83,10 +83,7 @@ Population stability is verified by tracking the **Population Stability Index (P
 
 The operational pipeline is entirely automated via an Apache Airflow Directed Acyclic Graph (DAG) running locally inside an isolated repository environment. The scheduler coordinates tasks sequentially, parsing execution results and exporting compliance states without manual shell intervention.
 
-```
 [stream_production_traffic] ──> [audit_fairness_metrics] ──> [check_population_data_drift] ──> [compile_regulatory_model_card]
-
-```
 
 ### ⚙️ Environment Initialization
 
