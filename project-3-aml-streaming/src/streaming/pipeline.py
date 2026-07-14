@@ -16,7 +16,9 @@ def run_production_stream_pipeline():
     # Initialize core modules
     state_manager = StreamingStateManager()
     ingestor = StreamingIngestionEngine(dlq_output_dir=artifacts_dir)
-    detector = AMLAnomalyDetector(contamination=0.005)
+    
+    # Calibrate contamination limit to focus on the top 1% spatial outliers
+    detector = AMLAnomalyDetector(contamination=0.01)
     
     # 2. Spin up the single live stream channel
     print("\n[1/3] Connecting to live transaction stream network...")
@@ -34,6 +36,7 @@ def run_production_stream_pipeline():
             enriched_tx = state_manager.update_and_enrich(tx)
             warmup_records.append(enriched_tx)
             
+    # CRITICAL SEQUENCE FIX: Build matrix data frame BEFORE running training block
     warmup_features_df = pd.DataFrame(warmup_records)
     detector.train(warmup_features_df)
     
@@ -43,7 +46,7 @@ def run_production_stream_pipeline():
     anomaly_count = 0
     laundering_caught = 0
     total_laundering_in_stream = 0
-    records_to_score = 5000  # Expand look to 5,000 items to catch more events
+    records_to_score = 10000  # Extended scoring window to profile more laundering traces
     
     for _ in range(records_to_score):
         tx_raw = next(stream)

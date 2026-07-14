@@ -1,6 +1,6 @@
 import numpy as np
-import joblib
 import pandas as pd
+import joblib
 from sklearn.ensemble import IsolationForest
 from pathlib import Path
 
@@ -9,7 +9,7 @@ class AMLAnomalyDetector:
     Unsupervised Anomaly Detection wrapper using an Isolation Forest.
     Evaluates spatial geometry of transactions to flag structural outliers.
     """
-    def __init__(self, contamination: float = 0.005, random_state: int = 42):
+    def __init__(self, contamination: float = 0.01, random_state: int = 42):
         self.contamination = contamination
         self.random_state = random_state
         self.feature_cols = [
@@ -28,38 +28,49 @@ class AMLAnomalyDetector:
         )
         self.is_trained = False
 
+    def _preprocess(self, df_or_dict) -> pd.DataFrame:
+        """
+        Applies mathematical log-scaling to monetary volumes to prevent 
+        high-value clean transactions from dominating tree isolation paths.
+        """
+        if isinstance(df_or_dict, dict):
+            X = pd.DataFrame([df_or_dict])[self.feature_cols].copy()
+        else:
+            X = df_or_dict[self.feature_cols].copy()
+            
+        # Compress heavy right-skewed cash metrics using natural log
+        X['Amount'] = np.log1p(X['Amount'].astype(float))
+        X['tx_amount_sum_1h'] = np.log1p(X['tx_amount_sum_1h'].astype(float))
+        return X
+
     def train(self, feature_dataframe) -> None:
-        """Trains the unsupervised engine on a baseline matrix of engineered features."""
+        """Trains the unsupervised engine on a preprocessed baseline matrix."""
         print(f"Training Isolation Forest across features: {self.feature_cols}")
-        X = feature_dataframe[self.feature_cols]
-        self.model.fit(X)
+        X_scaled = self._preprocess(feature_dataframe)
+        self.model.fit(X_scaled)
         self.is_trained = True
         print("✅ Anomaly detection model trained successfully.")
 
     def score_transaction(self, enriched_tx: dict) -> tuple:
+        """Evaluates a single stateful transaction payload using scaled vectors."""
         if not self.is_trained:
             raise RuntimeError("Model must be trained on a baseline before running real-time scoring.")
         
-        # FIX: Construct a single-row DataFrame with explicit feature names to eliminate warnings
-        X_row = pd.DataFrame([enriched_tx])[self.feature_cols]
+        X_row = self._preprocess(enriched_tx)
         
-        # decision_function returns lower values for high anomalies
+        # Extract decisions
         score = float(self.model.decision_function(X_row)[0])
         pred = self.model.predict(X_row)[0]
         
-        # Sklearn maps anomalies to -1; we conform this to 1 for Anomaly, 0 for Normal
         is_anomaly = 1 if pred == -1 else 0
-        
         return score, is_anomaly
 
     def save(self, output_path: Path) -> None:
-        """Serializes the trained model artifacts to disk."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self.model, output_path)
         print(f"Artifact successfully saved to {output_path}")
 
     def load(self, input_path: Path) -> None:
-        """Loads a pre-trained model artifact from disk."""
         if not input_path.exists():
             raise FileNotFoundError(f"No model artifact found at {input_path}")
         self.model = joblib.load(input_path)
