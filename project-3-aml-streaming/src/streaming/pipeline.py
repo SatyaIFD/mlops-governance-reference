@@ -17,8 +17,8 @@ def run_production_stream_pipeline():
     state_manager = StreamingStateManager()
     ingestor = StreamingIngestionEngine(dlq_output_dir=artifacts_dir)
     
-    # Calibrate contamination limit to focus on the top 1% spatial outliers
-    detector = AMLAnomalyDetector(contamination=0.01)
+    # Initialize the supervised detector
+    detector = AMLAnomalyDetector()
     
     # 2. Spin up the single live stream channel
     print("\n[1/3] Connecting to live transaction stream network...")
