@@ -16,37 +16,45 @@ def run_production_stream_pipeline():
     # Initialize core modules
     state_manager = StreamingStateManager()
     ingestor = StreamingIngestionEngine(dlq_output_dir=artifacts_dir)
-    
-    # Initialize the supervised detector
     detector = AMLAnomalyDetector()
     
     # 2. Spin up the single live stream channel
-    print("\n[1/3] Connecting to live transaction stream network...")
+    print("\n[1/4] Connecting to live transaction stream network...")
     stream = transaction_stream_generator(csv_path, delay_seconds=0.0)
     
-    # 3. Collect warmup data directly from the stream to maintain state continuity
-    print("[2/3] Collecting 50,000 stream events for unsupervised training baseline...")
-    warmup_records = []
-    
+    # 3. PHASE A: Pure State Cache Warmup
+    print("[2/4] Phase A: Warming up state manager lookback cache (50,000 events)...")
     for _ in range(50000):
         tx_raw = next(stream)
         is_valid, tx = ingestor.validate_and_route(tx_raw)
         if is_valid:
-            # Process through state manager to build rolling history natively
+            state_manager.update_and_enrich(tx)
+            
+    # 4. PHASE B: High-Fidelity Training Data Collection (Mature Cache Only)
+    print("[3/4] Phase B: Collecting 50,000 high-fidelity mature events for training...")
+    warmup_records = []
+    for _ in range(50000):
+        tx_raw = next(stream)
+        is_valid, tx = ingestor.validate_and_route(tx_raw)
+        if is_valid:
             enriched_tx = state_manager.update_and_enrich(tx)
             warmup_records.append(enriched_tx)
             
-    # CRITICAL SEQUENCE FIX: Build matrix data frame BEFORE running training block
     warmup_features_df = pd.DataFrame(warmup_records)
+    
+    # Print out safety audit to ensure laundering events are caught in this slice
+    laundering_in_train = warmup_features_df['Is_laundering'].sum()
+    print(f" -> Laundering events present in high-fidelity training set: {laundering_in_train}")
+    
     detector.train(warmup_features_df)
     
-    # 4. Commencing live scoring immediately on the REMAINING active stream
-    print("\n[3/3] Commencing real-time transaction validation and inference...")
+    # 5. Commencing live scoring immediately on the REMAINING active stream
+    print("\n[4/4] Commencing real-time transaction validation and inference...")
     
     anomaly_count = 0
     laundering_caught = 0
     total_laundering_in_stream = 0
-    records_to_score = 10000  # Extended scoring window to profile more laundering traces
+    records_to_score = 10000
     
     for _ in range(records_to_score):
         tx_raw = next(stream)
@@ -62,7 +70,7 @@ def run_production_stream_pipeline():
         # Real-time stateful feature calculations (State is completely warm and connected!)
         enriched_tx = state_manager.update_and_enrich(tx)
         
-        # Query the unsupervised brain
+        # Query the supervised brain
         score, is_anomaly = detector.score_transaction(enriched_tx)
         
         if is_anomaly == 1:
@@ -76,7 +84,7 @@ def run_production_stream_pipeline():
                   f"| Diversity: {enriched_tx['beneficiary_diversity_24h']:.4f} "
                   f"| Score: {score:.4f} | [Actual Laundering: {bool(tx['Is_laundering'])}]")
 
-    # 5. Output Session Metrics
+    # 6. Output Session Metrics
     print("\n=== REAL-TIME STREAMING INFERENCE SESSION SUMMARY ===")
     print(f"Total Stream Transactions Processed: {records_to_score}")
     print(f"Data Quality Governance Status: {ingestor.get_data_quality_report()}")
