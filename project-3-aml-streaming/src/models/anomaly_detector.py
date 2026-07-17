@@ -11,15 +11,17 @@ class AMLAnomalyDetector:
     """
     def __init__(self, random_state: int = 42):
         self.random_state = random_state
+        # Expanded feature matrix mapping both sides of the transaction ledger
         self.feature_cols = [
             'Amount', 
             'tx_count_1h', 
             'tx_amount_sum_1h', 
             'tx_count_24h', 
             'beneficiary_diversity_24h', 
-            'pass_through_ratio_1h'
+            'pass_through_ratio_1h',
+            'receiver_inflow_count_1h',
+            'receiver_inflow_sum_1h'
         ]
-        # class_weight='balanced' forces the trees to heavily penalize missing the rare laundering cases
         self.model = RandomForestClassifier(
             n_estimators=100,
             class_weight='balanced',
@@ -29,18 +31,19 @@ class AMLAnomalyDetector:
         self.is_trained = False
 
     def _preprocess(self, df_or_dict) -> pd.DataFrame:
-        """Applies mathematical log-scaling to monetary volumes."""
+        """Applies mathematical log-scaling to all monetary volume metrics."""
         if isinstance(df_or_dict, dict):
             X = pd.DataFrame([df_or_dict])[self.feature_cols].copy()
         else:
             X = df_or_dict[self.feature_cols].copy()
             
+        # Log compress all cash volume columns to handle high-value whales smoothly
         X['Amount'] = np.log1p(X['Amount'].astype(float))
         X['tx_amount_sum_1h'] = np.log1p(X['tx_amount_sum_1h'].astype(float))
+        X['receiver_inflow_sum_1h'] = np.log1p(X['receiver_inflow_sum_1h'].astype(float))
         return X
 
     def train(self, feature_dataframe) -> None:
-        """Trains the supervised engine using feature vectors and historical labels."""
         if 'Is_laundering' not in feature_dataframe.columns:
             raise KeyError("Supervised training requires the target label column 'Is_laundering'.")
             
@@ -53,13 +56,10 @@ class AMLAnomalyDetector:
         print("✅ Supervised AML model trained successfully.")
 
     def score_transaction(self, enriched_tx: dict) -> tuple:
-        """Evaluates a single stateful transaction payload. Returns: (laundering_probability, prediction)"""
         if not self.is_trained:
             raise RuntimeError("Model must be trained on a baseline before running real-time scoring.")
         
         X_row = self._preprocess(enriched_tx)
-        
-        # Extract the probability score of the transaction being laundering (class 1)
         prob = float(self.model.predict_proba(X_row)[0][1])
         pred = int(self.model.predict(X_row)[0])
         
