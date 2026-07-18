@@ -6,12 +6,11 @@ from pathlib import Path
 
 class AMLAnomalyDetector:
     """
-    Supervised Streaming Classifier using a Balanced Random Forest architecture.
-    Learns explicit behavioral signatures of deceptive laundering profiles.
+    Supervised Streaming Classifier using a Controlled Downsampled Random Forest.
+    Prevents high minority class weights from distorting decision tree splits.
     """
     def __init__(self, random_state: int = 42):
         self.random_state = random_state
-        # Expanded feature matrix mapping both sides of the transaction ledger
         self.feature_cols = [
             'Amount', 
             'tx_count_1h', 
@@ -22,12 +21,7 @@ class AMLAnomalyDetector:
             'receiver_inflow_count_1h',
             'receiver_inflow_sum_1h'
         ]
-        self.model = RandomForestClassifier(
-            n_estimators=100,
-            class_weight='balanced',
-            random_state=self.random_state,
-            n_jobs=-1
-        )
+        self.model = None
         self.is_trained = False
 
     def _preprocess(self, df_or_dict) -> pd.DataFrame:
@@ -37,7 +31,6 @@ class AMLAnomalyDetector:
         else:
             X = df_or_dict[self.feature_cols].copy()
             
-        # Log compress all cash volume columns to handle high-value whales smoothly
         X['Amount'] = np.log1p(X['Amount'].astype(float))
         X['tx_amount_sum_1h'] = np.log1p(X['tx_amount_sum_1h'].astype(float))
         X['receiver_inflow_sum_1h'] = np.log1p(X['receiver_inflow_sum_1h'].astype(float))
@@ -48,12 +41,31 @@ class AMLAnomalyDetector:
             raise KeyError("Supervised training requires the target label column 'Is_laundering'.")
             
         print(f"Training Supervised Classifier across features: {self.feature_cols}")
-        X_scaled = self._preprocess(feature_dataframe)
-        y = feature_dataframe['Is_laundering'].astype(int)
+        
+        # 1. Implement Controlled Downsampling to balance the feature boundaries naturally
+        normal_df = feature_dataframe[feature_dataframe['Is_laundering'] == 0]
+        laundering_df = feature_dataframe[feature_dataframe['Is_laundering'] == 1]
+        
+        # Maintain a clean 10:1 ratio of normal-to-laundering data to stabilize node splits
+        sample_size = min(len(normal_df), len(laundering_df) * 10)
+        normal_sampled = normal_df.sample(n=sample_size, random_state=self.random_state)
+        
+        balanced_df = pd.concat([laundering_df, normal_sampled]).sample(frac=1.0, random_state=self.random_state)
+        
+        X_scaled = self._preprocess(balanced_df)
+        y = balanced_df['Is_laundering'].astype(int)
+        
+        # 2. Re-initialize the model with strict depth constraints to eliminate cold-start memorization
+        self.model = RandomForestClassifier(
+            n_estimators=150,
+            max_depth=8, 
+            random_state=self.random_state,
+            n_jobs=-1
+        )
         
         self.model.fit(X_scaled, y)
         self.is_trained = True
-        print("✅ Supervised AML model trained successfully.")
+        print("✅ Supervised AML model trained successfully with structural downsampling balancing.")
 
     def score_transaction(self, enriched_tx: dict) -> tuple:
         if not self.is_trained:
@@ -61,7 +73,9 @@ class AMLAnomalyDetector:
         
         X_row = self._preprocess(enriched_tx)
         prob = float(self.model.predict_proba(X_row)[0][1])
-        pred = int(self.model.predict(X_row)[0])
+        
+        # 3. Apply an engineered precision threshold buffer suited for high-stakes AML scoring
+        pred = 1 if prob >= 0.70 else 0
         
         return prob, pred
 

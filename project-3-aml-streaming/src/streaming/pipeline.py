@@ -54,7 +54,7 @@ def run_production_stream_pipeline():
     anomaly_count = 0
     laundering_caught = 0
     total_laundering_in_stream = 0
-    records_to_score = 10000
+    records_to_score = 15000
     
     for _ in range(records_to_score):
         tx_raw = next(stream)
@@ -79,9 +79,9 @@ def run_production_stream_pipeline():
                 laundering_caught += 1
             
             # Print alert logs for structural anomalies intercepted by our new relational features
-            print(f"🚨 AML ALERT | Account: {tx['Sender_account']} | Amt: ${tx['Amount']:.2f} "
-                  f"| Pass-Through Ratio: {enriched_tx['pass_through_ratio_1h']:.4f} "
-                  f"| Diversity: {enriched_tx['beneficiary_diversity_24h']:.4f} "
+            print(f"🚨 AML ALERT | Account: {tx['Sender_account']} ──> {tx['Receiver_account']} | Amt: ${tx['Amount']:.2f} "
+                  f"| Pass-Through: {enriched_tx['pass_through_ratio_1h']:.4f} "
+                  f"| Rx Inflow Count: {enriched_tx['receiver_inflow_count_1h']} "
                   f"| Score: {score:.4f} | [Actual Laundering: {bool(tx['Is_laundering'])}]")
 
     # 6. Output Session Metrics
