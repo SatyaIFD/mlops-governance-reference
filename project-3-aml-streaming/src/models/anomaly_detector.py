@@ -74,8 +74,8 @@ class AMLAnomalyDetector:
         X_row = self._preprocess(enriched_tx)
         prob = float(self.model.predict_proba(X_row)[0][1])
         
-        # 3. Apply an engineered precision threshold buffer suited for high-stakes AML scoring
-        pred = 1 if prob >= 0.70 else 0
+        # ADJUSTMENT: Calibrate threshold to 0.40 to fit the downsampled distribution
+        pred = 1 if prob >= 0.40 else 0
         
         return prob, pred
 

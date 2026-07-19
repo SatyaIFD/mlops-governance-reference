@@ -54,7 +54,7 @@ def run_production_stream_pipeline():
     anomaly_count = 0
     laundering_caught = 0
     total_laundering_in_stream = 0
-    records_to_score = 15000
+    records_to_score = 100000
     
     for _ in range(records_to_score):
         tx_raw = next(stream)
