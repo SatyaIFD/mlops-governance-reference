@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Setup explicit logging for data governance tracking
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -65,7 +65,8 @@ class StreamingIngestionEngine:
         self.metrics["dlq_events"] += 1
         
         dlq_record = {
-            "quarantine_timestamp": datetime.utcnow().isoformat(),
+            # FIX: Use timezone-aware UTC formatting to eliminate the deprecation warning
+            "quarantine_timestamp": datetime.now(timezone.utc).isoformat(),
             "validation_errors": evaluation_errors,
             "raw_payload": poisoned_payload
         }
