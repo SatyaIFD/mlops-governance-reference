@@ -1,0 +1,32 @@
+name: Project 3 Streaming Pipeline CI
+
+on:
+  push:
+    paths:
+      - 'project-3-aml-streaming/**'
+      - '.github/workflows/project3-ci.yml'
+  pull_request:
+    paths:
+      - 'project-3-aml-streaming/**'
+
+jobs:
+  continuous-integration:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository Codebase
+      uses: actions/checkout@v4
+
+    - name: Initialize Production Python Environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Core Pipeline Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas scikit-learn joblib pytest faker time-machine anyio hydra-core
+
+    - name: Execute Governance Validation Test Suite
+      run: |
+        PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
