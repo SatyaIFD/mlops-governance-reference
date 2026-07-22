@@ -78,3 +78,7 @@ project-3-aml-streaming/artifacts/
 
 # ALLOW Project 3 clean validation Parquet files to pass into LFS tracking
 !project-3-aml-streaming/data/processed/*.parquet
+# Large datasets and artifacts
+*.csv
+data/
+*.joblib
