@@ -82,3 +82,4 @@ project-3-aml-streaming/artifacts/
 *.csv
 data/
 *.joblib
+project-3-aml-streaming/docs/api/

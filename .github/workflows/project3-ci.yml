@@ -25,8 +25,12 @@ jobs:
     - name: Install Core Pipeline Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pandas scikit-learn joblib pytest faker time-machine anyio hydra-core
+        pip install pandas scikit-learn joblib pytest faker time-machine anyio hydra-core pdoc kagglehub
 
     - name: Execute Governance Validation Test Suite
       run: |
         PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
+
+    - name: Auto-Generate Technical API Documentation
+      run: |
+        pdoc project-3-aml-streaming/src/ -o project-3-aml-streaming/docs/api/
