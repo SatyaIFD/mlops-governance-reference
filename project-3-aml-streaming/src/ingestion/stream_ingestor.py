@@ -1,106 +1,128 @@
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timezone
+from typing import Dict, Any, Tuple, List
 
-# Setup explicit logging for data governance tracking
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 class StreamingIngestionEngine:
+    """Validates streaming transaction payloads against schema contracts and routes failures.
+
+    The engine acts as a quality gatekeeper for the streaming pipeline. It validates field
+    presence, data types, and non-negative amounts, converting valid timestamps to datetime
+    objects while isolating corrupt or malformed payloads to a Dead-Letter Queue (DLQ).
+
+    Attributes:
+        dlq_output_dir (Path): Directory where quarantined DLQ payloads are written.
+        clean_event_count (int): Total count of valid events passed to state cache.
+        dlq_event_count (int): Total count of corrupted events routed to DLQ.
     """
-    Production gatekeeper for the AML stream. Validates schema structures 
-    in real time and handles Dead-Letter Queue (DLQ) isolation for poison payloads.
-    """
+
     def __init__(self, dlq_output_dir: Path):
-        self.dlq_path = Path(dlq_output_dir)
-        self.dlq_path.mkdir(parents=True, exist_ok=True)
-        self.dlq_log_file = self.dlq_path / "dead_letter_queue.jsonl"
-        
-        # Track pipeline data quality metrics
-        self.metrics = {"total_ingested": 0, "clean_events": 0, "dlq_events": 0}
+        """Initializes the ingestion engine and prepares the DLQ artifact directory.
 
-    def validate_and_route(self, raw_payload: dict) -> tuple[bool, dict | None]:
+        Args:
+            dlq_output_dir (Path): Path to store quarantined JSON payloads.
         """
-        Validates the schema matrix of an incoming event.
-        Returns: (is_valid, processed_payload_or_none)
-        """
-        self.metrics["total_ingested"] += 1
-        errors = []
+        self.dlq_output_dir = Path(dlq_output_dir)
+        self.dlq_output_dir.mkdir(parents=True, exist_ok=True)
+        self.clean_event_count: int = 0
+        self.dlq_event_count: int = 0
 
-        # 1. Check for structural completeness (Required Fields)
+    def validate_and_route(self, raw_tx: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+        """Validates a raw stream record and routes malformed payloads to the DLQ.
+
+        Args:
+            raw_tx (Dict[str, Any]): Dictionary containing unvalidated transaction fields.
+
+        Returns:
+            Tuple[bool, Dict[str, Any]]: 
+                - bool: True if payload passed validation, False if quarantined.
+                - Dict[str, Any]: Processed record (with datetime timestamp) or raw payload.
+        """
+        errors: List[str] = []
+
+        # 1. Mandatory Field Existence Verification
         required_fields = ['Timestamp', 'Sender_account', 'Receiver_account', 'Amount']
         for field in required_fields:
-            if field not in raw_payload or raw_payload[field] is None:
+            if field not in raw_tx or raw_tx[field] is None or raw_tx[field] == '':
                 errors.append(f"Missing mandatory field: {field}")
 
+        # 2. Monetary Amount Validation
+        if 'Amount' in raw_tx and raw_tx['Amount'] is not None:
+            try:
+                amt = float(raw_tx['Amount'])
+                if amt <= 0.0:
+                    errors.append(f"Invalid monetary amount ({amt}): Must be greater than 0.0")
+            except (ValueError, TypeError):
+                errors.append(f"Non-numeric monetary amount: {raw_tx['Amount']}")
+
+        # 3. Timestamp Parsing & Normalization
+        parsed_timestamp = None
+        if 'Timestamp' in raw_tx and raw_tx['Timestamp']:
+            ts_val = raw_tx['Timestamp']
+            if isinstance(ts_val, datetime):
+                parsed_timestamp = ts_val
+            else:
+                ts_str = str(ts_val)
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S"):
+                    try:
+                        parsed_timestamp = datetime.strptime(ts_str, fmt)
+                        break
+                    except ValueError:
+                        continue
+
+            if parsed_timestamp is None:
+                errors.append(f"Malformed timestamp string format: '{raw_tx['Timestamp']}'")
+
+        # 4. Routing Logic: DLQ Quarantine vs Clean Payload
         if errors:
-            self._route_to_dlq(raw_payload, errors)
-            return False, None
+            self._quarantine_payload(raw_tx, errors)
+            self.dlq_event_count += 1
+            return False, raw_tx
 
-        # 2. Assert strict type validation and values
-        try:
-            # Check for non-positive values
-            amount = float(raw_payload['Amount'])
-            if amount <= 0:
-                errors.append(f"Invalid monetary value: ${amount} (Must be positive)")
-        except (ValueError, TypeError):
-            errors.append(f"Amount type casting failure: {raw_payload['Amount']}")
+        # Valid Payload Assembly
+        clean_tx = raw_tx.copy()
+        clean_tx['Timestamp'] = parsed_timestamp
+        clean_tx['Amount'] = float(raw_tx['Amount'])
+        self.clean_event_count += 1
+        return True, clean_tx
 
-        # Ensure account strings are populated
-        if not str(raw_payload['Sender_account']).strip():
-            errors.append("Sender_account string is blank")
-        if not str(raw_payload['Receiver_account']).strip():
-            errors.append("Receiver_account string is blank")
+    def _quarantine_payload(self, raw_tx: Dict[str, Any], errors: List[str]) -> None:
+        """Serializes and isolates malformed payloads into the DLQ directory.
 
-        # 3. Handle validation routing decisions
-        if errors:
-            self._route_to_dlq(raw_payload, errors)
-            return False, None
-
-        self.metrics["clean_events"] += 1
-        return True, raw_payload
-
-    def _route_to_dlq(self, poisoned_payload: dict, evaluation_errors: list):
-        """Isolates bad records out of the stream into local DLQ storage for compliance review."""
-        self.metrics["dlq_events"] += 1
+        Args:
+            raw_tx (Dict[str, Any]): The original corrupted transaction record.
+            errors (List[str]): List of error messages explaining validation failures.
+        """
+        logging.warning(f"⚠️ DLQ TRIGGERED: Payload quarantined due to errors: {errors}")
+        quarantine_file = self.dlq_output_dir / f"dlq_event_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json"
         
-        dlq_record = {
-            # FIX: Use timezone-aware UTC formatting to eliminate the deprecation warning
-            "quarantine_timestamp": datetime.now(timezone.utc).isoformat(),
-            "validation_errors": evaluation_errors,
-            "raw_payload": poisoned_payload
+        quarantine_payload = {
+            "isolation_timestamp_utc": datetime.now().isoformat(),
+            "validation_errors": errors,
+            "raw_payload": raw_tx
         }
-        
-        # Append to a newline-delimited JSON file (standard streaming format)
-        with open(self.dlq_log_file, mode='a', encoding='utf-8') as f:
-            f.write(json.dumps(dlq_record) + "\n")
-            
-        logging.warning(f"⚠️ DLQ TRIGGERED: Payload quarantined due to errors: {evaluation_errors}")
 
-    def get_data_quality_report(self) -> dict:
-        """Returns the active data quality footprint for monitoring dashboards."""
-        if self.metrics["total_ingested"] == 0:
-            return {"data_quality_pct": 100.0, **self.metrics}
-        
-        dq_pct = (self.metrics["clean_events"] / self.metrics["total_ingested"]) * 100
-        return {"data_quality_pct": round(dq_pct, 2), **self.metrics}
+        try:
+            with open(quarantine_file, "w") as f:
+                json.dump(quarantine_payload, f, indent=2, default=str)
+        except Exception as e:
+            logging.error(f"Failed to write DLQ file: {e}")
 
-if __name__ == '__main__':
-    print("Running data governance validation test loop...")
-    # Setup test workspace boundary
-    test_artifacts = Path("project-3-aml-streaming/artifacts").resolve()
-    ingestor = StreamingIngestionEngine(dlq_output_dir=test_artifacts)
+    def get_data_quality_report(self) -> Dict[str, Any]:
+        """Returns aggregated data quality governance statistics for the session.
 
-    # Mock vectors containing a clean run, a negative money hack, and a missing key
-    mock_wire = [
-        {'Timestamp': '2026-07-13 12:00:00', 'Sender_account': 'ACC_1', 'Receiver_account': 'ACC_2', 'Amount': 500.0},
-        {'Timestamp': '2026-07-13 12:01:00', 'Sender_account': 'ACC_3', 'Receiver_account': 'ACC_4', 'Amount': -250.0},
-        {'Timestamp': '2026-07-13 12:02:00', 'Sender_account': '', 'Receiver_account': 'ACC_5', 'Amount': 100.0}
-    ]
-
-    for data_tick in mock_wire:
-        success, clean_data = ingestor.validate_and_route(data_tick)
-        print(f"Processed Tick -> Route Success: {success} | Forwardable Data: {clean_data is not None}")
-        
-    print("\nData Governance Footprint:")
-    print(ingestor.get_data_quality_report())
+        Returns:
+            Dict[str, Any]: Summary containing total ingested, clean %, and DLQ counts.
+        """
+        total = self.clean_event_count + self.dlq_event_count
+        dq_pct = (self.clean_event_count / total * 100.0) if total > 0 else 100.0
+        return {
+            "data_quality_pct": round(dq_pct, 2),
+            "total_ingested": total,
+            "clean_events": self.clean_event_count,
+            "dlq_events": self.dlq_event_count
+        }
