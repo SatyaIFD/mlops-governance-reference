@@ -1,4 +1,3 @@
-```markdown
 # Project 3: Real-Time Stateful AML Streaming Observability Engine
 
 An enterprise-grade, stateful streaming inference engine built to detect complex money-laundering typologies (smurfing, layering, structuring, pass-through mules) in real-time transaction streams with zero data loss guarantees and automated schema governance.
@@ -149,9 +148,5 @@ PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
 
 # Launch real-time streaming pipeline
 PYTHONPATH=project-3-aml-streaming python project-3-aml-streaming/src/streaming/pipeline.py
-
-```
-
-```
 
 ```
