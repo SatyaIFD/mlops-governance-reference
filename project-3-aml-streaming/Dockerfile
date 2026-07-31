@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt-get/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt pytest
+
+# Copy application source code, scripts, tests, data, and baseline artifacts
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+COPY tests/ ./tests/
+COPY data/ ./data/
+COPY artifacts/ ./artifacts/
+
+# Default command: run unit tests first, then launch the streaming pipeline
+CMD ["sh", "-c", "pytest tests/ && python src/streaming/pipeline.py"]
