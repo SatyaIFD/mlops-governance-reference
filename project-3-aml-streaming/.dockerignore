@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.git/
+.gitignore
+docs/api/
+artifacts/*.joblib
+artifacts/dlq_event_*.json
