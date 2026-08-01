@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  aml-streaming-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aml-streaming-engine:latest
+    container_name: aml_streaming_container
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
