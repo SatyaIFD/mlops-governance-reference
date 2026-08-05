@@ -35,34 +35,24 @@ async def lifespan(app: FastAPI):
     mlflow.set_tracking_uri(tracking_uri)
     
     try:
-        client = MlflowClient()
-        latest_versions = client.get_latest_versions("credit_card_fraud_model")
-        if latest_versions:
-            mv = latest_versions[-1]
-            raw_source = mv.source.replace("file://", "")
-            
-            # Resolve subpath after 'mlruns/' to make loading environment-agnostic
-            if "mlruns/" in raw_source:
-                rel_subpath = raw_source.split("mlruns/")[-1]
-                local_model_path = project_root / "mlruns" / rel_subpath
-                if local_model_path.exists():
-                    model = mlflow.pyfunc.load_model(str(local_model_path))
-                    model_uri = str(local_model_path)
-                else:
-                    model_uri = f"models:/credit_card_fraud_model/{mv.version}"
-                    model = mlflow.pyfunc.load_model(model_uri)
+        # First attempt: standard registry URI load
+        model = mlflow.pyfunc.load_model("models:/credit_card_fraud_model/1")
+        print("🟢 Production model loaded directly via MLflow Registry URI.")
+    except Exception as reg_err:
+        print(f"⚠️ Registry URI load failed ({reg_err}). Attempting local artifact discovery in mlruns...")
+        try:
+            # Fallback: Find MLmodel file inside project_root / mlruns
+            mlmodel_files = list((project_root / "mlruns").rglob("MLmodel"))
+            if mlmodel_files:
+                model_dir = mlmodel_files[0].parent
+                model = mlflow.pyfunc.load_model(str(model_dir))
+                print(f"🟢 Production model loaded successfully from local artifact path: {model_dir}")
             else:
-                model_uri = f"models:/credit_card_fraud_model/{mv.version}"
-                model = mlflow.pyfunc.load_model(model_uri)
-        else:
-            model_uri = "models:/credit_card_fraud_model/1"
-            model = mlflow.pyfunc.load_model(model_uri)
+                raise FileNotFoundError(f"No MLmodel files found under {project_root / 'mlruns'}")
+        except Exception as e:
+            print(f"❌ Critical error loading model from MLflow: {str(e)}")
+            model = None
             
-        print(f"🟢 Production model cached successfully from: {model_uri}")
-    except Exception as e:
-        print(f"❌ Critical error loading model from MLflow: {str(e)}")
-        model = None
-        
     yield
     print("🛑 Microservice context tearing down...")
 

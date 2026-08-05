@@ -14,7 +14,10 @@ def execute_training_pipeline(processed_data_dir: str, tracking_uri: str):
     """Loads preprocessed parquet files, trains an XGBoost model, and registers it to MLflow."""
     mlflow.set_tracking_uri(tracking_uri)
     
-    project_root = Path(processed_data_dir).resolve().parent
+    # Point directly to project-1-credit-card-fraud root (2 levels up from processed)
+    data_path = Path(processed_data_dir).resolve()
+    project_root = data_path.parents[1] if "data" in data_path.parts else data_path.parent
+    
     mlruns_dir = project_root / "mlruns"
     mlruns_dir.mkdir(parents=True, exist_ok=True)
     
@@ -24,8 +27,6 @@ def execute_training_pipeline(processed_data_dir: str, tracking_uri: str):
     if exp is None:
         client.create_experiment(experiment_name, artifact_location=mlruns_dir.as_uri())
     mlflow.set_experiment(experiment_name)
-    
-    data_path = Path(processed_data_dir)
     
     # DEFENSIVE CI/CD FALLBACK: Create mock tensors if parquet files do not exist
     if not (data_path / "train.parquet").exists():
