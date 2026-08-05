@@ -16,17 +16,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 5. Application Code Layer
 COPY project-1-credit-card-fraud/src/ /app/src/
 
-# 6. MLflow Database Layer (Copying the real DB from the repo root)
-COPY mlflow.db /app/mlflow.db
+# 6. MLflow Database & Artifacts Layer (Self-contained in /app)
+COPY project-1-credit-card-fraud/mlflow.db /app/mlflow.db
+COPY project-1-credit-card-fraud/mlruns/ /app/mlruns/
 
-# 7. THE FIX: Recreate your host machine's exact directory structure inside the container
-# This ensures the absolute paths stored in the SQLite database still work!
-RUN mkdir -p /media/storage/mlops-governance-reference/
-COPY mlruns/ /media/storage/mlops-governance-reference/mlruns/
-
-# 8. Runtime Configuration
+# 7. Runtime Configuration
 ENV PYTHONPATH=/app
 EXPOSE 5001
 
-# 9. Entrypoint
+# 8. Entrypoint
 CMD ["uvicorn", "src.inference.app:app", "--host", "0.0.0.0", "--port", "5001"]
