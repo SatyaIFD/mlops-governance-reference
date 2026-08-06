@@ -12,41 +12,42 @@ on:
 
 jobs:
   integration-tests:
-    runs-on: ubuntu-24.04  # Explicitly matches your updated stable LTS platform environment
+    runs-on: ubuntu-24.04
 
     steps:
-    # 1. Checkout repository code
     - name: Checkout Code Repository
       uses: actions/checkout@v4
 
-    # 2. Setup production runtime Python matrix
-    - name: Set up Python 3.12
+    - name: Set up Python 3.13
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.13'
         cache: 'pip'
 
-    # 3. Install core framework requirements
     - name: Install System Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r project-1-credit-card-fraud/requirements.txt
-        pip install pytest fastapi httpx
 
-    # 4. Mock execution patch: Setup temporary workspace data structures for the CI runner context
-    - name: Initialize CI Test SQLite Ledger
+    - name: Initialize CI Test SQLite Ledger & Model Artifacts
       run: |
         mkdir -p project-1-credit-card-fraud/data/processed
-        # Setup temporary mock local paths for test client file overrides
-        sed -i 's|/media/storage/mlops-governance-reference/mlflow.db|/home/runner/work/mlops-governance-reference/mlops-governance-reference/project-1-credit-card-fraud/mlflow.db|g' project-1-credit-card-fraud/tests/test_inference.py
-        
-        # Execute automated headless training to populate the ephemeral mlflow.db inside the runner
         PYTHONPATH=project-1-credit-card-fraud python project-1-credit-card-fraud/src/training/train.py
 
-    # 5. Execute core automated software integration testing pipeline matrix
     - name: Execute Pytest Regression Suite
       env:
         PYTHONPATH: project-1-credit-card-fraud
       run: |
         cd project-1-credit-card-fraud
         python -m pytest tests/
+
+    - name: Build and Validate Docker Container
+      run: |
+        docker build -t fraud-detection-api:ci -f project-1-credit-card-fraud/docker/Dockerfile .
+        docker run -d --name fraud-api-ci -p 5001:5001 fraud-detection-api:ci
+        sleep 4
+        curl -s http://localhost:5001/health
+        curl -s -X POST "http://localhost:5001/predict" \
+             -H "Content-Type: application/json" \
+             -d '{"features": [0.0, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, 85.00]}'
+        docker rm -f fraud-api-ci
