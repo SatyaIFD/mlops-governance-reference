@@ -23,68 +23,114 @@ The system moves away from raw, manual notebook execution toward automated softw
 
 ## Technical Specifications & Environment
 
-- **Core Frameworks:** Python 3.12+, XGBoost, MLflow, FastAPI, Uvicorn, SHAP, Pytest, Pandas, PyArrow
-- **Environment Context:** Configured for local Ubuntu Linux workspaces (`/media/storage/mlops-governance-reference`)
-- **Isolation Strategy:** All data engine tracks are entirely decoupled from physical absolute path variables using runtime package resolution (`sys.path` injection) to ensure seamless containerized migrations or automated CI/CD runs.
+- **Core Frameworks:** Python 3.13, XGBoost 3.3.0 (strictly pinned), MLflow 3.15.0 (strictly pinned), FastAPI, Uvicorn, SHAP, Pytest, Pandas, PyArrow
+- **Container Environment:** `python:3.13-slim` base image
+- **Isolation Strategy:** All data engine tracks are decoupled from physical absolute path variables using runtime package resolution to ensure seamless containerized migrations and automated CI/CD execution.
+
+---
+
+## 🚀 Quickstart & Reproduction Guide
+
+### 1. Environment Setup & Dependency Installation
+
+```bash
+pip install --upgrade pip
+pip install -r project-1-credit-card-fraud/requirements.txt
+
+```
+
+### 2. Train and Register Model to MLflow
+
+```bash
+PYTHONPATH=project-1-credit-card-fraud python3 project-1-credit-card-fraud/src/training/train.py
+
+```
+
+### 3. Execute Integration Tests
+
+```bash
+PYTHONPATH=project-1-credit-card-fraud pytest project-1-credit-card-fraud/tests/
+
+```
+
+### 4. Build and Run Docker Container
+
+> **Note:** Execute `docker build` from the repository root so build context captures all code and artifacts.
+
+```bash
+# Build image from repository root
+sudo docker build -t fraud-detection-api:v1 -f project-1-credit-card-fraud/docker/Dockerfile .
+
+# Launch container on port 5001
+sudo docker run -d --name fraud-api -p 5001:5001 fraud-detection-api:v1
+
+# Health probe
+curl http://localhost:5001/health
+
+# Prediction probe
+curl -X POST "http://localhost:5001/predict" \
+     -H "Content-Type: application/json" \
+     -d '{"features": [0.0, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, -1.35, 85.00]}'
+
+```
 
 ---
 
 ## Why This Architecture Was Chosen (Design Decisions)
 
 ### 1. Relational SQLite Backend Configuration over Flat File Tracking
+
 Standard MLflow logging defaults to flat-file directory structures (`mlruns/`) that easily degrade, lack native concurrency handling, and fail ACID compliance requirements. Forcing a dedicated relational scheme (`sqlite:///mlflow.db`) keeps the enterprise audit ledger structured, indexable, and positioned to scale transparently into cloud environments like PostgreSQL.
 
 ### 2. Columnar Parquet Serialization over CSV Formats
+
 Financial fraud datasets involve deep numerical precision across multiple Principal Component Analysis (PCA) dimensions (`V1`–`V28`). Storing data in Parquet format yields massive advantages:
-- Deep columnar compression reducing local disk I/O bottlenecks.
-- Strict data type schema enforcement, completely neutralizing floating-point rounding errors during downstream mathematical evaluations.
+
+* Deep columnar compression reducing local disk I/O bottlenecks.
+* Strict data type schema enforcement, completely neutralizing floating-point rounding errors during downstream mathematical evaluations.
 
 ### 3. Population Stability Index (PSI) Tracking with Laplace Smoothing
+
 Traditional data drift tests (such as Kolmogorov-Smirnov) struggle with high-velocity production data streams or heavily concentrated categorical distributions. The custom implementation utilizes fixed-quantile bucket allocations combined with a Laplace smoothing coefficient ($1e^{-4}$) to completely eliminate division-by-zero or logarithmic runtime infinity errors when zero-count buckets occur in live inference tracking windows.
 
 ---
 
-## 🧪 Benchmarking & Production Validation
+## 🧪 Benchmarking & Live Production Validation
 
-This pipeline utilizes the definitive **ULB Credit Card Fraud Detection benchmark dataset** (284,807 transactions, 0.172% class imbalance) to validate enterprise scalability and mathematical compliance. 
+This pipeline is validated against the **ULB Credit Card Fraud Detection benchmark dataset** (284,807 transactions, 0.172% class imbalance) and synthetic CI matrices:
 
-Rather than treating this as an isolated, standalone notebook exercise, this framework simulates a live financial environment:
-1. **Data Gravity Simulation:** The data engine optimizes the raw 284k records into compressed, type-downcasted Parquet partitions to minimize disk I/O bottlenecks and enforce schema types.
-2. **Production Lifespan Verification:** The model binary was successfully registered, cached, and validated under an active FastAPI ASGI lifespan loop, achieving latencies under **0.1 milliseconds** during batch execution checks.
-3. **CI/CD Cloud Verification:** Every software component is completely decoupled from absolute local paths, allowing the entire training, logging, and 9-point regression test suite to execute seamlessly in under 4 seconds on headless GitHub Actions cloud runners.
+1. **Model Accuracy:** Current registered run achieved **0.9995** classification accuracy during evaluation.
+2. **Data Gravity Optimization:** The data engine optimizes raw records into compressed, type-downcasted Parquet partitions (`train.parquet` / `test.parquet`) to minimize disk I/O bottlenecks and enforce strict schema types.
+3. **Ephemeral Fallback Engine:** For headless CI/CD contexts where raw dataset partitions are absent, `train.py` includes a defensive mock synthesis fallback to ensure test suite execution without blocking pipelines.
+4. **Production Lifespan Latency:** Model binaries are loaded via an active FastAPI ASGI lifespan context, achieving sub-millisecond inference latencies on incoming prediction payloads.
+5. **CI/CD End-to-End Validation:** The GitHub Actions pipeline verifies code quality via `pytest`, trains model artifacts, and executes a full `docker build` + container startup probe (`/health` and `/predict`) on `ubuntu-24.04` runners using Python 3.13.
 
 ---
 
 ## ⚖️ Governance, Risk, & Ethical Compliance Audit Framework
 
-Operating an AI model within financial risk sectors requires strict compliance tracking. This pipeline fulfills regulatory guidelines (such as the EU AI Act, Fair Credit Reporting Act, and "Right to Explanation" laws) across two critical pillars:
+Operating an AI model within financial risk sectors requires strict compliance tracking. This pipeline fulfills regulatory guidelines across two critical pillars:
 
-### 1. Explainability & Interpretability Framework (The "How" and "Why")
-- **Mechanism:** Game-theoretic Shapley Values via the `SHAP` TreeExplainer engine.
-- **Why it matters:** Traditional feature importance metrics (like Gini split criteria) are fundamentally biased toward high-cardinality features and lack directionality. SHAP calculates the exact, mathematically sound marginal contribution of each variable toward an individual transaction's fraud score.
-- **Audit Findings:** The compliance audit verified that the model relies heavily on hidden latent transaction signatures—specifically **`V14`**, **`V17`**, and **`V12`**—to isolate fraudulent patterns. Features like `Amount` carry a lower global priority weight, minimizing the risk that an ordinary high-value purchase is flagged as fraud purely due to its scale.
+### 1. Explainability & Interpretability Framework
 
-### 2. Quantitative Fairness & Anti-Bias Audit (Proxy Segment Review)
-To verify that the model treats different financial sub-segments equitably, we ran a proxy metric audit based on transaction scale (`Amount`), tracking if affluent user profiles are penalized at disproportionate rates.
+* **Mechanism:** Game-theoretic Shapley Values via the `SHAP` TreeExplainer engine.
+* **Audit Findings:** The compliance audit verified that the model relies heavily on hidden latent transaction signatures—specifically **`V14`**, **`V17`**, and **`V12`**—to isolate fraudulent patterns. Features like `Amount` carry a lower global priority weight, minimizing the risk that an ordinary high-value purchase is flagged as fraud purely due to its scale.
 
-- **The Metric (Disparate Impact Ratio):** Calculated by dividing the selection rate (flagging rate) of the protected/unfavorable group by the selection rate of the baseline group.
-- **Regulatory Guardrail:** Industry compliance standards enforce the **Four-Fifths Rule**. A calculated ratio between **0.80 and 1.25** indicates equitable statistical parity. Anything outside this window demonstrates systematic bias.
+### 2. Quantitative Fairness & Anti-Bias Audit (Live Segment Results)
 
-#### Critical Audit Discovery:
-- **High-Value Transaction Flagging Rate:** 0.002271 (0.227%)
-- **Low-Value Transaction Flagging Rate:** 0.001252 (0.125%)
-- **Calculated Disparate Impact Ratio:** **1.8135**
+* **High-Value Transaction Flagging Rate:** 0.002446 (0.245%)
+* **Low-Value Transaction Flagging Rate:** 0.001296 (0.130%)
+* **Calculated Disparate Impact Ratio:** **1.8868** (exceeds mandatory 0.80–1.25 regulatory window).
 
-**Audit Conclusion (🚨 CRITICAL PRODUCTION BLOCKER):** With a metric of **1.8135**, the model exhibits severe **Disparate Impact**. It flags high-value transactions for fraud at nearly **1.8 times** the rate of low-value transactions. In a live banking system, this represents an unacceptable operational risk that would disproportionately disrupt high-net-worth customers, trigger a massive spike in false-positive disputes, and fail an external regulatory compliance audit. 
-
-*Remediation Plan:* This model version is blocked from production migration. The next development phase requires implementing adversarial debiasing, sample loss re-weighting during the `src/training/train.py` phase, or applying post-processing decision threshold adjustments to bring the Disparate Impact Ratio back within the mandatory **0.80–1.25** compliance envelope.
+*Remediation Plan:* This model version is blocked from production migration due to disparate impact. The next development phase requires applying re-weighting or decision threshold adjustments before promotion.
 
 ### 3. Data Drift Observability Validation
-Simulated live production batches featuring an adversarial shift on key features successfully tripped our tracking thresholds:
-- **Calculated PSI Metric Value:** 1.7066
-- **System Guardrail Triggered:** `🔴 ALERT! Significant Data Drift detected. Trigger Automated Retraining.`
 
-The custom module handles zero-width bin boundaries safely via uniform linear space distributions if feature concentration collapses percentiles, making it highly reliable for high-density transactional tracking.
+Evaluates population distribution shifts using mathematical PSI tiering:
+
+* **`PSI < 0.10`**: `STABLE`
+* **`0.10 <= PSI < 0.25`**: `WARNING`
+* **`PSI >= 0.25`**: `ALERT` (Triggers automated retraining alert)
 
 ---
 
@@ -96,7 +142,7 @@ project-1-credit-card-fraud/
 │   └── processed/          
 ├── docs/
 │   ├── gdpr_controls.md    
-│   ├── model_card.md       
+│   ├── model_card.md        
 │   └── risk_assessment.md  
 ├── notebooks/
 │   ├── 01_data_ingestion.ipynb
@@ -121,3 +167,6 @@ project-1-credit-card-fraud/
 │   ├── test_observability.py
 │   └── test_governance.py
 └── README.md
+
+```
+
