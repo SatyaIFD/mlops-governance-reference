@@ -6,6 +6,12 @@ This project transitions exploratory modeling code into modular, contract-valida
 
 ---
 
+## 🎯 Primary Scope & Pipeline Intent
+
+> **Note on Scope:** The primary objective of this project is to build and demonstrate production-grade **MLOps infrastructure, CI/CD automation, containerization, and compliance auditing pipelines**. Model training steps produce baseline artifacts to validate end-to-end telemetry and automated governance circuit breakers rather than state-of-the-art predictive performance or model tuning.
+
+---
+
 ## Architecture Overview
 
 The system moves away from raw, manual notebook execution toward automated software components segmented by clear structural boundaries:
@@ -95,15 +101,14 @@ Traditional data drift tests (such as Kolmogorov-Smirnov) struggle with high-vel
 
 ---
 
-## 🧪 Benchmarking & Live Production Validation
+## 🧪 Benchmarking & Production Validation
 
-This pipeline is validated against the **ULB Credit Card Fraud Detection benchmark dataset** (284,807 transactions, 0.172% class imbalance) and synthetic CI matrices:
+This pipeline is validated against the **ULB Credit Card Fraud Detection benchmark dataset** (284,807 transactions, 0.172% class imbalance) and synthetic CI matrices to verify enterprise scalability and mathematical compliance.
 
-1. **Model Accuracy:** Current registered run achieved **0.9995** classification accuracy during evaluation.
-2. **Data Gravity Optimization:** The data engine optimizes raw records into compressed, type-downcasted Parquet partitions (`train.parquet` / `test.parquet`) to minimize disk I/O bottlenecks and enforce strict schema types.
-3. **Ephemeral Fallback Engine:** For headless CI/CD contexts where raw dataset partitions are absent, `train.py` includes a defensive mock synthesis fallback to ensure test suite execution without blocking pipelines.
-4. **Production Lifespan Latency:** Model binaries are loaded via an active FastAPI ASGI lifespan context, achieving sub-millisecond inference latencies on incoming prediction payloads.
-5. **CI/CD End-to-End Validation:** The GitHub Actions pipeline verifies code quality via `pytest`, trains model artifacts, and executes a full `docker build` + container startup probe (`/health` and `/predict`) on `ubuntu-24.04` runners using Python 3.13.
+1. **Data Gravity Optimization:** The data engine optimizes raw records into compressed, type-downcasted Parquet partitions (`train.parquet` / `test.parquet`) to minimize disk I/O bottlenecks and enforce strict schema types.
+2. **Ephemeral Fallback Engine:** For headless CI/CD contexts where raw dataset partitions are absent, `train.py` includes a defensive mock synthesis fallback to ensure test suite execution without blocking pipelines.
+3. **Production Lifespan Latency:** Model binaries are loaded via an active FastAPI ASGI lifespan context, achieving sub-millisecond inference latencies on incoming prediction payloads.
+4. **CI/CD End-to-End Validation:** The GitHub Actions pipeline verifies code quality via `pytest`, trains model artifacts, and executes a full `docker build` + container startup probe (`/health` and `/predict`) on `ubuntu-24.04` runners using Python 3.13.
 
 ---
 
@@ -116,21 +121,21 @@ Operating an AI model within financial risk sectors requires strict compliance t
 * **Mechanism:** Game-theoretic Shapley Values via the `SHAP` TreeExplainer engine.
 * **Audit Findings:** The compliance audit verified that the model relies heavily on hidden latent transaction signatures—specifically **`V14`**, **`V17`**, and **`V12`**—to isolate fraudulent patterns. Features like `Amount` carry a lower global priority weight, minimizing the risk that an ordinary high-value purchase is flagged as fraud purely due to its scale.
 
-### 2. Quantitative Fairness & Anti-Bias Audit (Live Segment Results)
+### 2. Quantitative Fairness & Anti-Bias Audit (Proxy Segment Review)
 
-* **High-Value Transaction Flagging Rate:** 0.002446 (0.245%)
-* **Low-Value Transaction Flagging Rate:** 0.001296 (0.130%)
-* **Calculated Disparate Impact Ratio:** **1.8868** (exceeds mandatory 0.80–1.25 regulatory window).
+* **High-Value Transaction Flagging Rate:** `0.002446` (0.245%)
+* **Low-Value Transaction Flagging Rate:** `0.001296` (0.130%)
+* **Calculated Disparate Impact Ratio:** **`1.8868`** (exceeds mandatory 0.80–1.25 regulatory window).
 
-*Remediation Plan:* This model version is blocked from production migration due to disparate impact. The next development phase requires applying re-weighting or decision threshold adjustments before promotion.
+*Automated Circuit Breaker Result:* This baseline model version is flagged by the compliance pipeline and blocked from production deployment. In a production setting, this automated check triggers remediation (such as loss re-weighting or decision threshold adjustment) prior to artifact release.
 
 ### 3. Data Drift Observability Validation
 
-Evaluates population distribution shifts using mathematical PSI tiering:
+Simulated live production batches featuring distribution shifts are evaluated against strict regulatory thresholds:
 
-* **`PSI < 0.10`**: `STABLE`
-* **`0.10 <= PSI < 0.25`**: `WARNING`
-* **`PSI >= 0.25`**: `ALERT` (Triggers automated retraining alert)
+* `PSI < 0.10`: **STABLE** (No action needed)
+* `0.10 <= PSI <= 0.25`: **WARNING** (Monitor closely)
+* `PSI > 0.25`: **ALERT** (Trigger automated retraining pipeline)
 
 ---
 
