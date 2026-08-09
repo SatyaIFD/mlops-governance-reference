@@ -14,8 +14,8 @@ def test_disparate_impact_ratio_bounds():
     mlflow.set_tracking_uri(f"sqlite:///{base_dir}/mlflow.db")
     
     client = MlflowClient()
-    latest_versions = client.get_latest_versions("credit_card_fraud_model")
-    latest_version = latest_versions[-1].version if latest_versions else "1"
+    model_versions = client.search_model_versions("name='credit_card_fraud_model'")
+    latest_version = max([int(mv.version) for mv in model_versions]) if model_versions else 1
     
     model = mlflow.pyfunc.load_model(f"models:/credit_card_fraud_model/{latest_version}")
     df = pd.read_parquet(base_dir / "data" / "processed" / "test.parquet")
