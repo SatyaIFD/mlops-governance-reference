@@ -14,7 +14,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import mlflow
 import mlflow.pyfunc
-from mlflow.tracking import MlflowClient
 
 warnings.filterwarnings("ignore", category=UserWarning, message=".*protected namespace.*")
 
@@ -34,19 +33,19 @@ async def lifespan(app: FastAPI):
         
     mlflow.set_tracking_uri(tracking_uri)
     
+    model_uri = os.getenv("MODEL_URI", "models:/credit_card_fraud_model/1")
+    
     try:
-        # First attempt: standard registry URI load
-        model = mlflow.pyfunc.load_model("models:/credit_card_fraud_model/1")
-        print("🟢 Production model loaded directly via MLflow Registry URI.")
+        model = mlflow.pyfunc.load_model(model_uri)
+        print(f"🟢 Production model loaded successfully via URI: {model_uri}")
     except Exception as reg_err:
-        print(f"⚠️ Registry URI load failed ({reg_err}). Attempting local artifact discovery in mlruns...")
+        print(f"⚠️ Primary URI load failed ({reg_err}). Attempting local artifact discovery in mlruns...")
         try:
-            # Fallback: Find MLmodel file inside project_root / mlruns
             mlmodel_files = list((project_root / "mlruns").rglob("MLmodel"))
             if mlmodel_files:
                 model_dir = mlmodel_files[0].parent
                 model = mlflow.pyfunc.load_model(str(model_dir))
-                print(f"🟢 Production model loaded successfully from local artifact path: {model_dir}")
+                print(f"🟢 Production model loaded successfully from fallback artifact path: {model_dir}")
             else:
                 raise FileNotFoundError(f"No MLmodel files found under {project_root / 'mlruns'}")
         except Exception as e:
