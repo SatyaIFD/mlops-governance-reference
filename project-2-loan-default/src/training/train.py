@@ -10,6 +10,8 @@ import pandas as pd
 from xgboost import XGBClassifier
 from sklearn.metrics import roc_auc_score
 import mlflow
+import mlflow.xgboost
+from mlflow.models import infer_signature
 
 class LoanModelTrainer:
     def __init__(self, data_dir: Path):
@@ -49,7 +51,6 @@ class LoanModelTrainer:
         train_df = pd.read_parquet(self.train_path)
         test_df = pd.read_parquet(self.test_path)
         
-        # Strip unneeded columns
         for df in [train_df, test_df]:
             if 'LoanID' in df.columns:
                 df.drop(columns=['LoanID'], inplace=True)
@@ -59,11 +60,9 @@ class LoanModelTrainer:
         X_test = test_df.drop(columns=['Default'])
         y_test = test_df['Default']
         
-        # Establish protected indicators
         X_train['is_young'] = (X_train['Age'] < 30).astype(int)
         X_test['is_young'] = (X_test['Age'] < 30).astype(int)
         
-        # Categorical processing
         cat_cols = X_train.select_dtypes(include=['object', 'category']).columns.tolist()
         if cat_cols:
             X_train = pd.get_dummies(X_train, columns=cat_cols, drop_first=True)
@@ -73,21 +72,17 @@ class LoanModelTrainer:
         X_train = X_train.astype({col: 'int8' for col in X_train.select_dtypes(include=['bool']).columns})
         X_test = X_test.astype({col: 'int8' for col in X_test.select_dtypes(include=['bool']).columns})
         
-        # Core Mitigation Weights
         sample_weights = self.calculate_mitigation_weights(train_df)
         
-        # Initialize MLflow tracking context
         mlflow.set_experiment("loan_default_risk_governance")
         with mlflow.start_run(run_name="mitigated_sample_reweighting"):
             print("🌲 Fitting Fair XGBoost pipeline...")
             model = XGBClassifier(random_state=42, eval_metric='logloss', n_estimators=100)
             model.fit(X_train, y_train, sample_weight=sample_weights)
             
-            # Performance tracking
             train_auc = roc_auc_score(y_train, model.predict_proba(X_train)[:, 1])
             test_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
             
-            # Fairness Metric calculation
             preds = model.predict(X_test)
             df_audit = pd.DataFrame({'is_young': X_test['is_young'], 'approved': (preds == 0).astype(int)})
             approval_rates = df_audit.groupby('is_young')['approved'].mean()
@@ -95,19 +90,28 @@ class LoanModelTrainer:
             
             print(f"📊 Run Completed: Test AUC = {test_auc:.4f} | Disparate Impact = {di_ratio:.4f}")
             
-            # Log metrics to MLflow dashboard
             mlflow.log_param("model_type", "XGBClassifier")
             mlflow.log_param("mitigation_technique", "sample_reweighting")
             mlflow.log_metric("train_roc_auc", train_auc)
             mlflow.log_metric("test_roc_auc", test_auc)
             mlflow.log_metric("disparate_impact_ratio", di_ratio)
             
-            # Register model binary artifact safely
-            mlflow.xgboost.log_model(
-                xgb_model=model,
-                artifact_path="fair_loan_model",
-                registered_model_name="loan_default_production_model"
-            )
+            signature = infer_signature(X_train, model.predict_proba(X_train)[:, 1])
+            
+            try:
+                mlflow.xgboost.log_model(
+                    xgb_model=model,
+                    name="fair_loan_model",
+                    registered_model_name="loan_default_production_model",
+                    signature=signature
+                )
+            except TypeError:
+                mlflow.xgboost.log_model(
+                    xgb_model=model,
+                    artifact_path="fair_loan_model",
+                    registered_model_name="loan_default_production_model",
+                    signature=signature
+                )
             print("💾 Production run completely tracked in system registry.")
 
 if __name__ == "__main__":
@@ -115,7 +119,6 @@ if __name__ == "__main__":
     BASE_DIR = SRC_DIR.parents[1]
     DATA_DIR = BASE_DIR / "data" / "processed"
     
-    # EXPLICIT ALIGNMENT: Map global backend tracking store onto a shared SQLite DB file
     db_path = BASE_DIR / "mlflow.db"
     mlflow.set_tracking_uri(f"sqlite:///{db_path}")
     
