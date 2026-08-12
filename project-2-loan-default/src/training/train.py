@@ -10,6 +10,7 @@ import pandas as pd
 from xgboost import XGBClassifier
 from sklearn.metrics import roc_auc_score
 import mlflow
+import json
 import mlflow.xgboost
 from mlflow.models import infer_signature
 
@@ -89,6 +90,19 @@ class LoanModelTrainer:
             di_ratio = approval_rates[1] / approval_rates[0] if approval_rates[0] > 0 else 0
             
             print(f"📊 Run Completed: Test AUC = {test_auc:.4f} | Disparate Impact = {di_ratio:.4f}")
+            
+            # Export metrics for Governance Audit Script
+            eval_report_path = self.data_dir.parent.parent / "artifacts" / "compliance_audit_report.json"
+            eval_report_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(eval_report_path, "w") as f:
+                json.dump({
+                    "performance_metrics": {"accuracy": f"{test_auc:.4f} (Test AUC)"},
+                    "fairness_metrics": {
+                        "demographic_parity_status": "COMPLIANT (FAIR)" if 0.80 <= di_ratio <= 1.25 else "NON-COMPLIANT (BREACH)",
+                        "disparate_impact_ratio": round(di_ratio, 4)
+                    }
+                }, f, indent=4)
+
             
             mlflow.log_param("model_type", "XGBClassifier")
             mlflow.log_param("mitigation_technique", "sample_reweighting")

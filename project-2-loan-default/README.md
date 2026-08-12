@@ -69,6 +69,11 @@ $$\text{Disparate Impact Ratio} = \frac{\text{Approval Rate of Protected Cohort}
 
 ---
 
+
+### Active Run Metrics
+* **Test ROC-AUC:** 0.7227
+* **Disparate Impact Ratio:** 1.0001 (Compliant)
+
 ## 📡 Production Drift Detection
 
 Population stability is verified by tracking the **Population Stability Index (PSI)** across continuous numerical financial features (`CreditScore`, `Income`, `LoanAmount`, `DTIRatio`) to determine if production feature distributions have shifted significantly away from the baseline model training data distribution:

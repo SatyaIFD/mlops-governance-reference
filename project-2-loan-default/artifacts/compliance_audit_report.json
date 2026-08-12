@@ -1,9 +1,9 @@
 {
-    "fairness_metrics": {
-        "demographic_parity_status": "NON-COMPLIANT (BREACH)",
-        "disparate_impact_ratio": 0.0
-    },
     "performance_metrics": {
-        "accuracy": "91.4% (Baseline Validation)"
+        "accuracy": "0.7227 (Test AUC)"
+    },
+    "fairness_metrics": {
+        "demographic_parity_status": "COMPLIANT (FAIR)",
+        "disparate_impact_ratio": 1.0001
     }
 }

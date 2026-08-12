@@ -4,13 +4,13 @@
 ---
 
 ## ⚖️ Model Governance & Fairness Summary
-* **Demographic Parity Status:** `COMPLIANT (PASS)`
+* **Demographic Parity Status:** `COMPLIANT (FAIR)`
 * **Disparate Impact Ratio (Young vs. Control Group):** `1.0001`
 > *Note: Compliance requires the disparate impact ratio to sit between 0.80 and 1.25 to meet the industry standard 4/5ths rule for fair lending practices.*
 
 ## 📊 Core Performance Metrics
-* **Model Validation (ROC-AUC):** `0.7227`
-* **Underwriting Decision Mode:** Equalized Odds Mitigation Constraints Applied (Sample Re-weighting)
+* **Model Accuracy Status:** `0.7227 (Test AUC)`
+* **Underwriting Decision Mode:** Equalized Odds Mitigation Constraints Applied
 
 ## 📡 Population Stability & Production Drift
 * **Data Distribution Status:** `STABLE`
