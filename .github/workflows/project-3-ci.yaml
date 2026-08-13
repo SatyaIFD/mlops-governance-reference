@@ -35,6 +35,11 @@ jobs:
       run: |
         pdoc project-3-aml-streaming/src/ -o project-3-aml-streaming/docs/api/
         
+    - name: Enforce Operational Directory Structures
+      run: |
+        mkdir -p project-3-aml-streaming/data
+        mkdir -p project-3-aml-streaming/artifacts
+        
     - name: Build Docker Container
       run: |
         docker build -t aml-stream-api:ci -f project-3-aml-streaming/Dockerfile project-3-aml-streaming/
