@@ -27,7 +27,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r project-2-loan-default/requirements.txt
+        pip install -r project-2-loan-default/requirements.txt pytest httpx
 
     - name: Enforce Operational Directory Structures
       run: |
