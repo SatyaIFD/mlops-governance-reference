@@ -59,6 +59,8 @@ docker pull ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
 docker run -d -p 8000:8000 --name aml-streaming-api ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
 
 ```
+### Option 2: Local Development Setup
+If you wish to run the test suite or modify the architecture locally:
 
 # Clone repository
 git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
