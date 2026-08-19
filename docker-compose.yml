@@ -1,0 +1,32 @@
+name: mlops-governance-reference
+
+services:
+  # ==========================================
+  # PROJECT 1: Batch Fraud Detection
+  # ==========================================
+  fraud-detection-batch:
+    image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
+    container_name: mlops-fraud-batch
+    # Keeps the batch container running in the background so we can execute scripts inside it
+    command: tail -f /dev/null
+    restart: unless-stopped
+
+  # ==========================================
+  # PROJECT 2: Loan Default Shadow Deployment
+  # ==========================================
+  loan-default-shadow:
+    image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
+    container_name: mlops-loan-shadow
+    # Keeps the batch container running in the background
+    command: tail -f /dev/null
+    restart: unless-stopped
+
+  # ==========================================
+  # PROJECT 3: Real-Time AML Streaming
+  # ==========================================
+  aml-streaming-api:
+    image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
+    container_name: mlops-aml-streaming
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
