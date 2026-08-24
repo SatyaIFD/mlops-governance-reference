@@ -84,3 +84,9 @@ PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
 
 # Launch real-time streaming pipeline locally
 PYTHONPATH=project-3-aml-streaming python project-3-aml-streaming/src/streaming/pipeline.py
+
+---
+
+## 🤖 Acknowledgments
+
+This enterprise reference architecture was conceptualized, structured, and developed with the assistance of **Google Gemini Pro**. AI was utilized to accelerate CI/CD boilerplate generation, refine MLOps architectural patterns, and implement robust, enterprise-grade compliance frameworks.
