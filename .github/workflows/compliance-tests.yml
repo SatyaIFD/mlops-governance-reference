@@ -1,0 +1,33 @@
+name: Regulatory Compliance Audit
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'compliance/**'
+      - '.github/workflows/compliance-tests.yml'
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  governance-audit:
+    name: EU AI Act, GDPR & DORA Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Monorepo
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Governance Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pandas hypothesis faker
+
+    - name: Execute Dynamic Testing Engine
+      run: |
+        python -m pytest compliance/test_compliance.py -v
