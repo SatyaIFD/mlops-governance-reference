@@ -41,7 +41,7 @@ A reference architecture for production Machine Learning Operations (MLOps) acro
 
 ## 🛠️ Cross-Project Governance Standards
 
-* **Automated CI/CD & Containerization:** GitHub Actions executes unit tests, auto-generates API docs, and builds optimized Docker containers (`python:3.13-slim`) on every commit via path filters.
+* **Automated CI/CD & Containerization:** GitHub Actions executes unit tests, auto-generates API docs, runs dynamic compliance gates, and builds optimized Docker containers (`python:3.13-slim`) on every commit via path filters.
 * **Continuous Deployment (CD):** Merges to `main` automatically publish production-ready images to GitHub Container Registry (GHCR) with strict Git commit SHA tagging for absolute traceability.
 * **Environment Portability:** Dynamic relative path resolution via `pathlib` across Linux, macOS, and containerized deployment environments.
 * **Full Auditability:** Complete 5-pillar governance framework (`data_dictionary.md`, `model_card.md`, `gdpr_compliance.md`, `fairness_and_bias_audit.md`, `incident_response_runbook.md`, `monitoring_and_slas.md`).
@@ -54,39 +54,43 @@ This architecture is designed to satisfy the strictest global regulatory framewo
 * **GDPR (Right to be Forgotten):** Programmatic purge utilities (`gdpr_purge.py`) to permanently scrub PII from MLflow tracking databases and batch datasets.
 * **EU AI Act (Human-in-the-Loop):** Decision routing gateways (`eu_ai_act_hitl_router.py`) that intercept borderline predictions and push them to manual auditor queues, preventing autonomous high-risk decisions.
 * **DORA (Operational Resilience):** Circuit breaker patterns (`dora_circuit_breaker.py`) ensuring inference degradation fails safely to rules-based fallbacks without causing cascading system outages.
+* **Automated Compliance Gates:** Property-based dynamic testing via `hypothesis` running in GitHub Actions to mathematically prove regulatory enforcement under thousands of unpredictable edge cases on every commit.
 
 ## 🚀 Quickstart & Setup
 
-### Option 1: Run Production Container (Recommended)
-You can instantly deploy the latest production build of the AML Streaming Engine directly from the GitHub Container Registry without installing any local Python dependencies:
+### Option 1: Run Multi-Project Fleet (Recommended)
+You can instantly deploy the fully containerized, three-project architecture simultaneously using the unified Docker Compose orchestration:
 
 ```bash
-# Pull the latest production image
-docker pull ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
+# Clone repository
+git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
+cd mlops-governance-reference
 
-# Run the real-time streaming pipeline
-docker run -d -p 8000:8000 --name aml-streaming-api ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
+# Spin up the entire multi-project architecture
+sudo docker-compose up --build -d
 
-```
-### Option 2: Local Development Setup
-If you wish to run the test suite or modify the architecture locally:
+# Verify all services are running
+sudo docker ps
+
+Option 2: Local Development Setup
+
+If you wish to run the test suites or modify the architecture natively:
+Bash
 
 # Clone repository
 git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
 cd mlops-governance-reference
 
-# Activate environment and install dependencies
+# Activate environment and install dependencies (including dynamic testing tools)
 conda activate mlops-lab
-uv pip install pandas numpy scikit-learn joblib pytest faker time-machine anyio hydra-core pdoc kagglehub
+uv pip install pandas numpy scikit-learn joblib pytest faker time-machine anyio hydra-core pdoc kagglehub hypothesis
 
-# Run test suite
+# Run the dynamic compliance test suite
+python -m pytest compliance/test_compliance.py -v
+
+# Run the Project 3 AML test suite
 PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
 
-# Launch real-time streaming pipeline locally
-PYTHONPATH=project-3-aml-streaming python project-3-aml-streaming/src/streaming/pipeline.py
+🤖 Acknowledgments
 
----
-
-## 🤖 Acknowledgments
-
-This enterprise reference architecture was conceptualized, structured, and developed with the assistance of **Google Gemini Pro**. AI was utilized to accelerate CI/CD boilerplate generation, refine MLOps architectural patterns, and implement robust, enterprise-grade compliance frameworks.
+This enterprise reference architecture was conceptualized, structured, and developed with the assistance of Google Gemini Pro. AI was utilized to accelerate CI/CD boilerplate generation, refine MLOps architectural patterns, and implement robust, enterprise-grade compliance frameworks.
