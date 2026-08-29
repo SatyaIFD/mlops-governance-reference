@@ -91,6 +91,8 @@ python -m pytest compliance/test_compliance.py -v
 # Run the Project 3 AML test suite
 PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
 
+```
+
 🤖 Acknowledgments
 
 This enterprise reference architecture was conceptualized, structured, and developed with the assistance of Google Gemini Pro. AI was utilized to accelerate CI/CD boilerplate generation, refine MLOps architectural patterns, and implement robust, enterprise-grade compliance frameworks.
