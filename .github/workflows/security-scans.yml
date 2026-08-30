@@ -1,0 +1,46 @@
+name: DevSecOps Vulnerability Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  python-sast:
+    name: Python Static Analysis (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Bandit
+      run: pip install bandit
+      
+    - name: Run Bandit Security Scan
+      # Scans only source code (ignores tests which often use fake/dummy data)
+      # -ll flag reports only Medium and High severity issues
+      run: bandit -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
+
+  container-scan:
+    name: Container Vulnerability Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build local AML image for scanning
+      run: docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile .
+      
+    - name: Run Trivy Vulnerability Scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'aml-security-test'
+        format: 'table'
+        exit-code: '1' # Fails the GitHub Action if vulnerabilities are found
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
