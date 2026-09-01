@@ -33,7 +33,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Build local AML image for scanning
-      run: docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile .
+      run: docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile project-3-aml-streaming
       
     - name: Run Trivy Vulnerability Scanner
       uses: aquasecurity/trivy-action@master
