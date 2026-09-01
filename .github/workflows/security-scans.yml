@@ -11,7 +11,7 @@ jobs:
     name: Python Static Analysis (Bandit)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -30,7 +30,7 @@ jobs:
     name: Container Vulnerability Scan (Trivy)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Build local AML image for scanning
       run: docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile project-3-aml-streaming
