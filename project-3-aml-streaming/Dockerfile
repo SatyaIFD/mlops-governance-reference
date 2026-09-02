@@ -20,8 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt pytest
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY tests/ ./tests/
-COPY data/ ./data/
-COPY artifacts/ ./artifacts/
+RUN mkdir -p data/
+RUN mkdir -p artifacts/
 
 # Default command: run unit tests first, then launch the streaming pipeline
 CMD ["sh", "-c", "pytest tests/ && python src/streaming/pipeline.py"]
