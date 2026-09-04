@@ -4,5 +4,6 @@ scikit-learn
 joblib
 faker
 kagglehub
-pytestmsgpack>=1.2.1
+pytest
+msgpack>=1.2.1
 setuptools>=78.1.1
