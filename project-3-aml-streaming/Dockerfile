@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt pytest
+RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1 msgpack>=1.2.1 && pip install --no-cache-dir -r requirements.txt pytest
 
 # Copy application source code, scripts, tests, data, and baseline artifacts
 COPY src/ ./src/
