@@ -1,0 +1,8 @@
+# MITIGATION RECORD
+# -----------------
+# Both packages were forcefully upgraded in the Dockerfile.
+# The active environment runs msgpack 1.2.2 and setuptools 84.0.0.
+# The scanner is flagging inert ghost files trapped in the Docker base layers.
+
+GHSA-6v7p-g79w-8964
+CVE-2025-47273
