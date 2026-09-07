@@ -55,6 +55,7 @@ This architecture is designed to satisfy the strictest global regulatory framewo
 * **EU AI Act (Human-in-the-Loop):** Decision routing gateways (`eu_ai_act_hitl_router.py`) that intercept borderline predictions and push them to manual auditor queues, preventing autonomous high-risk decisions.
 * **DORA (Operational Resilience):** Circuit breaker patterns (`dora_circuit_breaker.py`) ensuring inference degradation fails safely to rules-based fallbacks without causing cascading system outages.
 * **Automated Compliance Gates:** Property-based dynamic testing via `hypothesis` running in GitHub Actions to mathematically prove regulatory enforcement under thousands of unpredictable edge cases on every commit.
+* **DevSecOps & Container Security:** Hard-blocking CI/CD pipelines featuring Bandit (SAST) and Trivy container scanning, complete with documented ghost-package mitigation protocols.
 
 ## 🚀 Quickstart & Setup
 

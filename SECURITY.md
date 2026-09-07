@@ -17,17 +17,18 @@ Instead, please report it via [GitHub Security Advisories](https://docs.github.c
 
 We will acknowledge receipt of your vulnerability report within **48 hours** and strive to provide a timeline for a patch within 5 business days.
 
+## 🤖 Automated DevSecOps Pipeline
+This repository enforces strict, automated security gates on every Pull Request and merge to `main`:
+* **SAST (Static Application Security Testing):** `Bandit` scans all Python code for hardcoded credentials, injection flaws, and unsafe ML deserialization.
+* **Container Vulnerability Scanning:** `Trivy` scans the Docker layers (`python:3.13-slim`) for OS-level and Python-level CVEs. Builds will hard-fail (`exit code 1`) if `HIGH` or `CRITICAL` vulnerabilities are detected.
+* **Supply Chain Monitoring:** GitHub `Dependabot` automatically opens PRs to patch outdated dependencies.
+
+## 👻 Vulnerability Mitigation & Ghost Packages (.trivyignore)
+Because Docker builds in immutable layers, security scanners occasionally flag "ghost packages"—vulnerable files trapped in inert base layers, even after the active environment has been successfully patched. 
+
+Our policy dictates that `.trivyignore` is **strictly reserved for mitigated ghost packages or accepted risks with no upstream patch**. Any entry in this file must include a written mitigation record proving the active container runtime is secure.
+
 ## 🎯 Scope of Security
-
 Because this architecture processes simulated financial and PII data, we are particularly interested in vulnerability reports regarding the following AI/ML threat vectors:
-
-1. **Model Evasion & Poisoning:** Vulnerabilities allowing malicious inputs to bypass the EU AI Act HITL router or manipulate the AML streaming stateful graph.
-2. **Data Extraction:** Flaws that would allow unauthorized access to the MLflow backend or bypass the GDPR Right to be Forgotten protocol.
-3. **Pipeline Integrity:** Supply chain attacks or vulnerabilities in the automated GitHub Actions CI/CD pipeline or Docker base images (`python:3.13-slim`).
-4. **Denial of Service (DoS):** Attacks capable of bypassing the DORA circuit breaker pattern and crashing the streaming inference engine.
-
-## 🔒 Best Practices Implemented
-This repository natively enforces:
-* **Least Privilege:** Docker containers run on hardened Alpine/Slim layers without unnecessary root utilities.
-* **Secret Management:** No API keys, database credentials, or real customer PII are hardcoded in this repository.
-* **Dependency Scanning:** CI/CD automatically installs the latest secure versions of `pytest`, `scikit-learn`, and `pandas`.
+1. **Model Evasion & Poisoning:** Vulnerabilities allowing malicious inputs to bypass the EU AI Act HITL router.
+2. **Data Extraction:** Flaws that would bypass the GDPR Right to be Forgotten protocol.
