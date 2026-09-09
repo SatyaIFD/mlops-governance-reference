@@ -3,6 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13--slim-blue.svg)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED.svg)](https://www.docker.com/)
 [![CI/CD](https://img.shields.io/badge/GitHub_Actions-Automated-success.svg)](https://github.com/features/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A reference architecture for production Machine Learning Operations (MLOps) across batch, shadow deployment, and real-time stateful streaming paradigms. This repository demonstrates enterprise-grade data quality enforcement, drift detection, stateful feature engineering, automated CI/CD validation, and audit-ready artifact lineage.
 
@@ -46,7 +47,6 @@ A reference architecture for production Machine Learning Operations (MLOps) acro
 * **Environment Portability:** Dynamic relative path resolution via `pathlib` across Linux, macOS, and containerized deployment environments.
 * **Full Auditability:** Complete 5-pillar governance framework (`data_dictionary.md`, `model_card.md`, `gdpr_compliance.md`, `fairness_and_bias_audit.md`, `incident_response_runbook.md`, `monitoring_and_slas.md`).
 
-
 ## ⚖️ Regulatory Compliance & Legal Defensibility
 
 This architecture is designed to satisfy the strictest global regulatory frameworks for High-Risk AI systems. A dedicated `/compliance` directory provides centralized programmatic enforcement mechanisms:
@@ -59,6 +59,8 @@ This architecture is designed to satisfy the strictest global regulatory framewo
 
 ## 🚀 Quickstart & Setup
 
+This repository uses a `Makefile` to simplify orchestration. View all available commands by running `make help`.
+
 ### Option 1: Run Multi-Project Fleet (Recommended)
 You can instantly deploy the fully containerized, three-project architecture simultaneously using the unified Docker Compose orchestration:
 
@@ -68,32 +70,32 @@ git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://g
 cd mlops-governance-reference
 
 # Spin up the entire multi-project architecture
-sudo docker-compose up --build -d
+make up
 
 # Verify all services are running
 sudo docker ps
+
+# Tear down the architecture when finished
+make down
 
 Option 2: Local Development Setup
 
 If you wish to run the test suites or modify the architecture natively:
 Bash
 
-# Clone repository
-git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
-cd mlops-governance-reference
-
-# Activate environment and install dependencies (including dynamic testing tools)
+# Activate environment and install dependencies
 conda activate mlops-lab
 uv pip install pandas numpy scikit-learn joblib pytest faker time-machine anyio hydra-core pdoc kagglehub hypothesis
 
 # Run the dynamic compliance test suite
-python -m pytest compliance/test_compliance.py -v
+make test
 
-# Run the Project 3 AML test suite
-PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
-
-```
+# Run local security scans (Bandit)
+make security
 
 🤖 Acknowledgments
 
 This enterprise reference architecture was conceptualized, structured, and developed with the assistance of Google Gemini Pro. AI was utilized to accelerate CI/CD boilerplate generation, refine MLOps architectural patterns, and implement robust, enterprise-grade compliance frameworks.
+📜 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
