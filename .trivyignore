@@ -6,3 +6,31 @@
 
 GHSA-6v7p-g79w-8964
 CVE-2025-47273
+# -------------------------------------------------------------
+# OS-Level Vulnerability Triage 
+# Date: 2026-09-13
+# Justification: These vulnerabilities exist in the base upstream
+# python:3.13-slim (Debian 13.6) image. They affect packages (gzip, 
+# pcre2, sqlite3) that are not invoked during the runtime execution 
+# of the AML streaming application. Risk accepted temporarily until
+# upstream patches are released by Debian maintainers.
+# -------------------------------------------------------------
+CVE-2026-41992 # gzip
+CVE-2026-86145 # pcre2
+CVE-2026-89161 # pcre2
+CVE-2026-11822 # sqlite
+CVE-2026-11824 # sqlite
+# -------------------------------------------------------------
+# OS-Level Vulnerability Triage 
+# Date: 2026-09-13
+# Justification: These vulnerabilities exist in the base upstream
+# python:3.13-slim (Debian 13.6) image. They affect packages (gzip, 
+# pcre2, sqlite3) that are not invoked during the runtime execution 
+# of the AML streaming application. Risk accepted temporarily until
+# upstream patches are released by Debian maintainers.
+# -------------------------------------------------------------
+CVE-2026-41992 # gzip
+CVE-2026-86145 # pcre2
+CVE-2026-89161 # pcre2
+CVE-2026-11822 # sqlite
+CVE-2026-11824 # sqlite
