@@ -1,4 +1,3 @@
-import os # Intentional unused import for Ruff failure
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
