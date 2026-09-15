@@ -19,8 +19,11 @@ jobs:
         python-version: '3.11'
         
     - name: Install Bandit
-      run: pip install bandit
+      run: pip install bandit ruff
       
+    - name: Code Quality & Linting (Ruff)
+      run: ruff check .
+
     - name: Run Bandit Security Scan
       # Scans only source code (ignores tests which often use fake/dummy data)
       # -ll flag reports only Medium and High severity issues

@@ -1,0 +1,12 @@
+[tool.ruff]
+# Set the maximum line length to 88 (Standard Black formatting)
+line-length = 88
+
+# Enable specific rule sets:
+# E, W: pycodestyle (errors and warnings)
+# F: Pyflakes (logical errors like unused imports)
+# I: isort (import sorting)
+select = ["E", "W", "F", "I"]
+
+# Ignore specific rules if needed (we'll keep it strict for now)
+ignore = []
