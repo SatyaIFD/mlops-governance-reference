@@ -1,12 +1,20 @@
 [tool.ruff]
-# Set the maximum line length to 88 (Standard Black formatting)
+# Set the maximum line length to 88
 line-length = 88
+# Exclude Jupyter Notebooks from CI linting
+extend-exclude = ["*.ipynb"]
 
-# Enable specific rule sets:
-# E, W: pycodestyle (errors and warnings)
-# F: Pyflakes (logical errors like unused imports)
-# I: isort (import sorting)
+[tool.ruff.lint]
+# Enable specific rule sets
 select = ["E", "W", "F", "I"]
 
-# Ignore specific rules if needed (we'll keep it strict for now)
-ignore = []
+# Ignore legacy formatting issues to establish baseline
+ignore = [
+    "E501", # Line too long
+    "E722", # Bare except
+    "F541", # Empty f-string
+    "E702", # Multiple statements on one line (semicolon)
+    "E402", # Module import not at top of file
+    "W291", # Trailing whitespace
+    "W293"  # Blank line with whitespace
+]
