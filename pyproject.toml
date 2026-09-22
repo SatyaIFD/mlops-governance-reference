@@ -1,0 +1,11 @@
+[project]
+name = "mlops-governance-reference"
+version = "0.1.0"
+description = "Enterprise MLOps Governance & Observability Monorepo"
+authors = [{name = "SatyaIFD"}]
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
