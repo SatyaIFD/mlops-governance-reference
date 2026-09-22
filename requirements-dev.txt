@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+joblib
+pytest
+faker
+time-machine
+anyio
+hydra-core
+pdoc
+kagglehub
+hypothesis
+pre-commit
