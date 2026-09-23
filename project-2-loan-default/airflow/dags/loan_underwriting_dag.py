@@ -1,8 +1,11 @@
+from pathlib import Path
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-PROJECT_ROOT = "/media/storage/mlops-governance-reference"
+# Dynamically resolve the absolute path to the repository root
+DAG_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = str(DAG_DIR.parents[3])
 
 default_args = {
     "owner": "mlops_engine",
@@ -22,7 +25,6 @@ with DAG(
     catchup=False,
     max_active_runs=1,
 ) as dag:
-
     stream_traffic = BashOperator(
         task_id="stream_production_traffic",
         bash_command=f"cd {PROJECT_ROOT} && PYTHONPATH=. python project-2-loan-default/src/monitoring/generate_traffic.py",

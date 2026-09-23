@@ -83,3 +83,17 @@ project-3-aml-streaming/artifacts/
 data/
 *.joblib
 project-3-aml-streaming/docs/api/
+
+# Databases & MLflow
+*.db
+mlruns/
+
+# Airflow
+airflow/airflow-webserver.pid
+airflow/logs/
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
