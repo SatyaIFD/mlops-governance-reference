@@ -7,10 +7,24 @@ from typing import Dict, Any
 
 RAW_LOAN_DATA_SCHEMA: Dict[str, Any] = {
     "expected_columns": [
-        "LoanID", "Age", "Income", "CreditScore", "LoanAmount", "DTIRatio",
-        "MonthsEmployed", "NumCreditLines", "InterestRate", "LoanTerm",
-        "Education", "EmploymentType", "MaritalStatus", "HasMortgage",
-        "HasDependents", "LoanPurpose", "HasCoSigner", "Default"
+        "LoanID",
+        "Age",
+        "Income",
+        "CreditScore",
+        "LoanAmount",
+        "DTIRatio",
+        "MonthsEmployed",
+        "NumCreditLines",
+        "InterestRate",
+        "LoanTerm",
+        "Education",
+        "EmploymentType",
+        "MaritalStatus",
+        "HasMortgage",
+        "HasDependents",
+        "LoanPurpose",
+        "HasCoSigner",
+        "Default",
     ],
     "numerical_types": {
         "Age": "int64",
@@ -22,10 +36,20 @@ RAW_LOAN_DATA_SCHEMA: Dict[str, Any] = {
         "LoanTerm": "int64",
         "Default": "int64",
         "DTIRatio": "float64",
-        "InterestRate": "float64"
+        "InterestRate": "float64",
     },
     "categorical_columns": [
-        "Education", "EmploymentType", "MaritalStatus", 
-        "HasMortgage", "HasDependents", "LoanPurpose", "HasCoSigner"
-    ]
+        "Education",
+        "EmploymentType",
+        "MaritalStatus",
+        "HasMortgage",
+        "HasDependents",
+        "LoanPurpose",
+        "HasCoSigner",
+    ],
+    "categorical_allowed_values": {
+        "HasMortgage": ["Yes", "No"],
+        "HasDependents": ["Yes", "No"],
+        "HasCoSigner": ["Yes", "No"],
+    },
 }
