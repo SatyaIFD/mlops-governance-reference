@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.2.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.1.0...v0.2.0) (2026-09-26)
+
+
+### Features
+
+* implement pre-commit hooks and project metadata for DevEx ([ad30ff6](https://github.com/SatyaIFD/mlops-governance-reference/commit/ad30ff64997d11c33e65d19412566fab1c1c45b4))
+* implement pre-commit hooks and project metadata for DevEx ([a14be71](https://github.com/SatyaIFD/mlops-governance-reference/commit/a14be717898a907de255dee8c674f765d060de1b))
+
+
+### Bug Fixes
+
+* **project-1:** enforce hard failure on missing training data ([b90623d](https://github.com/SatyaIFD/mlops-governance-reference/commit/b90623dcd4be91beaaa7b13bf0167de93f9b7d6b))
+* **project-1:** implement dynamic mlflow versioning and robust fallback loading ([76dd643](https://github.com/SatyaIFD/mlops-governance-reference/commit/76dd643609dbdc7eb205f18492c947e1c8821039))
+* **project-2:** align ingestion schema boundaries with strict API con… ([b7d9dbc](https://github.com/SatyaIFD/mlops-governance-reference/commit/b7d9dbc6c6eb93a2b18a9b54c725fe6edc3bd413))
+* **project-2:** align ingestion schema boundaries with strict API contracts ([759074d](https://github.com/SatyaIFD/mlops-governance-reference/commit/759074d4a3023b0800200d546b6404c8c03edd7f))
+* **project-2:** bind evaluation engine to correct mlflow registry dat… ([12a26b8](https://github.com/SatyaIFD/mlops-governance-reference/commit/12a26b869d4eba3cd95a260c719ac38405d5c7af))
+* **project-2:** bind evaluation engine to correct mlflow registry database ([169ab8d](https://github.com/SatyaIFD/mlops-governance-reference/commit/169ab8dbbc8b19d4eb66135b3b7a539b89bb8eaa))
+* **project-3:** implement defensive stream exhaustion handling ([6295f97](https://github.com/SatyaIFD/mlops-governance-reference/commit/6295f9786cbdecd4dd86ffdcb2dc944b534a503d))
+* **project-3:** implement defensive stream exhaustion handling ([1f4aa24](https://github.com/SatyaIFD/mlops-governance-reference/commit/1f4aa242fe99ef8ad18591bc14d758c5ebb2ccbf))
+* resolve hardcoded airflow paths and clean up redundant docker/git configurations ([ae0a18f](https://github.com/SatyaIFD/mlops-governance-reference/commit/ae0a18f16335156aff6240aa926fd9255a905905))
+
+
+### Documentation
+
+* modernize architecture diagram and add DevSecOps documentation ([9f84333](https://github.com/SatyaIFD/mlops-governance-reference/commit/9f84333596235631058de3b02f3e1f87e6ff127b))
+* modernize architecture diagram and add DevSecOps documentation ([12831cf](https://github.com/SatyaIFD/mlops-governance-reference/commit/12831cfa25f07d3fda585301b6b6534374f0479e))
+
 ## 0.1.0 (2026-09-20)
 
 
