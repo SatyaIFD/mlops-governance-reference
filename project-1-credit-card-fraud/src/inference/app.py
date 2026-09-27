@@ -109,7 +109,8 @@ def predict_fraud(payload: TransactionData):
             status_code=503, detail="Inference engine is uninitialized."
         )
 
-    feature_names = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
+    # CRITICAL FIX: Align column order exactly with utils.py training sequence
+    feature_names = [f"V{i}" for i in range(1, 29)] + ["scaled_amount", "scaled_time"]
     df = pd.DataFrame([payload.features], columns=feature_names)
 
     try:
