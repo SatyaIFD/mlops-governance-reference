@@ -1,17 +1,51 @@
 version: 2
 updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # Root Monorepo Dependencies (pyproject.toml / uv)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-  - package-ecosystem: "docker"
-    directory: "/"
+
+  # Project 1: Credit Card Fraud
+  - package-ecosystem: "pip"
+    directory: "/project-1-credit-card-fraud"
     schedule:
       interval: "weekly"
       day: "monday"
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: "docker"
+    directory: "/project-1-credit-card-fraud"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # Project 2: Loan Default
+  - package-ecosystem: "pip"
+    directory: "/project-2-loan-default"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+  - package-ecosystem: "docker"
+    directory: "/project-2-loan-default"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # Project 3: AML Streaming
+  - package-ecosystem: "pip"
+    directory: "/project-3-aml-streaming"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+  - package-ecosystem: "docker"
+    directory: "/project-3-aml-streaming"
     schedule:
       interval: "weekly"
       day: "monday"
