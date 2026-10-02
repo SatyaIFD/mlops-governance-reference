@@ -3,7 +3,7 @@
 # ---------------------------------------------------------
 
 # Use the official slim Debian-based Python image for a smaller footprint
-FROM python:3.13.14-slim
+FROM python:3.14.0-slim
 
 # Set environment variables to optimize Python for containerized execution
 ENV PYTHONDONTWRITEBYTECODE=1 \
