@@ -5,5 +5,5 @@ joblib
 faker
 kagglehub
 pytest
-msgpack>=1.2.1
+msgpack>=1.2.3
 setuptools>=78.1.1
