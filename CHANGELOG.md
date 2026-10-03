@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.2.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.1.0...v0.2.0) (2026-10-03)
+
+
+### Features
+
+* implement pre-commit hooks and project metadata for DevEx ([ad30ff6](https://github.com/SatyaIFD/mlops-governance-reference/commit/ad30ff64997d11c33e65d19412566fab1c1c45b4))
+* implement pre-commit hooks and project metadata for DevEx ([a14be71](https://github.com/SatyaIFD/mlops-governance-reference/commit/a14be717898a907de255dee8c674f765d060de1b))
+
+
+### Bug Fixes
+
+* **deps:** cap pandas below 3.0 to resolve mlflow dependency conflict ([319d2a7](https://github.com/SatyaIFD/mlops-governance-reference/commit/319d2a7abe4b2f857d2f5949705301a45ee22077))
+* **deps:** cap pandas below 3.0 to resolve mlflow dependency conflict ([ba165c2](https://github.com/SatyaIFD/mlops-governance-reference/commit/ba165c2b85ac53a18d244ae132f5ddc64ab36f8a))
+* **project-1:** align inference dataframe columns with training schem… ([4411683](https://github.com/SatyaIFD/mlops-governance-reference/commit/4411683accb1e86c8a9987a1e18dc90ca1d2109b))
+* **project-1:** align inference dataframe columns with training schema sequence ([628e560](https://github.com/SatyaIFD/mlops-governance-reference/commit/628e56016d8cae5bdaf7b8f4dec941fbd6fd67ce))
+* **project-1:** enforce hard failure on missing training data ([b90623d](https://github.com/SatyaIFD/mlops-governance-reference/commit/b90623dcd4be91beaaa7b13bf0167de93f9b7d6b))
+* **project-1:** implement dynamic mlflow versioning and robust fallback loading ([76dd643](https://github.com/SatyaIFD/mlops-governance-reference/commit/76dd643609dbdc7eb205f18492c947e1c8821039))
+* **project-1:** unify feature scaling across training and inference s… ([573e29e](https://github.com/SatyaIFD/mlops-governance-reference/commit/573e29eb05149f2898f564f13b2955a23172b094))
+* **project-1:** unify feature scaling across training and inference schemas ([28e03a5](https://github.com/SatyaIFD/mlops-governance-reference/commit/28e03a561ed9378a842e4e41d6386caca4355e1e))
+* **project-2:** align ingestion schema boundaries with strict API con… ([b7d9dbc](https://github.com/SatyaIFD/mlops-governance-reference/commit/b7d9dbc6c6eb93a2b18a9b54c725fe6edc3bd413))
+* **project-2:** align ingestion schema boundaries with strict API contracts ([759074d](https://github.com/SatyaIFD/mlops-governance-reference/commit/759074d4a3023b0800200d546b6404c8c03edd7f))
+* **project-2:** bind evaluation engine to correct mlflow registry dat… ([12a26b8](https://github.com/SatyaIFD/mlops-governance-reference/commit/12a26b869d4eba3cd95a260c719ac38405d5c7af))
+* **project-2:** bind evaluation engine to correct mlflow registry database ([169ab8d](https://github.com/SatyaIFD/mlops-governance-reference/commit/169ab8dbbc8b19d4eb66135b3b7a539b89bb8eaa))
+* **project-3:** implement defensive stream exhaustion handling ([6295f97](https://github.com/SatyaIFD/mlops-governance-reference/commit/6295f9786cbdecd4dd86ffdcb2dc944b534a503d))
+* **project-3:** implement defensive stream exhaustion handling ([1f4aa24](https://github.com/SatyaIFD/mlops-governance-reference/commit/1f4aa242fe99ef8ad18591bc14d758c5ebb2ccbf))
+* **project-3:** replace COPY data with mkdir and clean trivyignore ([6cd3235](https://github.com/SatyaIFD/mlops-governance-reference/commit/6cd3235d98ff96506c824790555108877f370215))
+* **project-3:** replace COPY data with mkdir and clean trivyignore ([181d301](https://github.com/SatyaIFD/mlops-governance-reference/commit/181d301a5cf5c9faf031582ffcd63fd2ffec4679))
+* resolve hardcoded airflow paths and clean up redundant docker/git configurations ([ae0a18f](https://github.com/SatyaIFD/mlops-governance-reference/commit/ae0a18f16335156aff6240aa926fd9255a905905))
+
+
+### Documentation
+
+* modernize architecture diagram and add DevSecOps documentation ([9f84333](https://github.com/SatyaIFD/mlops-governance-reference/commit/9f84333596235631058de3b02f3e1f87e6ff127b))
+* modernize architecture diagram and add DevSecOps documentation ([12831cf](https://github.com/SatyaIFD/mlops-governance-reference/commit/12831cfa25f07d3fda585301b6b6534374f0479e))
+
 ## 0.1.0 (2026-09-20)
 
 
