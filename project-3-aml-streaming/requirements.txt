@@ -1,9 +1,14 @@
-pandas>=2.0.0,<3.0.0
-numpy
-scikit-learn
-joblib
-faker
-kagglehub
-pytest
+# ==========================================
+# Project 3: Anti-Money Laundering Streaming
+# ==========================================
+numpy>=2.0.0
+pandas>=2.2.0
+scikit-learn>=1.5.0
+pytest>=8.0.0
+joblib>=1.4.2
+faker>=30.0.0
+
+# Security Patched Dependencies (Trivy Scan)
 msgpack>=1.2.1
 setuptools>=78.1.1
+urllib3>=2.8.0
