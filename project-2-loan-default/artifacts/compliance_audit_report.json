@@ -1,9 +1,0 @@
-{
-    "performance_metrics": {
-        "accuracy": "0.7227 (Test AUC)"
-    },
-    "fairness_metrics": {
-        "demographic_parity_status": "COMPLIANT (FAIR)",
-        "disparate_impact_ratio": 1.0001
-    }
-}
