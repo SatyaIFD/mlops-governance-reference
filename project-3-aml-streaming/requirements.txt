@@ -1,4 +1,4 @@
-pandas>=2.0.0,<3.0.0
+pandas>=3.0.6,<4.0.0
 numpy
 scikit-learn
 joblib
