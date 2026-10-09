@@ -39,6 +39,7 @@ jobs:
         run: |
           pip install pytest uv
           uv pip install --system -r requirements.txt
+          uv pip install --system -r requirements-dev.txt
           uv pip install --system -r project-1-credit-card-fraud/requirements.txt
           uv pip install --system -r project-2-loan-default/requirements.txt
           uv pip install --system -r project-3-aml-streaming/requirements.txt
@@ -59,4 +60,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify Docker Compose Fleet
-        run: docker-compose build
+        run: docker compose build
