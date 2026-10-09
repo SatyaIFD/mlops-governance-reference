@@ -1,0 +1,62 @@
+name: Global CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Security Tools
+        run: pip install bandit
+
+      - name: Run SAST Scanner
+        run: make security
+
+  compliance-and-testing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Dependencies
+        run: |
+          pip install pytest uv
+          uv pip install --system -r requirements.txt
+          uv pip install --system -r project-1-credit-card-fraud/requirements.txt
+          uv pip install --system -r project-2-loan-default/requirements.txt
+          uv pip install --system -r project-3-aml-streaming/requirements.txt
+
+      - name: Run Global Compliance Tests
+        run: make test
+
+      - name: Run Microservice Unit Tests
+        run: |
+          pytest project-1-credit-card-fraud/tests/
+          pytest project-2-loan-default/tests/
+          pytest project-3-aml-streaming/tests/
+
+  docker-build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Verify Docker Compose Fleet
+        run: docker-compose build
