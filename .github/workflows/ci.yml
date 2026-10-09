@@ -49,9 +49,9 @@ jobs:
 
       - name: Run Microservice Unit Tests
         run: |
-          pytest project-1-credit-card-fraud/tests/
-          pytest project-2-loan-default/tests/
-          pytest project-3-aml-streaming/tests/
+          PYTHONPATH=project-1-credit-card-fraud pytest project-1-credit-card-fraud/tests/
+          PYTHONPATH=project-2-loan-default pytest project-2-loan-default/tests/
+          PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
 
   docker-build-check:
     runs-on: ubuntu-latest
