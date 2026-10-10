@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.2.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.1.0...v0.2.0) (2026-10-10)
+
+
+### Features
+
+* add global .env.example template for standardized configuration ([b5c2e1a](https://github.com/SatyaIFD/mlops-governance-reference/commit/b5c2e1af8767dd8368dc5234391df61d0fecebf1))
+* add global .env.example template for standardized configuration ([7c71998](https://github.com/SatyaIFD/mlops-governance-reference/commit/7c7199880cc723ab71259c82e5c891b7e71e96f1))
+* implement pre-commit hooks and project metadata for DevEx ([ad30ff6](https://github.com/SatyaIFD/mlops-governance-reference/commit/ad30ff64997d11c33e65d19412566fab1c1c45b4))
+* implement pre-commit hooks and project metadata for DevEx ([a14be71](https://github.com/SatyaIFD/mlops-governance-reference/commit/a14be717898a907de255dee8c674f765d060de1b))
+* **infra:** implement nginx api gateway and standardize compose serv… ([9a6d2d8](https://github.com/SatyaIFD/mlops-governance-reference/commit/9a6d2d8e25fa1e8b74f75c4008eff6c970a99c61))
+* **infra:** implement nginx api gateway and standardize compose services ([db16ac2](https://github.com/SatyaIFD/mlops-governance-reference/commit/db16ac248e2e22d82fd37e690ba2fc629b46849f))
+
+
+### Bug Fixes
+
+* **ci:** add dev requirements and use docker compose v2 syntax ([2ec920d](https://github.com/SatyaIFD/mlops-governance-reference/commit/2ec920d2f98ab9cacf5b65c3d26e5dba90d469ed))
+* **ci:** explicitly set pythonpath for nested monorepo microservices ([3de8e16](https://github.com/SatyaIFD/mlops-governance-reference/commit/3de8e16a5d0dc3c24201916acbfb495e8d1e03dc))
+* **ci:** restore original tests and use pytest -k to exclude mlflow model loads in cloud runner ([846f073](https://github.com/SatyaIFD/mlops-governance-reference/commit/846f073fc82a7ddd9d6a96f4c7f5ff928d6e0664))
+* **ci:** use pytest -k to exclude mlflow prediction test in project 2 cloud runner ([f4cc485](https://github.com/SatyaIFD/mlops-governance-reference/commit/f4cc485bbf2dfa4d3a990c07a72bce3874e96361))
+* **deps:** add missing kaggle dependency for project 2 ingestion ([78519b3](https://github.com/SatyaIFD/mlops-governance-reference/commit/78519b35ae113129d68a9afd9d47b2125fe1853b))
+* **deps:** cap pandas below 3.0 to resolve mlflow dependency conflict ([319d2a7](https://github.com/SatyaIFD/mlops-governance-reference/commit/319d2a7abe4b2f857d2f5949705301a45ee22077))
+* **deps:** cap pandas below 3.0 to resolve mlflow dependency conflict ([ba165c2](https://github.com/SatyaIFD/mlops-governance-reference/commit/ba165c2b85ac53a18d244ae132f5ddc64ab36f8a))
+* **deps:** strictly constrain pandas&lt;3 in pyproject.toml and rebuild … ([8c77e26](https://github.com/SatyaIFD/mlops-governance-reference/commit/8c77e26f4d9335a7bd3acac15bb4be8a77e78d2b))
+* **deps:** strictly constrain pandas&lt;3 in pyproject.toml and rebuild lockfile ([7189098](https://github.com/SatyaIFD/mlops-governance-reference/commit/71890985c5a982529685cd621dbb0868b843b5cb))
+* **project-1:** align inference dataframe columns with training schem… ([4411683](https://github.com/SatyaIFD/mlops-governance-reference/commit/4411683accb1e86c8a9987a1e18dc90ca1d2109b))
+* **project-1:** align inference dataframe columns with training schema sequence ([628e560](https://github.com/SatyaIFD/mlops-governance-reference/commit/628e56016d8cae5bdaf7b8f4dec941fbd6fd67ce))
+* **project-1:** enforce hard failure on missing training data ([b90623d](https://github.com/SatyaIFD/mlops-governance-reference/commit/b90623dcd4be91beaaa7b13bf0167de93f9b7d6b))
+* **project-1:** implement dynamic mlflow versioning and robust fallback loading ([76dd643](https://github.com/SatyaIFD/mlops-governance-reference/commit/76dd643609dbdc7eb205f18492c947e1c8821039))
+* **project-1:** unify feature scaling across training and inference s… ([573e29e](https://github.com/SatyaIFD/mlops-governance-reference/commit/573e29eb05149f2898f564f13b2955a23172b094))
+* **project-1:** unify feature scaling across training and inference schemas ([28e03a5](https://github.com/SatyaIFD/mlops-governance-reference/commit/28e03a561ed9378a842e4e41d6386caca4355e1e))
+* **project-2:** align ingestion schema boundaries with strict API con… ([b7d9dbc](https://github.com/SatyaIFD/mlops-governance-reference/commit/b7d9dbc6c6eb93a2b18a9b54c725fe6edc3bd413))
+* **project-2:** align ingestion schema boundaries with strict API contracts ([759074d](https://github.com/SatyaIFD/mlops-governance-reference/commit/759074d4a3023b0800200d546b6404c8c03edd7f))
+* **project-2:** bind evaluation engine to correct mlflow registry dat… ([12a26b8](https://github.com/SatyaIFD/mlops-governance-reference/commit/12a26b869d4eba3cd95a260c719ac38405d5c7af))
+* **project-2:** bind evaluation engine to correct mlflow registry database ([169ab8d](https://github.com/SatyaIFD/mlops-governance-reference/commit/169ab8dbbc8b19d4eb66135b3b7a539b89bb8eaa))
+* **project-3:** implement defensive stream exhaustion handling ([6295f97](https://github.com/SatyaIFD/mlops-governance-reference/commit/6295f9786cbdecd4dd86ffdcb2dc944b534a503d))
+* **project-3:** implement defensive stream exhaustion handling ([1f4aa24](https://github.com/SatyaIFD/mlops-governance-reference/commit/1f4aa242fe99ef8ad18591bc14d758c5ebb2ccbf))
+* **project-3:** replace COPY data with mkdir and clean trivyignore ([6cd3235](https://github.com/SatyaIFD/mlops-governance-reference/commit/6cd3235d98ff96506c824790555108877f370215))
+* **project-3:** replace COPY data with mkdir and clean trivyignore ([181d301](https://github.com/SatyaIFD/mlops-governance-reference/commit/181d301a5cf5c9faf031582ffcd63fd2ffec4679))
+* resolve hardcoded airflow paths and clean up redundant docker/git configurations ([ae0a18f](https://github.com/SatyaIFD/mlops-governance-reference/commit/ae0a18f16335156aff6240aa926fd9255a905905))
+* **tests:** mock mlflow model loads during github actions ci execution ([bdcc673](https://github.com/SatyaIFD/mlops-governance-reference/commit/bdcc67388e053a4dc4157ceb16c6ade44a4d628f))
+
+
+### Documentation
+
+* modernize architecture diagram and add DevSecOps documentation ([9f84333](https://github.com/SatyaIFD/mlops-governance-reference/commit/9f84333596235631058de3b02f3e1f87e6ff127b))
+* modernize architecture diagram and add DevSecOps documentation ([12831cf](https://github.com/SatyaIFD/mlops-governance-reference/commit/12831cfa25f07d3fda585301b6b6534374f0479e))
+
 ## 0.1.0 (2026-09-20)
 
 
