@@ -2,31 +2,41 @@ name: mlops-governance-reference
 
 services:
   # ==========================================
-  # PROJECT 1: Batch Fraud Detection
+  # API GATEWAY (Nginx)
   # ==========================================
-  fraud-detection-batch:
+  api-gateway:
+    image: nginx:1.25-alpine
+    container_name: mlops-api-gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - fraud-detection-api
+      - loan-default-api
+      - aml-streaming-api
+    restart: unless-stopped
+
+  # ==========================================
+  # PROJECT 1: Credit Card Fraud API
+  # ==========================================
+  fraud-detection-api:
     image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
-    container_name: mlops-fraud-batch
-    # Keeps the batch container running in the background so we can execute scripts inside it
-    command: tail -f /dev/null
+    container_name: mlops-fraud-api
     restart: unless-stopped
 
   # ==========================================
-  # PROJECT 2: Loan Default Shadow Deployment
+  # PROJECT 2: Loan Default API
   # ==========================================
-  loan-default-shadow:
+  loan-default-api:
     image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
-    container_name: mlops-loan-shadow
-    # Keeps the batch container running in the background
-    command: tail -f /dev/null
+    container_name: mlops-loan-api
     restart: unless-stopped
 
   # ==========================================
-  # PROJECT 3: Real-Time AML Streaming
+  # PROJECT 3: Real-Time AML Streaming API
   # ==========================================
   aml-streaming-api:
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
-    ports:
-      - "8000:8000"
     restart: unless-stopped
