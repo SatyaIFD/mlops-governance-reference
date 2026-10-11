@@ -15,7 +15,7 @@ sys.path.insert(0, str(BASE_DIR))
 # Dynamically set tracking URI relative to project root
 os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{BASE_DIR}/mlflow.db"
 
-from src.inference.app import app  # noqa: E402
+from src.inference.main import app  # noqa: E402
 
 
 def test_health_check():

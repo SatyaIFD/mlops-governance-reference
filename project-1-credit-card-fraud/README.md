@@ -1,6 +1,6 @@
 # Project 1: Production-Grade Credit Card Fraud Detection Pipeline
 
-An end-to-end, reproducible Machine Learning Operations (MLOps) pipeline built for credit card fraud classification, risk auditing, and automated data drift monitoring. 
+An end-to-end, reproducible Machine Learning Operations (MLOps) pipeline built for credit card fraud classification, risk auditing, and automated data drift monitoring.
 
 This project transitions exploratory modeling code into modular, contract-validated software sub-packages to implement Explainable AI (XAI) compliance audits, fairness evaluations, and real-time REST API endpoints suitable for highly regulated financial environments.
 
@@ -144,11 +144,11 @@ Simulated live production batches featuring distribution shifts are evaluated ag
 ```text
 project-1-credit-card-fraud/
 ├── data/
-│   └── processed/          
+│   └── processed/
 ├── docs/
-│   ├── gdpr_controls.md    
-│   ├── model_card.md        
-│   └── risk_assessment.md  
+│   ├── gdpr_controls.md
+│   ├── model_card.md
+│   └── risk_assessment.md
 ├── notebooks/
 │   ├── 01_data_ingestion.ipynb
 │   ├── 02_model_training.ipynb
@@ -161,7 +161,7 @@ project-1-credit-card-fraud/
 │   ├── training/
 │   │   └── train.py
 │   ├── inference/
-│   │   └── app.py
+│   │   └── main.py
 │   ├── monitoring/
 │   │   └── observability.py
 │   └── governance/
@@ -174,4 +174,3 @@ project-1-credit-card-fraud/
 └── README.md
 
 ```
-
