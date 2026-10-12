@@ -8,7 +8,7 @@ def test_streaming_ingestion_engine_validation(tmp_path):
     """Verifies schema validation and DLQ routing logic."""
     engine = StreamingIngestionEngine(dlq_output_dir=tmp_path)
     valid_payload = {
-        "Timestamp": "2024-03-15T10:00:00Z",
+        "Timestamp": "2024-03-15 10:00:00",
         "Sender_account": "ACC_123",
         "Receiver_account": "ACC_456",
         "Amount": 1500.00,
@@ -23,13 +23,13 @@ def test_velocity_state_manager_enrichment():
     """Verifies stateful feature engineering over lookback windows."""
     manager = StreamingStateManager()
     tx1 = {
-        "Timestamp": "2024-03-15T10:00:00Z",
+        "Timestamp": "2024-03-15 10:00:00",
         "Sender_account": "A",
         "Receiver_account": "B",
         "Amount": 1000.0,
     }
     tx2 = {
-        "Timestamp": "2024-03-15T10:05:00Z",
+        "Timestamp": "2024-03-15 10:05:00",
         "Sender_account": "A",
         "Receiver_account": "C",
         "Amount": 500.0,
