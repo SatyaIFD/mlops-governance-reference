@@ -97,3 +97,11 @@ airflow/logs/
 .ruff_cache/
 __pycache__/
 *.pyc
+
+# ==========================================
+# Apache Airflow Configurations & Secrets
+# ==========================================
+airflow/airflow.cfg
+airflow/webserver_config.py
+airflow/airflow.db
+airflow/logs/
