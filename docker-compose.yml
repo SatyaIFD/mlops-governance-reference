@@ -40,3 +40,20 @@ services:
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
     restart: unless-stopped
+
+  # ==========================================
+  # GLOBAL ORCHESTRATION: Apache Airflow
+  # ==========================================
+  airflow-standalone:
+    image: apache/airflow:2.10.2
+    container_name: mlops-airflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+    command: standalone
+    restart: unless-stopped
