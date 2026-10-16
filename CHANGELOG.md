@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.0...v0.2.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **tests:** replace hardcoded parquet test data with dynamic syntheti… ([04e16c1](https://github.com/SatyaIFD/mlops-governance-reference/commit/04e16c1e71a70f5edafe90fddf04881fcd20f00a))
+* **tests:** replace hardcoded parquet test data with dynamic synthetic dataframe ([23a8b28](https://github.com/SatyaIFD/mlops-governance-reference/commit/23a8b28e2581cfb06fab53f082f68126976b13b5))
+
 ## [0.2.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.1.0...v0.2.0) (2026-10-14)
 
 
