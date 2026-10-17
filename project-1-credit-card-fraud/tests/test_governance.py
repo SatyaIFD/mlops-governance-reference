@@ -29,9 +29,12 @@ def test_disparate_impact_ratio_bounds(mock_load_model):
     # GENERATE SYNTHETIC DATA
     np.random.seed(42)
     n_rows = 100
+
+    # FIX: Added "Class" to satisfy clean_and_transform_features column indexing
     data = {
         "Time": np.random.uniform(0, 100000, n_rows),
         "Amount": np.random.exponential(50, n_rows),
+        "Class": np.zeros(n_rows),
     }
     for i in range(1, 29):
         data[f"V{i}"] = np.random.normal(0, 1, n_rows)
