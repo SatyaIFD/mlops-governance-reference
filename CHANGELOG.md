@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.1...v0.2.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* **env:** update Makefile docker compose syntax and patch MLflow DB absolute paths ([27ff20b](https://github.com/SatyaIFD/mlops-governance-reference/commit/27ff20b17a5861fda9eacc73d55d8402bf8b51ac))
+* **tests:** add missing Class column to governance synthetic data ([c388ae7](https://github.com/SatyaIFD/mlops-governance-reference/commit/c388ae7d09979e3cf37cbe7c675e7bcc20fa8379))
+* **tests:** correct MLflow model name registration and cast GDPR purge ID to string ([e44de77](https://github.com/SatyaIFD/mlops-governance-reference/commit/e44de7795da3bef1ead243595d3c75951843d8bc))
+* **tests:** resolve linting and bandit security flags in mock tests ([bd34ca6](https://github.com/SatyaIFD/mlops-governance-reference/commit/bd34ca62ff88ef77895103e565a10f66c1b25313))
+* **tests:** resolve ruff E402 import error for project 2 inference tests ([b2e1fb7](https://github.com/SatyaIFD/mlops-governance-reference/commit/b2e1fb71fe0d093b6de6e636e3b935d685e56aed))
+
 ## [0.2.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.0...v0.2.1) (2026-10-16)
 
 
