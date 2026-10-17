@@ -25,17 +25,16 @@ def test_disparate_impact_ratio_bounds():
     mlflow.set_tracking_uri(f"sqlite:///{root_mlflow_db}")
 
     client = MlflowClient()
-    model_versions = client.search_model_versions("name='credit_card_fraud_model'")
+    # FIX: Use actual model name
+    model_name = "fraud_detection_xgb"
+    model_versions = client.search_model_versions(f"name='{model_name}'")
     latest_version = (
         max([int(mv.version) for mv in model_versions]) if model_versions else 1
     )
 
-    model = mlflow.pyfunc.load_model(
-        f"models:/credit_card_fraud_model/{latest_version}"
-    )
+    model = mlflow.pyfunc.load_model(f"models:/{model_name}/{latest_version}")
 
     # --- SYNTHETIC DATA GENERATION ---
-    # Replaces the local test.parquet file with deterministic synthetic data
     np.random.seed(42)
     n_rows = 100
 
@@ -43,23 +42,22 @@ def test_disparate_impact_ratio_bounds():
         "Time": np.random.uniform(0, 100000, n_rows),
         "Amount": np.random.exponential(50, n_rows),  # Skewed amounts
     }
-    # Add V1 through V28
     for i in range(1, 29):
         data[f"V{i}"] = np.random.normal(0, 1, n_rows)
 
     df = pd.DataFrame(data)
 
-    # Drop duplicates upfront so the raw dataframe and processed dataframe maintain the exact same row count
+    # Drop duplicates upfront
     df = df.drop_duplicates().reset_index(drop=True)
 
-    # Transform a copy of the dataframe to generate scaled_time and scaled_amount
+    # Transform
     processed_df = clean_and_transform_features(df.copy())
 
     # The model's exact expected signature
     feature_names = [f"V{i}" for i in range(1, 29)] + ["scaled_amount", "scaled_time"]
     df["predictions"] = model.predict(processed_df[feature_names])
 
-    # Governance Logic: Check if high-value transactions are disproportionately flagged
+    # Governance Logic
     threshold = df["Amount"].quantile(0.80)
     high_flag_rate = df[df["Amount"] >= threshold]["predictions"].mean()
     low_flag_rate = df[df["Amount"] < threshold]["predictions"].mean()
