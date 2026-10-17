@@ -9,17 +9,21 @@ tests_dir = Path(__file__).resolve().parent
 project_root = tests_dir.parent
 sys.path.append(str(project_root))
 
-from src.inference.app import app  # noqa: E402
+from src.inference.main import app  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def mock_mlflow_model():
     """Injects a mock model to bypass empty MLflow registries in CI runners."""
-    with patch("src.inference.app.mlflow.pyfunc.load_model") as mock_load:
+    with patch("src.inference.main.mlflow.xgboost.load_model") as mock_load:
         mock_model = MagicMock()
         # Simulate a standard risk prediction so the test assertion passes
         mock_model.predict.return_value = [0]
         mock_model.predict_proba.return_value = [[0.8, 0.2]]
+
+        # Project 2 app checks for feature_names_in_ to build the dataframe
+        mock_model.feature_names_in_ = ["Age", "Income", "CreditScore"]
+
         mock_load.return_value = mock_model
         yield mock_model
 
