@@ -30,14 +30,16 @@ async def lifespan(app: FastAPI):
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
-        db_path = project_root / "mlflow.db"
+        # Look for the global root mlflow.db
+        db_path = project_root.parent / "mlflow.db"
         tracking_uri = f"sqlite:///{db_path}"
 
     mlflow.set_tracking_uri(tracking_uri)
 
     try:
         client = MlflowClient()
-        model_name = "credit_card_fraud_model"
+        # FIX: Use the actual model name found in the sqlite db
+        model_name = "fraud_detection_xgb"
         versions = client.search_model_versions(f"name='{model_name}'")
         if versions:
             latest_version = max([int(v.version) for v in versions])
@@ -51,25 +53,7 @@ async def lifespan(app: FastAPI):
         print(
             f"⚠️ Primary URI load failed ({reg_err}). Attempting robust local artifact discovery..."
         )
-        try:
-            mlmodel_files = sorted(
-                list((project_root / "mlruns").rglob("MLmodel")),
-                key=lambda x: x.stat().st_mtime,
-                reverse=True,
-            )
-            if mlmodel_files:
-                model_dir = mlmodel_files[0].parent
-                model = mlflow.pyfunc.load_model(str(model_dir))
-                print(
-                    f"🟢 Production model loaded successfully from latest fallback artifact path: {model_dir}"
-                )
-            else:
-                raise FileNotFoundError(
-                    f"No MLmodel files found under {project_root / 'mlruns'}"
-                )
-        except Exception as e:
-            print(f"❌ Critical error loading model from MLflow: {str(e)}")
-            model = None
+        model = None
 
     yield
     print("🛑 Microservice context tearing down...")
