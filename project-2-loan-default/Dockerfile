@@ -9,5 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the project codebase
 COPY . .
 
-# Default command for a batch container
-CMD ["/bin/bash"]
+# Expose the API port
+EXPOSE 8000
+
+# Start the FastAPI application via Uvicorn
+CMD ["uvicorn", "src.inference.main:app", "--host", "0.0.0.0", "--port", "8000"]
