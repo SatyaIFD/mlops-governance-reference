@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.2...v0.2.3) (2026-10-18)
+
+
+### Bug Fixes
+
+* **docker:** inject uvicorn entrypoints and map local build contexts … ([3239183](https://github.com/SatyaIFD/mlops-governance-reference/commit/3239183d99f7c848075f584c95ca44a847ab0668))
+* **docker:** inject uvicorn entrypoints and map local build contexts in compose ([39bcaff](https://github.com/SatyaIFD/mlops-governance-reference/commit/39bcaff773df80bc4ad652639b921e68311ca0a3))
+
 ## [0.2.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.1...v0.2.2) (2026-10-17)
 
 
