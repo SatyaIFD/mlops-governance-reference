@@ -21,6 +21,7 @@ services:
   # PROJECT 1: Credit Card Fraud API
   # ==========================================
   fraud-detection-api:
+    build: ./project-1-credit-card-fraud
     image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
     container_name: mlops-fraud-api
     restart: unless-stopped
@@ -29,6 +30,7 @@ services:
   # PROJECT 2: Loan Default API
   # ==========================================
   loan-default-api:
+    build: ./project-2-loan-default
     image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
     container_name: mlops-loan-api
     restart: unless-stopped
@@ -37,6 +39,7 @@ services:
   # PROJECT 3: Real-Time AML Streaming API
   # ==========================================
   aml-streaming-api:
+    build: ./project-3-aml-streaming
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
     restart: unless-stopped
