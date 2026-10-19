@@ -7,4 +7,4 @@ kagglehub
 pytest
 msgpack>=1.2.1
 setuptools>=78.1.1
-mlflow>=2.11.0
+mlflow>=3.17.1
