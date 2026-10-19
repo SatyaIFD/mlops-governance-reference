@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.3...v0.2.4) (2026-10-19)
+
+
+### Bug Fixes
+
+* **docker:** correct project 3 headless streaming entrypoint and prev… ([4c7667f](https://github.com/SatyaIFD/mlops-governance-reference/commit/4c7667f2f88c9d7bdc5a3890ec68a8be801e3302))
+* **docker:** correct project 3 headless streaming entrypoint and prevent exit loops ([dcbde6f](https://github.com/SatyaIFD/mlops-governance-reference/commit/dcbde6f9f0ea0849773eb503caf435cda05f8c12))
+
 ## [0.2.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.2...v0.2.3) (2026-10-18)
 
 
