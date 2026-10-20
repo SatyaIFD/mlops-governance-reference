@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.5](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.4...v0.2.5) (2026-10-20)
+
+
+### Bug Fixes
+
+* **docker:** mount global mlflow database into API containers ([a38ab8c](https://github.com/SatyaIFD/mlops-governance-reference/commit/a38ab8c9c0b306bfc090af07342b05a05b970c1d))
+* **project1:** align train.py path with monorepo mlflow database ([1f23529](https://github.com/SatyaIFD/mlops-governance-reference/commit/1f235297105d9e82e9f34b11ec08362a7c2d78c1))
+
 ## [0.2.4](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.3...v0.2.4) (2026-10-19)
 
 
