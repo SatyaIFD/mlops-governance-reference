@@ -64,6 +64,7 @@ app = FastAPI(
     description="Real-time transactional inference API backed by MLflow Registry.",
     version="1.0.0",
     lifespan=lifespan,
+    root_path="/api/v1/fraud",
 )
 
 

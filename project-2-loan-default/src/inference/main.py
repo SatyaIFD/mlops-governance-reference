@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
-        db_path = project_root / "mlflow.db"
+        # FIX: Point to monorepo root for global database alignment
+        db_path = project_root.parent / "mlflow.db"
         tracking_uri = f"sqlite:///{db_path}"
 
     mlflow.set_tracking_uri(tracking_uri)
@@ -55,7 +56,8 @@ async def lifespan(app: FastAPI):
             f"⚠️ Registry URI load failed ({reg_err}). Attempting local artifact discovery in mlruns..."
         )
         try:
-            mlmodel_files = list((project_root / "mlruns").rglob("MLmodel"))
+            # FIX: Point fallback artifact path to monorepo root
+            mlmodel_files = list((project_root.parent / "mlruns").rglob("MLmodel"))
             if mlmodel_files:
                 model_dir = mlmodel_files[0].parent
                 model = mlflow.xgboost.load_model(str(model_dir))
@@ -64,7 +66,7 @@ async def lifespan(app: FastAPI):
                 )
             else:
                 raise FileNotFoundError(
-                    f"No MLmodel files found under {project_root / 'mlruns'}"
+                    f"No MLmodel files found under {project_root.parent / 'mlruns'}"
                 )
         except Exception as e:
             print(f"❌ Critical error loading model from MLflow: {str(e)}")
@@ -88,6 +90,7 @@ app = FastAPI(
     description="Responsible AI Risk Scoring Engine using a Sample-Reweighted XGBoost Model.",
     version="1.0.0",
     lifespan=lifespan,
+    root_path="/api/v1/loan",
 )
 
 

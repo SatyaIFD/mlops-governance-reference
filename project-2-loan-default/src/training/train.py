@@ -3,7 +3,6 @@ Production Training Engine - Project 2: Loan Default Prediction
 Trains the mitigated fair model using sample re-weighting and registers metrics via MLflow.
 """
 
-import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -14,6 +13,7 @@ import json
 import mlflow.xgboost
 from mlflow.models import infer_signature
 
+
 class LoanModelTrainer:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
@@ -23,27 +23,31 @@ class LoanModelTrainer:
     def calculate_mitigation_weights(self, df: pd.DataFrame) -> np.ndarray:
         """Computes sample weights to neutralize historical age-based demographic parity bias."""
         N = len(df)
-        n_fav = len(df[df['Default'] == 0])
-        n_unfav = len(df[df['Default'] == 1])
-        
-        n_protected = len(df[df['Age'] < 30])
-        n_baseline = len(df[df['Age'] >= 30])
-        
-        n_prot_fav = len(df[(df['Age'] < 30) & (df['Default'] == 0)])
-        n_prot_unfav = len(df[(df['Age'] < 30) & (df['Default'] == 1)])
-        n_base_fav = len(df[(df['Age'] >= 30) & (df['Default'] == 0)])
-        n_base_unfav = len(df[(df['Age'] >= 30) & (df['Default'] == 1)])
-        
+        n_fav = len(df[df["Default"] == 0])
+        n_unfav = len(df[df["Default"] == 1])
+
+        n_protected = len(df[df["Age"] < 30])
+        n_baseline = len(df[df["Age"] >= 30])
+
+        n_prot_fav = len(df[(df["Age"] < 30) & (df["Default"] == 0)])
+        n_prot_unfav = len(df[(df["Age"] < 30) & (df["Default"] == 1)])
+        n_base_fav = len(df[(df["Age"] >= 30) & (df["Default"] == 0)])
+        n_base_unfav = len(df[(df["Age"] >= 30) & (df["Default"] == 1)])
+
         w_prot_fav = (n_protected * n_fav) / (N * n_prot_fav) if n_prot_fav > 0 else 1.0
-        w_prot_unfav = (n_protected * n_unfav) / (N * n_prot_unfav) if n_prot_unfav > 0 else 1.0
+        w_prot_unfav = (
+            (n_protected * n_unfav) / (N * n_prot_unfav) if n_prot_unfav > 0 else 1.0
+        )
         w_base_fav = (n_baseline * n_fav) / (N * n_base_fav) if n_base_fav > 0 else 1.0
-        w_base_unfav = (n_baseline * n_unfav) / (N * n_base_unfav) if n_base_unfav > 0 else 1.0
-        
+        w_base_unfav = (
+            (n_baseline * n_unfav) / (N * n_base_unfav) if n_base_unfav > 0 else 1.0
+        )
+
         weights = np.ones(N)
-        weights[(df['Age'] < 30) & (df['Default'] == 0)] = w_prot_fav
-        weights[(df['Age'] < 30) & (df['Default'] == 1)] = w_prot_unfav
-        weights[(df['Age'] >= 30) & (df['Default'] == 0)] = w_base_fav
-        weights[(df['Age'] >= 30) & (df['Default'] == 1)] = w_base_unfav
+        weights[(df["Age"] < 30) & (df["Default"] == 0)] = w_prot_fav
+        weights[(df["Age"] < 30) & (df["Default"] == 1)] = w_prot_unfav
+        weights[(df["Age"] >= 30) & (df["Default"] == 0)] = w_base_fav
+        weights[(df["Age"] >= 30) & (df["Default"] == 1)] = w_base_unfav
         return weights
 
     def run_pipeline(self):
@@ -51,90 +55,117 @@ class LoanModelTrainer:
         print("📥 Ingesting validated Parquet frames...")
         train_df = pd.read_parquet(self.train_path)
         test_df = pd.read_parquet(self.test_path)
-        
+
         for df in [train_df, test_df]:
-            if 'LoanID' in df.columns:
-                df.drop(columns=['LoanID'], inplace=True)
-                
-        X_train = train_df.drop(columns=['Default'])
-        y_train = train_df['Default']
-        X_test = test_df.drop(columns=['Default'])
-        y_test = test_df['Default']
-        
-        X_train['is_young'] = (X_train['Age'] < 30).astype(int)
-        X_test['is_young'] = (X_test['Age'] < 30).astype(int)
-        
-        cat_cols = X_train.select_dtypes(include=['object', 'category']).columns.tolist()
+            if "LoanID" in df.columns:
+                df.drop(columns=["LoanID"], inplace=True)
+
+        X_train = train_df.drop(columns=["Default"])
+        y_train = train_df["Default"]
+        X_test = test_df.drop(columns=["Default"])
+        y_test = test_df["Default"]
+
+        X_train["is_young"] = (X_train["Age"] < 30).astype(int)
+        X_test["is_young"] = (X_test["Age"] < 30).astype(int)
+
+        cat_cols = X_train.select_dtypes(
+            include=["object", "category"]
+        ).columns.tolist()
         if cat_cols:
             X_train = pd.get_dummies(X_train, columns=cat_cols, drop_first=True)
             X_test = pd.get_dummies(X_test, columns=cat_cols, drop_first=True)
-            X_train, X_test = X_train.align(X_test, join='left', axis=1, fill_value=0)
-            
-        X_train = X_train.astype({col: 'int8' for col in X_train.select_dtypes(include=['bool']).columns})
-        X_test = X_test.astype({col: 'int8' for col in X_test.select_dtypes(include=['bool']).columns})
-        
+            X_train, X_test = X_train.align(X_test, join="left", axis=1, fill_value=0)
+
+        X_train = X_train.astype(
+            {col: "int8" for col in X_train.select_dtypes(include=["bool"]).columns}
+        )
+        X_test = X_test.astype(
+            {col: "int8" for col in X_test.select_dtypes(include=["bool"]).columns}
+        )
+
         sample_weights = self.calculate_mitigation_weights(train_df)
-        
+
         mlflow.set_experiment("loan_default_risk_governance")
         with mlflow.start_run(run_name="mitigated_sample_reweighting"):
             print("🌲 Fitting Fair XGBoost pipeline...")
-            model = XGBClassifier(random_state=42, eval_metric='logloss', n_estimators=100)
+            model = XGBClassifier(
+                random_state=42, eval_metric="logloss", n_estimators=100
+            )
             model.fit(X_train, y_train, sample_weight=sample_weights)
-            
+
             train_auc = roc_auc_score(y_train, model.predict_proba(X_train)[:, 1])
             test_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-            
+
             preds = model.predict(X_test)
-            df_audit = pd.DataFrame({'is_young': X_test['is_young'], 'approved': (preds == 0).astype(int)})
-            approval_rates = df_audit.groupby('is_young')['approved'].mean()
-            di_ratio = approval_rates[1] / approval_rates[0] if approval_rates[0] > 0 else 0
-            
-            print(f"📊 Run Completed: Test AUC = {test_auc:.4f} | Disparate Impact = {di_ratio:.4f}")
-            
+            df_audit = pd.DataFrame(
+                {"is_young": X_test["is_young"], "approved": (preds == 0).astype(int)}
+            )
+            approval_rates = df_audit.groupby("is_young")["approved"].mean()
+            di_ratio = (
+                approval_rates[1] / approval_rates[0] if approval_rates[0] > 0 else 0
+            )
+
+            print(
+                f"📊 Run Completed: Test AUC = {test_auc:.4f} | Disparate Impact = {di_ratio:.4f}"
+            )
+
             # Export metrics for Governance Audit Script
-            eval_report_path = self.data_dir.parent.parent / "artifacts" / "compliance_audit_report.json"
+            eval_report_path = (
+                self.data_dir.parent.parent
+                / "artifacts"
+                / "compliance_audit_report.json"
+            )
             eval_report_path.parent.mkdir(parents=True, exist_ok=True)
             with open(eval_report_path, "w") as f:
-                json.dump({
-                    "performance_metrics": {"accuracy": f"{test_auc:.4f} (Test AUC)"},
-                    "fairness_metrics": {
-                        "demographic_parity_status": "COMPLIANT (FAIR)" if 0.80 <= di_ratio <= 1.25 else "NON-COMPLIANT (BREACH)",
-                        "disparate_impact_ratio": round(di_ratio, 4)
-                    }
-                }, f, indent=4)
+                json.dump(
+                    {
+                        "performance_metrics": {
+                            "accuracy": f"{test_auc:.4f} (Test AUC)"
+                        },
+                        "fairness_metrics": {
+                            "demographic_parity_status": "COMPLIANT (FAIR)"
+                            if 0.80 <= di_ratio <= 1.25
+                            else "NON-COMPLIANT (BREACH)",
+                            "disparate_impact_ratio": round(di_ratio, 4),
+                        },
+                    },
+                    f,
+                    indent=4,
+                )
 
-            
             mlflow.log_param("model_type", "XGBClassifier")
             mlflow.log_param("mitigation_technique", "sample_reweighting")
             mlflow.log_metric("train_roc_auc", train_auc)
             mlflow.log_metric("test_roc_auc", test_auc)
             mlflow.log_metric("disparate_impact_ratio", di_ratio)
-            
+
             signature = infer_signature(X_train, model.predict_proba(X_train)[:, 1])
-            
+
             try:
                 mlflow.xgboost.log_model(
                     xgb_model=model,
                     name="fair_loan_model",
                     registered_model_name="loan_default_production_model",
-                    signature=signature
+                    signature=signature,
                 )
             except TypeError:
                 mlflow.xgboost.log_model(
                     xgb_model=model,
                     artifact_path="fair_loan_model",
                     registered_model_name="loan_default_production_model",
-                    signature=signature
+                    signature=signature,
                 )
             print("💾 Production run completely tracked in system registry.")
+
 
 if __name__ == "__main__":
     SRC_DIR = Path(__file__).resolve().parent
     BASE_DIR = SRC_DIR.parents[1]
     DATA_DIR = BASE_DIR / "data" / "processed"
-    
-    db_path = BASE_DIR / "mlflow.db"
+
+    # FIX: Point tracking URI to the monorepo root database
+    db_path = BASE_DIR.parent / "mlflow.db"
     mlflow.set_tracking_uri(f"sqlite:///{db_path}")
-    
+
     trainer = LoanModelTrainer(data_dir=DATA_DIR)
     trainer.run_pipeline()
