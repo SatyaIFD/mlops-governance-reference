@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.6](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.5...v0.2.6) (2026-10-21)
+
+
+### Bug Fixes
+
+* resolve p2 mlflow tracking, nginx routing, and swagger ui paths ([168528e](https://github.com/SatyaIFD/mlops-governance-reference/commit/168528e0326af9db7ad418551df587b036a91849))
+* resolve p2 mlflow tracking, nginx routing, and swagger ui paths ([fda8f48](https://github.com/SatyaIFD/mlops-governance-reference/commit/fda8f48c534a71d4b732ffad10782c6c738e1c8b))
+
 ## [0.2.5](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.4...v0.2.5) (2026-10-20)
 
 
