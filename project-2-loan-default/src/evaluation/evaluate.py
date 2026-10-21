@@ -22,8 +22,8 @@ class LoanModelEvaluator:
         """Loads latest registered model, runs performance & fairness audits, and dumps a sign-off report."""
         print("📥 Loading validated test partition for governance audit...")
 
-        # CRITICAL FIX: Explicitly bind the MLflow tracking URI to the Project 2 SQLite DB
-        db_path = self.data_dir.parents[1] / "mlflow.db"
+        # FIX: Point tracking URI to the monorepo root database
+        db_path = self.data_dir.parents[2] / "mlflow.db"
         mlflow.set_tracking_uri(f"sqlite:///{db_path}")
 
         test_df = pd.read_parquet(self.test_path)
