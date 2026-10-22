@@ -1,4 +1,5 @@
 import joblib
+import pandas as pd
 import mlflow
 import mlflow.pyfunc
 from pathlib import Path
@@ -28,7 +29,10 @@ class AMLAnomalyDetector:
         if not self.model:
             raise ValueError("Inference engine is uninitialized.")
 
-        features = [[enriched_tx.get(col, 0.0) for col in self.feature_cols]]
+        features = pd.DataFrame(
+            [[enriched_tx.get(col, 0.0) for col in self.feature_cols]],
+            columns=self.feature_cols,
+        )
 
         # Extract underlying sklearn model if wrapped by MLflow PyFunc
         model_to_use = self.model
@@ -46,7 +50,7 @@ class AMLAnomalyDetector:
     def load(self, model_name: str = "aml_streaming_model") -> None:
         """Loads the latest production model artifact from the central MLflow registry."""
         # Resolve the absolute path to the root mlops-governance-reference directory
-        root_dir = Path(__file__).resolve().parents[4]
+        root_dir = Path(__file__).resolve().parents[3]
         mlflow_db_path = root_dir / "mlflow.db"
 
         mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
