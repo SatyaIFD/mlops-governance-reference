@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.6...v0.3.0) (2026-10-22)
+
+
+### Features
+
+* complete aml streaming orchestration and optimize model training ([a3b4ca6](https://github.com/SatyaIFD/mlops-governance-reference/commit/a3b4ca661d902b62fd92dee354acf34191d87414))
+* complete aml streaming orchestration and optimize model training ([7fffafe](https://github.com/SatyaIFD/mlops-governance-reference/commit/7fffafe0243311d60ee934dae35d500425f1d3f4))
+
 ## [0.2.6](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.5...v0.2.6) (2026-10-21)
 
 
