@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.0...v0.3.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* add standalone mlflow tracking server to docker compose ([2e1f282](https://github.com/SatyaIFD/mlops-governance-reference/commit/2e1f28251b39b0c706ed2282c8470afa3e412c50))
+* add standalone mlflow tracking server to docker compose ([fcfb5a3](https://github.com/SatyaIFD/mlops-governance-reference/commit/fcfb5a3c9f9289694e9d3e411e21cff003f86916))
+
 ## [0.3.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.2.6...v0.3.0) (2026-10-22)
 
 
