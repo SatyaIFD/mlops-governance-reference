@@ -28,6 +28,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./:/home/satyajit/Work/mlops-governance-reference
     restart: unless-stopped
 
   # ==========================================
@@ -41,6 +42,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./:/home/satyajit/Work/mlops-governance-reference
     restart: unless-stopped
 
   # ==========================================
@@ -54,6 +56,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./:/home/satyajit/Work/mlops-governance-reference
     restart: unless-stopped
 
   # ==========================================
@@ -71,4 +74,18 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
     command: standalone
+    restart: unless-stopped
+
+  # ==========================================
+  # GLOBAL OBSERVABILITY: MLflow Tracking Server
+  # ==========================================
+  mlflow-server:
+    image: python:3.13-slim
+    container_name: mlops-mlflow-server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow.db:/mlflow.db
+      - ./mlruns:/mlruns
+    command: /bin/bash -c "pip install mlflow && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped
