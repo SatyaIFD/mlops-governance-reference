@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.1...v0.3.2) (2026-10-24)
+
+
+### Documentation
+
+* update root readme to reflect nginx gateway and mlflow centrali… ([010cf49](https://github.com/SatyaIFD/mlops-governance-reference/commit/010cf49e7062b586378d4e41637a0015b8b0bad3))
+* update root readme to reflect nginx gateway and mlflow centralized architecture ([5058d51](https://github.com/SatyaIFD/mlops-governance-reference/commit/5058d51cce5b6e86797a8ce0393d363049551fdb))
+
 ## [0.3.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.0...v0.3.1) (2026-10-23)
 
 
