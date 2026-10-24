@@ -29,17 +29,17 @@ This repository enforces strict CI/CD and DevSecOps governance for every commit 
 ## 🔬 Core Projects Breakdown
 
 ### 1. Project 1: Credit Card Fraud — Batch Governance & Drift Tracking
-* **Scope:** Batch ML pipeline with automated drift monitoring and retrain trigger evaluation.
-* **Directory:** `/project-1-credit-card-fraud/`
+- **Scope:** Batch ML pipeline with automated drift monitoring and retrain trigger evaluation.
+- **Directory:** `/project-1-credit-card-fraud/`
 
 ### 2. Project 2: Loan Default — Shadow Deployment & Near Real-Time Monitoring
-* **Scope:** Production shadow deployment engine comparing champion vs. candidate models live without impacting business decisions.
-* **Directory:** `/project-2-loan-default/`
+- **Scope:** Production shadow deployment engine comparing champion vs. candidate models live without impacting business decisions.
+- **Directory:** `/project-2-loan-default/`
 
 ### 3. Project 3: Anti-Money Laundering (AML) — Real-Time Stateful Streaming Observability
-* **Scope:** High-throughput streaming inference engine intercepting financial crime patterns.
-* **Key Achievements:** 30.33% streaming recall, 100% data quality compliance across 200k records, 7 stateful graph/velocity features, 24h TTL memory eviction, and a 5-pillar governance suite.
-* **Directory:** `/project-3-aml-streaming/`
+- **Scope:** High-throughput streaming inference engine intercepting financial crime patterns.
+- **Key Achievements:** 30.33% streaming recall, 100% data quality compliance across 200k records, 7 stateful graph/velocity features, 24h TTL memory eviction, and a 5-pillar governance suite.
+- **Directory:** `/project-3-aml-streaming/`
 
 ## ⚖️ Regulatory Compliance & Legal Defensibility
 
@@ -52,28 +52,27 @@ This architecture is designed to satisfy the strictest global regulatory framewo
 
 ## 🚀 Quickstart & Setup
 
-This repository uses a `Makefile` to simplify orchestration. View all available commands by running `make help`.
+This repository is orchestrated using Docker Compose to deploy the fully containerized, three-project architecture simultaneously, fronted by a unified Nginx API Gateway and a centralized MLflow tracking server.
 
-### Option 1: Run Multi-Project Fleet (Recommended)
-Deploy the fully containerized, three-project architecture simultaneously using unified Docker Compose orchestration:
-
-
-```
+### 1. Run Multi-Project Fleet (Recommended)
 
 bash
-git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git?utm_source=gemini)
+git clone https://github.com/SatyaIFD/mlops-governance-reference.git
 cd mlops-governance-reference
-make up
-sudo docker ps
-make down
+sudo docker compose up -d
 
-```
 
-### Option 2: Local Development Setup
+### 2. Centralized Infrastructure Access
+
+Once the Docker Compose fleet is running, the services are unified under a single host footprint:
+
+*   **API Gateway (Nginx):** Routes traffic natively via HTTP port 80.
+    *   Project 1 (Fraud) Swagger UI: `http://localhost/api/v1/fraud/docs`
+    *   Project 2 (Loan) Swagger UI: `http://localhost/api/v1/loan/docs`
+*   **MLflow Tracking Server:** Centralized experiment registry tracking all three projects, accessible at `http://localhost:5000`.
+
+### 3. Local Development Setup
 If you wish to run the test suites or modify the architecture natively:
-
-
-```
 
 bash
 conda activate mlops-lab
@@ -81,7 +80,6 @@ uv pip install pandas numpy scikit-learn joblib pytest faker time-machine anyio 
 make test
 make security
 
-```
 
 ## 🤖 Acknowledgments
 
