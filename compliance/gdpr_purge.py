@@ -1,51 +1,90 @@
 import sqlite3
 import pandas as pd
-import argparse
-import logging
 from pathlib import Path
+import logging
+import argparse
+import sys
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+class PurgeError(RuntimeError):
+    pass
 
 
-def execute_right_to_be_forgotten(user_id: str, db_path: str, data_path: str):
-    """
-    GDPR Compliance: Permanently purges a specific user's PII
-    from MLflow tracking databases and raw batch data files.
-    """
-    logging.info(f"Initiating GDPR protocol for User ID: {user_id}")
+def execute_right_to_be_forgotten(user_id: str, db_path: str, data_path: str) -> dict:
+    db_file, data_file = Path(db_path), Path(data_path)
 
-    if Path(db_path).exists():
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute(
-                "DELETE FROM params WHERE key='user_id' AND value=?", (user_id,)
-            )
-            conn.commit()
-            conn.close()
-            logging.info("✅ User scrubbed from MLflow tracking database.")
-        except Exception as e:
-            logging.error(f"Failed to scrub database: {e}")
+    if not db_file.exists():
+        raise PurgeError(f"Tracking DB missing: {db_file}")
+    if not data_file.exists():
+        raise PurgeError(f"Batch data file missing: {data_file}")
 
-    if Path(data_path).exists():
-        try:
-            # CRITICAL FIX: Enforce string type to prevent ID '00000' becoming integer 0
-            df = pd.read_csv(data_path, dtype={"user_id": str})
-            if "user_id" in df.columns:
-                initial_count = len(df)
-                df = df[df["user_id"] != str(user_id)]
-                df.to_csv(data_path, index=False)
-                logging.info(
-                    f"✅ Removed {initial_count - len(df)} records from {data_path}."
-                )
-        except Exception as e:
-            logging.error(f"Failed to scrub data file: {e}")
+    # 1. Scrub MLflow SQLite DB (Both params and tags tables)
+    conn = sqlite3.connect(db_file)
+    try:
+        cur = conn.cursor()
+        tables = {
+            r[0]
+            for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        deleted = 0
+
+        for sql in (
+            "DELETE FROM params WHERE key='user_id' AND value=?",
+            "DELETE FROM tags WHERE value=?",
+        ):
+            target_table = sql.split()[2]
+            if target_table in tables:
+                cur.execute(sql, (user_id,))
+                deleted += cur.rowcount
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise PurgeError(f"Database purge failed: {e}") from e
+    finally:
+        conn.close()
+
+    # 2. Scrub Batch Data File (CSV or Parquet)
+    try:
+        if data_file.suffix == ".parquet":
+            df = pd.read_parquet(data_file)
+        else:
+            df = pd.read_csv(data_file, dtype={"user_id": str})
+
+        if "user_id" not in df.columns:
+            raise PurgeError("user_id column missing in dataset")
+
+        remaining = df[df["user_id"] != str(user_id)]
+        tmp = data_file.with_suffix(data_file.suffix + ".tmp")
+
+        # Atomic replacement to prevent corruption during writes
+        if data_file.suffix == ".parquet":
+            remaining.to_parquet(tmp, index=False)
+        else:
+            remaining.to_csv(tmp, index=False)
+
+        tmp.replace(data_file)
+        file_rows_removed = len(df) - len(remaining)
+    except Exception as e:
+        raise PurgeError(f"Data file purge failed: {e}") from e
+
+    result = {"db_rows_deleted": deleted, "file_rows_removed": file_rows_removed}
+    if result["file_rows_removed"] == 0 and result["db_rows_deleted"] == 0:
+        raise PurgeError(f"No records found for user_id: {user_id}")
+
+    return result
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GDPR Data Purge Utility")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--user_id", required=True)
-    parser.add_argument("--db_path", required=True)
-    parser.add_argument("--data_path", required=True)
+    parser.add_argument("--db_path", default="mlflow.db")
+    parser.add_argument("--data_path", default="data/processed/train.parquet")
     args = parser.parse_args()
-    execute_right_to_be_forgotten(args.user_id, args.db_path, args.data_path)
+
+    try:
+        res = execute_right_to_be_forgotten(args.user_id, args.db_path, args.data_path)
+        logging.info(f"✅ GDPR Purge Complete: {res}")
+    except PurgeError as e:
+        logging.error(f"❌ GDPR Purge Failed: {e}")
+        sys.exit(1)
