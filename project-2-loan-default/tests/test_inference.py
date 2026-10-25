@@ -17,7 +17,6 @@ def mock_mlflow_model():
     """Injects a mock model to bypass empty MLflow registries in CI runners."""
     with patch("src.inference.main.mlflow.xgboost.load_model") as mock_load:
         mock_model = MagicMock()
-        # Predict a low risk of default (0.2) to test standard routing
         mock_model.predict.return_value = [0]
         mock_model.predict_proba.return_value = [[0.8, 0.2]]
         mock_model.feature_names_in_ = ["Age", "Income", "CreditScore"]
@@ -64,15 +63,20 @@ def test_health_endpoint(client):
 
 
 def test_predict_success_low_risk(client, valid_payload):
-    """Asserts that a low-risk payload is scored normally by the EU AI Act router."""
+    """Asserts that a low-risk payload is processed.
+    Under the EU AI Act, both APPROVE and DENY in lending are high-risk actions."""
+    # Ensure the mock predicts a low risk of default (0.2)
+    p2_main.model.predict_proba.return_value = [[0.8, 0.2]]
+
     response = client.post("/predict", json=valid_payload)
     assert response.status_code == 200  # nosec B101
 
     data = response.json()
     assert "risk_metrics" in data  # nosec B101
     assert "governance" in data  # nosec B101
-    # The probability injected by the mock is 0.2 (< 0.50 threshold)
-    assert data["governance"]["action"] == "SCORE_ONLY"  # nosec B101
+
+    # Even at low risk (0.2), it's a CREDIT_APPROVE action, which is HIGH_RISK under EU AI Act
+    assert data["governance"]["action"] == "MANUAL_REVIEW_REQUIRED"  # nosec B101
 
 
 def test_predict_success_high_risk(client, valid_payload):
