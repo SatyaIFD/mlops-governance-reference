@@ -13,14 +13,18 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import mlflow
-import mlflow.pyfunc
+import mlflow.xgboost
 from mlflow.tracking import MlflowClient
+
+from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
 
 warnings.filterwarnings(
     "ignore", category=UserWarning, message=".*protected namespace.*"
 )
 
 model = None
+# Initialize the circuit breaker with a threshold of 3 consecutive failures
+circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 
 
 @asynccontextmanager
@@ -30,7 +34,6 @@ async def lifespan(app: FastAPI):
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
-        # Look for the global root mlflow.db
         db_path = project_root.parent / "mlflow.db"
         tracking_uri = f"sqlite:///{db_path}"
 
@@ -38,16 +41,23 @@ async def lifespan(app: FastAPI):
 
     try:
         client = MlflowClient()
-        # FIX: Use the actual model name found in the sqlite db
         model_name = "fraud_detection_xgb"
+
+        # Look for versions explicitly tagged as Production
         versions = client.search_model_versions(f"name='{model_name}'")
-        if versions:
+        prod_versions = [v for v in versions if v.current_stage == "Production"]
+
+        if prod_versions:
+            latest_version = max([int(v.version) for v in prod_versions])
+            model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
+        elif versions:
             latest_version = max([int(v.version) for v in versions])
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
         else:
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
-        model = mlflow.pyfunc.load_model(model_uri)
+        # Load via xgboost flavor directly to guarantee predict_proba is available
+        model = mlflow.xgboost.load_model(model_uri)
         print(f"🟢 Production model loaded successfully via URI: {model_uri}")
     except Exception as reg_err:
         print(
@@ -80,11 +90,14 @@ class TransactionData(BaseModel):
 class InferenceResponse(BaseModel):
     prediction: int
     risk_score: float
+    status: str = "success"
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "HEALTHY", "model_loaded": model is not None}
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model is uninitialized")
+    return {"status": "HEALTHY", "model_loaded": True}
 
 
 @app.post("/predict", response_model=InferenceResponse)
@@ -94,19 +107,21 @@ def predict_fraud(payload: TransactionData):
             status_code=503, detail="Inference engine is uninitialized."
         )
 
-    # CRITICAL FIX: Align column order exactly with utils.py training sequence
     feature_names = [f"V{i}" for i in range(1, 29)] + ["scaled_amount", "scaled_time"]
     df = pd.DataFrame([payload.features], columns=feature_names)
 
-    try:
-        prediction = int(model.predict(df)[0])
-        proba = (
-            float(model.predict_proba(df)[0][1])
-            if hasattr(model, "predict_proba")
-            else 0.0
+    def _execute_model_logic():
+        pred = int(model.predict(df)[0])
+        prob = float(model.predict_proba(df)[0][1])
+        return pred, prob
+
+    # Wrap the inference in the DORA Circuit Breaker
+    breaker_response = circuit_breaker.execute_inference(_execute_model_logic)
+
+    if breaker_response["status"] == "fallback":
+        return InferenceResponse(
+            prediction=0, risk_score=0.0, status="CIRCUIT_OPEN_FALLBACK"
         )
-        return InferenceResponse(prediction=prediction, risk_score=proba)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Inference computation crash: {str(e)}"
-        )
+
+    prediction, proba = breaker_response["prediction"]
+    return InferenceResponse(prediction=prediction, risk_score=proba)
