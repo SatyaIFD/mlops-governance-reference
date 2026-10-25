@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        
+
     - name: Install Bandit
       run: pip install bandit
-      
+
     - name: Run Bandit Security Scan
       # Scans only source code (ignores tests which often use fake/dummy data)
       # -ll flag reports only Medium and High severity issues
@@ -31,12 +31,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Build local AML image for scanning
       run: docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile project-3-aml-streaming
-      
+
     - name: Run Trivy Vulnerability Scanner
       uses: aquasecurity/trivy-action@master
+      env:
+        TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
       with:
         image-ref: 'aml-security-test'
         format: 'table'
