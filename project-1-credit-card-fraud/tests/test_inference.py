@@ -7,17 +7,24 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
 from src.inference.main import app
+from src.inference import main
 
 
 @pytest.fixture(autouse=True)
 def mock_mlflow_model():
     """Injects a mock model to bypass empty MLflow registries in CI runners."""
-    with patch("src.inference.main.mlflow.pyfunc.load_model") as mock_load:
+    with patch("src.inference.main.mlflow.xgboost.load_model") as mock_load:
         mock_model = MagicMock()
         mock_model.predict.return_value = [0]
         mock_model.predict_proba.return_value = [[0.9, 0.1]]
         mock_load.return_value = mock_model
+
+        # Explicitly set the global model state for the TestClient
+        main.model = mock_model
         yield mock_model
+
+        # Teardown
+        main.model = None
 
 
 def test_health_check():
