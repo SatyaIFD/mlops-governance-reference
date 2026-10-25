@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.3...v0.3.4) (2026-10-25)
+
+
+### Bug Fixes
+
+* refactor inference apis to resolve async blocking, integrate dora breaker, and enforce hitl routing ([fd68698](https://github.com/SatyaIFD/mlops-governance-reference/commit/fd686983092174c3164aaec81c88cb3308b84af0))
+
 ## [0.3.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.2...v0.3.3) (2026-10-25)
 
 

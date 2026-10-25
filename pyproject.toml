@@ -1,6 +1,6 @@
 [project]
 name = "mlops-governance-reference"
-version = "0.3.3"
+version = "0.3.4"
 description = "Enterprise MLOps Governance & Observability Monorepo"
 authors = [{name = "SatyaIFD"}]
 readme = "README.md"
