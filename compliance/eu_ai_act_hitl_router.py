@@ -1,40 +1,48 @@
 import json
 import argparse
 import logging
+import math
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-def enforce_human_in_the_loop(prediction_proba: float, auto_reject_threshold: float = 0.80, manual_review_floor: float = 0.45) -> dict:
+HIGH_RISK_ACTIONS = {"CREDIT_APPROVE", "CREDIT_DENY", "FRAUD_BLOCK"}
+
+
+def enforce_human_in_the_loop(
+    prediction_proba: float, decision_type: str = "CREDIT_DENY"
+) -> dict:
     """
-    EU AI Act Compliance: Routes borderline predictions to a human auditor queue.
-    Prevents High-Risk AI from autonomously making marginal, high-impact decisions.
+    EU AI Act Compliance (Art 14): Enforces human oversight for high-risk decisions.
     """
-    if prediction_proba >= auto_reject_threshold:
-        decision = {
-            "action": "AUTO_REJECT",
-            "confidence": prediction_proba,
-            "compliance_status": "Automated action executed safely above threshold."
-        }
-    elif manual_review_floor <= prediction_proba < auto_reject_threshold:
+    if not math.isfinite(prediction_proba) or not 0.0 <= prediction_proba <= 1.0:
+        raise ValueError(
+            "prediction_proba must be a finite probability between 0.0 and 1.0"
+        )
+
+    if decision_type in HIGH_RISK_ACTIONS:
         decision = {
             "action": "MANUAL_REVIEW_REQUIRED",
-            "confidence": prediction_proba,
-            "compliance_status": "EU AI Act HITL Triggered. Decision routed to human auditor."
+            "confidence": round(prediction_proba, 4),
+            "compliance_status": "EU AI Act Art. 14: high-risk decision queued for human oversight.",
         }
     else:
         decision = {
-            "action": "AUTO_APPROVE",
-            "confidence": prediction_proba,
-            "compliance_status": "Automated action executed safely below threshold."
+            "action": "SCORE_ONLY",
+            "confidence": round(prediction_proba, 4),
+            "compliance_status": "Score emitted; no automated legal/credit effect.",
         }
-    
-    logging.info(f"Compliance Audit Log - Action: {decision['action']} | Status: {decision['compliance_status']}")
+
+    logging.info(
+        f"Compliance Audit Log - Action: {decision['action']} | Status: {decision['compliance_status']}"
+    )
     return decision
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EU AI Act HITL Decision Router")
-    parser.add_argument("--probability", type=float, required=True, help="Model's predicted probability (0.0 to 1.0)")
+    parser.add_argument("--probability", type=float, required=True)
+    parser.add_argument("--decision_type", type=str, default="CREDIT_DENY")
     args = parser.parse_args()
-    
-    result = enforce_human_in_the_loop(args.probability)
+
+    result = enforce_human_in_the_loop(args.probability, args.decision_type)
     print(json.dumps(result, indent=2))
