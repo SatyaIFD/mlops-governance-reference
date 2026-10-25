@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.2...v0.3.3) (2026-10-25)
+
+
+### Documentation
+
+* finalize project readmes with strict factual nginx, mlflow, and security states ([c52ca9c](https://github.com/SatyaIFD/mlops-governance-reference/commit/c52ca9c5cf929a4a8b9b2cd697199b9cd2bc782a))
+* finalize project readmes with strict factual nginx, mlflow, and… ([c4fe9b4](https://github.com/SatyaIFD/mlops-governance-reference/commit/c4fe9b4b28ce0d027701d6a03cc8d6ee696a1908))
+
 ## [0.3.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.1...v0.3.2) (2026-10-24)
 
 
