@@ -13,8 +13,12 @@ import mlflow
 import mlflow.xgboost
 from mlflow.tracking import MlflowClient
 
+from compliance.eu_ai_act_hitl_router import enforce_human_in_the_loop
+from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
+
 model = None
 feature_columns = None
+circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 
 
 @asynccontextmanager
@@ -24,10 +28,9 @@ async def lifespan(app: FastAPI):
     print("🚀 Initializing inference context...")
 
     project_root = Path(__file__).resolve().parents[2]
-
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+
     if not tracking_uri:
-        # FIX: Point to monorepo root for global database alignment
         db_path = project_root.parent / "mlflow.db"
         tracking_uri = f"sqlite:///{db_path}"
 
@@ -35,42 +38,26 @@ async def lifespan(app: FastAPI):
 
     try:
         client = MlflowClient()
-        model_versions = client.search_model_versions(
-            "name='loan_default_production_model'"
-        )
-        if model_versions:
-            latest_version = max([int(mv.version) for mv in model_versions])
-            model_uri = os.getenv(
-                "MODEL_URI", f"models:/loan_default_production_model/{latest_version}"
-            )
-        else:
-            model_uri = os.getenv(
-                "MODEL_URI", "models:/loan_default_production_model/1"
-            )
+        model_name = "loan_default_production_model"
+        versions = client.search_model_versions(f"name='{model_name}'")
+        prod_versions = [v for v in versions if v.current_stage == "Production"]
 
-        # Natively load XGBoost model to bypass strict PyFunc schema enforcement
+        if prod_versions:
+            latest_version = max([int(v.version) for v in prod_versions])
+            model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
+        elif versions:
+            latest_version = max([int(v.version) for v in versions])
+            model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
+        else:
+            model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
+
         model = mlflow.xgboost.load_model(model_uri)
         print(f"🟢 Production model loaded successfully via URI: {model_uri}")
     except Exception as reg_err:
         print(
-            f"⚠️ Registry URI load failed ({reg_err}). Attempting local artifact discovery in mlruns..."
+            f"⚠️ Registry URI load failed ({reg_err}). Attempting local artifact discovery..."
         )
-        try:
-            # FIX: Point fallback artifact path to monorepo root
-            mlmodel_files = list((project_root.parent / "mlruns").rglob("MLmodel"))
-            if mlmodel_files:
-                model_dir = mlmodel_files[0].parent
-                model = mlflow.xgboost.load_model(str(model_dir))
-                print(
-                    f"🟢 Production model loaded successfully from fallback artifact path: {model_dir}"
-                )
-            else:
-                raise FileNotFoundError(
-                    f"No MLmodel files found under {project_root.parent / 'mlruns'}"
-                )
-        except Exception as e:
-            print(f"❌ Critical error loading model from MLflow: {str(e)}")
-            model = None
+        model = None
 
     if model is not None:
         try:
@@ -95,30 +82,22 @@ app = FastAPI(
 
 
 class LoanApplicationPayload(BaseModel):
-    Age: int = Field(..., ge=18, le=120, description="Age of the applicant")
-    Income: int = Field(..., ge=0, description="Annual income of the applicant")
-    CreditScore: int = Field(..., ge=300, le=850, description="Financial credit score")
-    LoanAmount: int = Field(..., ge=0, description="Requested loan amount")
-    DTIRatio: float = Field(..., ge=0.0, le=1.0, description="Debt-to-Income ratio")
-    MonthsEmployed: int = Field(
-        ..., ge=0, description="Total months of employment history"
-    )
-    InterestRate: float = Field(..., ge=0.0, description="Offered loan interest rate")
-    NumCreditLines: int = Field(..., ge=0, description="Number of open credit lines")
-    LoanTerm: int = Field(..., ge=1, description="Term of the loan in months")
-    Education: str = Field(..., description="Highest education tier attained")
-    EmploymentType: str = Field(..., description="Employment nature")
-    MaritalStatus: str = Field(..., description="Marital status context")
-    HasMortgage: str = Field(
-        ..., description="Mortgage ownership indicator ('Yes' or 'No')"
-    )
-    HasDependents: str = Field(
-        ..., description="Dependents visibility indicator ('Yes' or 'No')"
-    )
-    LoanPurpose: str = Field(..., description="Core purpose behind the loan request")
-    HasCoSigner: str = Field(
-        ..., description="Co-signer presence indicator ('Yes' or 'No')"
-    )
+    Age: int = Field(..., ge=18, le=120)
+    Income: int = Field(..., ge=0)
+    CreditScore: int = Field(..., ge=300, le=850)
+    LoanAmount: int = Field(..., ge=0)
+    DTIRatio: float = Field(..., ge=0.0, le=1.0)
+    MonthsEmployed: int = Field(..., ge=0)
+    InterestRate: float = Field(..., ge=0.0)
+    NumCreditLines: int = Field(..., ge=0)
+    LoanTerm: int = Field(..., ge=1)
+    Education: str = Field(...)
+    EmploymentType: str = Field(...)
+    MaritalStatus: str = Field(...)
+    HasMortgage: str = Field(...)
+    HasDependents: str = Field(...)
+    LoanPurpose: str = Field(...)
+    HasCoSigner: str = Field(...)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -144,14 +123,20 @@ class LoanApplicationPayload(BaseModel):
     )
 
 
-@app.post("/predict", tags=["Inference"])
-async def predict_loan_risk(payload: LoanApplicationPayload):
+@app.get("/health", tags=["Monitoring"])
+def health_check():
     if model is None:
-        raise HTTPException(
-            status_code=503, detail="Model is currently unavailable or uninitialized."
-        )
+        raise HTTPException(status_code=503, detail="Model is uninitialized")
+    return {"status": "HEALTHY", "model_loaded": True}
 
-    try:
+
+# Removed 'async' to run CPU-bound pandas operations in a separate thread pool
+@app.post("/predict", tags=["Inference"])
+def predict_loan_risk(payload: LoanApplicationPayload):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model is uninitialized.")
+
+    def _execute_model_logic():
         raw_data = pd.DataFrame([payload.model_dump()])
         raw_data["is_young"] = (raw_data["Age"] < 30).astype(int)
 
@@ -164,6 +149,7 @@ async def predict_loan_risk(payload: LoanApplicationPayload):
             "LoanPurpose",
             "HasCoSigner",
         ]
+
         transformed_df = pd.get_dummies(
             raw_data, columns=categorical_cols, drop_first=True
         )
@@ -180,41 +166,26 @@ async def predict_loan_risk(payload: LoanApplicationPayload):
         if not bool_cols.empty:
             final_payload[bool_cols] = final_payload[bool_cols].astype("int8")
 
-        preds = model.predict(final_payload)
-        prob_default = (
-            float(model.predict_proba(final_payload)[0][1])
-            if hasattr(model, "predict_proba")
-            else float(preds[0])
-        )
-        prediction_label = (
-            int(preds[0])
-            if not hasattr(model, "predict_proba")
-            else int(prob_default >= 0.5)
-        )
+        prob_default = float(model.predict_proba(final_payload)[0][1])
+        return prob_default
 
-        credit_decision = "DENIED" if prediction_label == 1 else "APPROVED"
+    breaker_response = circuit_breaker.execute_inference(_execute_model_logic)
 
+    if breaker_response["status"] == "fallback":
         return {
-            "risk_metrics": {
-                "default_probability": round(prob_default, 4),
-                "risk_score_tier": "HIGH RISK"
-                if prob_default >= 0.50
-                else "STANDARD RISK",
-            },
-            "governance": {
-                "underwriting_decision": credit_decision,
-                "fairness_demographic_proxy_flag": "Protected Young Cohort"
-                if payload.Age < 30
-                else "Mature Group",
-            },
+            "risk_metrics": {"default_probability": 0.0},
+            "governance": {"action": "CIRCUIT_OPEN_FALLBACK"},
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=400, detail=f"Inference pipeline execution failure: {str(e)}"
-        )
+    prob_default = breaker_response["prediction"]
 
+    # EU AI Act HITL Routing
+    decision_type = "CREDIT_DENY" if prob_default >= 0.50 else "CREDIT_APPROVE"
+    routed_decision = enforce_human_in_the_loop(
+        prob_default, decision_type=decision_type
+    )
 
-@app.get("/health", tags=["Monitoring"])
-async def health_check():
-    return {"status": "HEALTHY", "model_loaded": model is not None}
+    return {
+        "risk_metrics": {"default_probability": round(prob_default, 4)},
+        "governance": routed_decision,
+    }
