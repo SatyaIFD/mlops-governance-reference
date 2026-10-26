@@ -14,6 +14,9 @@ spec:
       labels:
         app: loan-prediction-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
       containers:
       - name: loan-prediction-container
         image: loan-prediction-service:v1
@@ -27,9 +30,15 @@ spec:
           requests:
             cpu: "0.5"
             memory: "512Mi"
-        livenessProbe:
+        readinessProbe:
           httpGet:
-            path: /docs
+            path: /health
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20

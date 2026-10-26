@@ -1,9 +1,5 @@
 name: mlops-governance-reference
-
 services:
-  # ==========================================
-  # API GATEWAY (Nginx)
-  # ==========================================
   api-gateway:
     image: nginx:1.25-alpine
     container_name: mlops-api-gateway
@@ -12,14 +8,12 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - fraud-detection-api
-      - loan-default-api
-      - aml-streaming-api
+      fraud-detection-api:
+        condition: service_healthy
+      loan-default-api:
+        condition: service_healthy
     restart: unless-stopped
 
-  # ==========================================
-  # PROJECT 1: Credit Card Fraud API
-  # ==========================================
   fraud-detection-api:
     build: ./project-1-credit-card-fraud
     image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
@@ -28,12 +22,8 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./:/home/satyajit/Work/mlops-governance-reference
     restart: unless-stopped
 
-  # ==========================================
-  # PROJECT 2: Loan Default API
-  # ==========================================
   loan-default-api:
     build: ./project-2-loan-default
     image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
@@ -42,12 +32,8 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./:/home/satyajit/Work/mlops-governance-reference
     restart: unless-stopped
 
-  # ==========================================
-  # PROJECT 3: Real-Time AML Streaming API
-  # ==========================================
   aml-streaming-api:
     build: ./project-3-aml-streaming
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
@@ -56,12 +42,8 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./:/home/satyajit/Work/mlops-governance-reference
     restart: unless-stopped
 
-  # ==========================================
-  # GLOBAL ORCHESTRATION: Apache Airflow
-  # ==========================================
   airflow-standalone:
     image: apache/airflow:2.10.2
     container_name: mlops-airflow
@@ -76,9 +58,6 @@ services:
     command: standalone
     restart: unless-stopped
 
-  # ==========================================
-  # GLOBAL OBSERVABILITY: MLflow Tracking Server
-  # ==========================================
   mlflow-server:
     image: python:3.13-slim
     container_name: mlops-mlflow-server

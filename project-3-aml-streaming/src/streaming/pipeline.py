@@ -47,7 +47,7 @@ def run_production_stream_pipeline():
             if is_anomaly:
                 anomaly_count += 1
                 print(
-                    f"🚨 ANOMALY [Score: {prob:.4f}] | {clean_tx['Sender_account']} -> {clean_tx['Receiver_account']} | ${clean_tx['Amount']:.2f}"
+                    f"🚨 ANOMALY [Score: {prob:.4f}] | {hash(clean_tx['Sender_account']) % 10000} -> {hash(clean_tx['Receiver_account']) % 10000} | ${clean_tx['Amount']:.2f}"
                 )
 
             if processed_count % 500 == 0:
