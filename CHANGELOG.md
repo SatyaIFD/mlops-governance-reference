@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.4...v0.3.5) (2026-10-26)
+
+
+### Bug Fixes
+
+* repair airflow paths and enforce fail-closed exits on schema vio… ([62b7bb1](https://github.com/SatyaIFD/mlops-governance-reference/commit/62b7bb127226524b468f7f8fc47aca3c2f33b81d))
+* repair airflow paths and enforce fail-closed exits on schema violations and data drift ([96c4d29](https://github.com/SatyaIFD/mlops-governance-reference/commit/96c4d290f07beba37626368f5f2ceb3a732e3c39))
+
 ## [0.3.4](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.3...v0.3.4) (2026-10-25)
 
 
