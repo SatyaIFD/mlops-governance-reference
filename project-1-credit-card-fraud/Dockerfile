@@ -1,9 +1,10 @@
 FROM python:3.13-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt mlflow
-COPY . .
+COPY project-1-credit-card-fraud/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && pip install -U mlflow
+COPY project-1-credit-card-fraud/ .
+COPY compliance/ ./compliance/
 RUN useradd -m -u 10001 mlopsuser && chown -R mlopsuser /app
 USER 10001
 EXPOSE 8000

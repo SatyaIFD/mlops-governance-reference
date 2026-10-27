@@ -15,7 +15,7 @@ test:
 	python -m pytest compliance/test_compliance.py -v
 
 security:
-	bandit -r . -ll -ii -x '*/tests/*,*/.pytest_cache/*'
+	bandit -r . -ll -ii -x '*/tests/*,*/.pytest_cache/*,*/.venv/*'
 
 up:
 	sudo docker compose up --build -d

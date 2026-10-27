@@ -15,33 +15,42 @@ services:
     restart: unless-stopped
 
   fraud-detection-api:
-    build: ./project-1-credit-card-fraud
+    build:
+      context: .
+      dockerfile: project-1-credit-card-fraud/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
     container_name: mlops-fraud-api
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     restart: unless-stopped
 
   loan-default-api:
-    build: ./project-2-loan-default
+    build:
+      context: .
+      dockerfile: project-2-loan-default/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
     container_name: mlops-loan-api
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     restart: unless-stopped
 
   aml-streaming-api:
-    build: ./project-3-aml-streaming
+    build:
+      context: .
+      dockerfile: project-3-aml-streaming/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     restart: unless-stopped
 
   airflow-standalone:
@@ -65,6 +74,6 @@ services:
       - "5000:5000"
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./mlruns:/mlruns
-    command: /bin/bash -c "pip install mlflow && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /mlruns --host 0.0.0.0 --port 5000"
+      - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
+    command: /bin/bash -c "pip install mlflow && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /home/satyajit/Work/mlops-governance-reference/mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped

@@ -48,9 +48,9 @@ jobs:
       run: |
         REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         IMAGE_ID="ghcr.io/$REPO/fraud-detection-job"
-        
-        docker build -t $IMAGE_ID:latest -f project-1-credit-card-fraud/Dockerfile project-1-credit-card-fraud/
-        
+
+        docker build -t $IMAGE_ID:latest -f project-1-credit-card-fraud/Dockerfile .
+
         if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
           echo "Pushing latest image to GHCR..."
           docker push $IMAGE_ID:latest

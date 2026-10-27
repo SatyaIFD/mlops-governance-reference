@@ -16,10 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY project-3-aml-streaming/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && pip install -U mlflow
 
-COPY src/ /app/src/
+COPY project-3-aml-streaming/src/ /app/src/
+COPY compliance/ ./compliance/
 
 RUN mkdir -p /app/data /app/artifacts
 
