@@ -41,7 +41,9 @@ services:
     restart: unless-stopped
 
   aml-streaming-api:
-    build: ./project-3-aml-streaming
+    build:
+      context: .
+      dockerfile: project-3-aml-streaming/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
     environment:
