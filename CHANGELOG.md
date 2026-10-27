@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.5...v0.4.0) (2026-10-27)
+
+
+### Features
+
+* complete end-to-end integration and security hardening of the e… ([4bcb745](https://github.com/SatyaIFD/mlops-governance-reference/commit/4bcb745cdf645d5814f3fa9361a36b846bd1eda9))
+* complete end-to-end integration and security hardening of the enterprise mlops fleet ([e416910](https://github.com/SatyaIFD/mlops-governance-reference/commit/e416910ec28caab59f715f316dd266696af5d47b))
+
 ## [0.3.5](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.4...v0.3.5) (2026-10-26)
 
 
