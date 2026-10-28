@@ -25,6 +25,12 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
 
   loan-default-api:
@@ -38,6 +44,12 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
 
   aml-streaming-api:
@@ -51,6 +63,12 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
 
   airflow-standalone:
