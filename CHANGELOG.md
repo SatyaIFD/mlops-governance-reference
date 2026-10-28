@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.0...v0.4.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* increase docker healthcheck start_period to 60s to handle sqlite concurrent locks ([bfdf4ff](https://github.com/SatyaIFD/mlops-governance-reference/commit/bfdf4ff261c8cc9ca5c5e07498025d26d1437af5))
+* increase docker healthcheck start_period to 60s to handle sqlite… ([d28c8eb](https://github.com/SatyaIFD/mlops-governance-reference/commit/d28c8ebb99b90b9efd7fe588efe28a3010ed8461))
+
 ## [0.4.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.3.5...v0.4.0) (2026-10-27)
 
 
