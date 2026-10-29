@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.1...v0.4.2) (2026-10-29)
+
+
+### Bug Fixes
+
+* **security:** resolve aml streaming deserialization vulnerabilities, memory leaks, and gdpr violations ([1722f45](https://github.com/SatyaIFD/mlops-governance-reference/commit/1722f45a19852155c78169f4f25c79aef8c31b97))
+* **security:** resolve aml streaming deserialization vulnerabilities,… ([9dc7171](https://github.com/SatyaIFD/mlops-governance-reference/commit/9dc71712f59b53dfab6ba480f634e8ce894f4b79))
+
 ## [0.4.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.0...v0.4.1) (2026-10-28)
 
 
