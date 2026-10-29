@@ -24,6 +24,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./aml_streaming_model:/app/aml_streaming_model
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
@@ -43,6 +44,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./aml_streaming_model:/app/aml_streaming_model
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
@@ -62,6 +64,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./aml_streaming_model:/app/aml_streaming_model
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
@@ -80,7 +83,7 @@ services:
       - ./airflow/dags:/opt/airflow/dags
     environment:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
     command: standalone
     restart: unless-stopped
@@ -92,6 +95,7 @@ services:
       - "5000:5000"
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./aml_streaming_model:/app/aml_streaming_model
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     command: /bin/bash -c "pip install mlflow && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /home/satyajit/Work/mlops-governance-reference/mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped
