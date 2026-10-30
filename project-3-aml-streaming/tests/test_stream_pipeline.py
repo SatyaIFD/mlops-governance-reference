@@ -16,7 +16,7 @@ def test_streaming_ingestion_engine_validation(tmp_path):
         "Payment_currency": "USD",
     }
     is_valid, processed = engine.validate_and_route(valid_payload)
-    assert is_valid is True
+    assert is_valid is True  # nosec B101
 
 
 def test_velocity_state_manager_enrichment():
@@ -35,18 +35,14 @@ def test_velocity_state_manager_enrichment():
     }
     manager.update_and_enrich(tx1)
     enriched = manager.update_and_enrich(tx2)
-    assert "pass_through_ratio_1h" in enriched
+    assert "pass_through_ratio_1h" in enriched  # nosec B101
 
 
 @patch("src.models.anomaly_detector.sio.load")
-@patch("src.models.anomaly_detector.sio.get_untrusted_types")
-def test_anomaly_detector_skops_integration(mock_get_untrusted, mock_sio_load):
+def test_anomaly_detector_skops_integration(mock_sio_load):
     mock_sklearn = MagicMock()
     mock_sklearn.predict_proba.return_value = [[0.1, 0.85]]
     mock_sio_load.return_value = mock_sklearn
-    mock_get_untrusted.return_value = [
-        "sklearn.ensemble._forest.RandomForestClassifier"
-    ]
 
     detector = AMLAnomalyDetector()
     detector.load(Path("mock_model.skops"))
@@ -58,9 +54,12 @@ def test_anomaly_detector_skops_integration(mock_get_untrusted, mock_sio_load):
     }
     prob, is_anomaly = detector.score_transaction(sample_enriched)
 
-    assert prob == 0.85
-    mock_get_untrusted.assert_called_once_with(file=Path("mock_model.skops"))
+    assert prob == 0.85  # nosec B101
+    # Verify that the secure hardcoded trust list is actively passed
     mock_sio_load.assert_called_once_with(
         Path("mock_model.skops"),
-        trusted=["sklearn.ensemble._forest.RandomForestClassifier"],
+        trusted=[
+            "sklearn.ensemble._forest.RandomForestClassifier",
+            "sklearn.tree._tree.Tree",
+        ],
     )

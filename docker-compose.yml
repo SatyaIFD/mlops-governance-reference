@@ -92,7 +92,7 @@ services:
     image: python:3.13-slim
     container_name: mlops-mlflow-server
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./aml_streaming_model:/app/aml_streaming_model

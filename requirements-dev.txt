@@ -11,3 +11,4 @@ pdoc
 kagglehub
 hypothesis
 pre-commit
+pyarrow>=15.0.0

@@ -24,6 +24,10 @@ COPY compliance/ ./compliance/
 
 RUN mkdir -p /app/data /app/artifacts
 
+# SECURE FIX: Create non-root user and drop privileges before CMD execution
+RUN useradd -m -u 10001 mlopsuser && chown -R mlopsuser /app
+USER 10001
+
 # This is a headless streaming consumer, not a web API.
 # We remove EXPOSE and HTTP HEALTHCHECK, and execute the pipeline directly.
 CMD ["python", "-m", "src.streaming.pipeline"]
