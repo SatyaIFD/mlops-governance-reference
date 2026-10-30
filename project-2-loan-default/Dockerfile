@@ -5,7 +5,10 @@ COPY project-2-loan-default/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && pip install -U mlflow
 COPY project-2-loan-default/ .
 COPY compliance/ ./compliance/
-RUN useradd -m -u 10001 mlopsuser && chown -R mlopsuser /app
+# SECURE FIX: Avoid chowning source code. Only grant permissions on runtime necessity folders.
+RUN useradd -m -u 10001 mlopsuser
+RUN mkdir -p /app/data /app/artifacts /app/mlruns && \
+    chown -R mlopsuser:mlopsuser /app/data /app/artifacts /app/mlruns
 USER 10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

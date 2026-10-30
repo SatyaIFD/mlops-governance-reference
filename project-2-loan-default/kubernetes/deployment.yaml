@@ -21,6 +21,13 @@ spec:
       - name: loan-prediction-container
         image: loan-prediction-service:v1
         imagePullPolicy: IfNotPresent
+        # SECURE FIX: Enforce Restricted PSS Profile via SecurityContext
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
         ports:
         - containerPort: 8000
         resources:

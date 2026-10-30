@@ -7,7 +7,8 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field, ConfigDict
 import mlflow
 import mlflow.xgboost
@@ -19,6 +20,15 @@ from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
 model = None
 feature_columns = None
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
+
+# SECURE FIX: API Key dependency (optional in tests if env var missing, enforced otherwise in production)
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verify_api_key(api_key: str = Depends(api_key_header)):
+    expected_key = os.getenv("EXPECTED_API_KEY")
+    if expected_key and api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
 
 
 @asynccontextmanager
@@ -91,13 +101,14 @@ class LoanApplicationPayload(BaseModel):
     InterestRate: float = Field(..., ge=0.0)
     NumCreditLines: int = Field(..., ge=0)
     LoanTerm: int = Field(..., ge=1)
-    Education: str = Field(...)
-    EmploymentType: str = Field(...)
-    MaritalStatus: str = Field(...)
-    HasMortgage: str = Field(...)
-    HasDependents: str = Field(...)
-    LoanPurpose: str = Field(...)
-    HasCoSigner: str = Field(...)
+    # SECURE FIX: Add strict max_length constraint to all strings to prevent OOM algorithmic DoS
+    Education: str = Field(..., max_length=50)
+    EmploymentType: str = Field(..., max_length=50)
+    MaritalStatus: str = Field(..., max_length=50)
+    HasMortgage: str = Field(..., max_length=50)
+    HasDependents: str = Field(..., max_length=50)
+    LoanPurpose: str = Field(..., max_length=50)
+    HasCoSigner: str = Field(..., max_length=50)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -130,8 +141,8 @@ def health_check():
     return {"status": "HEALTHY", "model_loaded": True}
 
 
-# Removed 'async' to run CPU-bound pandas operations in a separate thread pool
-@app.post("/predict", tags=["Inference"])
+# SECURE FIX: Enforce API key header dependency check
+@app.post("/predict", tags=["Inference"], dependencies=[Depends(verify_api_key)])
 def predict_loan_risk(payload: LoanApplicationPayload):
     if model is None:
         raise HTTPException(status_code=503, detail="Model is uninitialized.")

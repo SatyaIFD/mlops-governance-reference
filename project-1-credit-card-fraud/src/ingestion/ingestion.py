@@ -31,18 +31,18 @@ print(f"Python Package Injection:    {PROJECT_DIR}")
 print(f"Data Target Directory Path:  {DATA_DIR}")
 print("============================================================\n")
 
-# =====================================================================
-# IMPORTS ENFORCED SAFELY NOW THAT SYS.PATH TARGETS PROJECT_DIR
-# =====================================================================
-from src.ingestion.schemas import TransactionInputSchema, ProcessedTransactionSchema
-from src.ingestion.utils import clean_and_transform_features
+from src.ingestion.schemas import TransactionInputSchema, ProcessedTransactionSchema  # noqa: E402
+from src.ingestion.utils import clean_and_transform_features  # noqa: E402
+
 
 def download_raw_data():
     """Robust download layer with strict absolute path routing."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     if RAW_DATA_PATH.exists() and RAW_DATA_PATH.stat().st_size > 0:
-        print(f"📦 Valid raw dataset found at: {RAW_DATA_PATH.name}. Skipping download.")
+        print(
+            f"📦 Valid raw dataset found at: {RAW_DATA_PATH.name}. Skipping download."
+        )
         return
 
     print("🔍 Target data missing. Initializing system checks...")
@@ -54,69 +54,91 @@ def download_raw_data():
         )
 
     try:
-        if os.name != 'nt':  # Linux / macOS
+        if os.name != "nt":
             os.chmod(KAGGLE_JSON, 0o600)
     except Exception as e:
         print(f"⚠️ Warning: Could not adjust permissions on kaggle.json: {e}")
 
-    os.environ['KAGGLE_CONFIG_DIR'] = str(DATA_DIR.resolve())
+    os.environ["KAGGLE_CONFIG_DIR"] = str(DATA_DIR.resolve())
 
     try:
         import kaggle
+
         print("📥 Requesting 'mlg-ulb/creditcardfraud' from Kaggle servers...")
-        
+
         kaggle.api.dataset_download_files(
-            "mlg-ulb/creditcardfraud", 
-            path=str(DATA_DIR.resolve()), 
-            unzip=False
+            "mlg-ulb/creditcardfraud", path=str(DATA_DIR.resolve()), unzip=False
         )
 
         if ZIP_DATA_PATH.exists():
             print(f"🔩 Extracting {ZIP_DATA_PATH.name} payload...")
-            with zipfile.ZipFile(ZIP_DATA_PATH, 'r') as zip_ref:
-                zip_ref.extractall(DATA_DIR)
+            with zipfile.ZipFile(ZIP_DATA_PATH, "r") as zip_ref:
+                for member in zip_ref.namelist():
+                    member_path = (DATA_DIR / member).resolve()
+                    # SECURE FIX: Prevent Zip Slip Directory Traversal
+                    if DATA_DIR.resolve() not in member_path.parents:
+                        raise RuntimeError("Attempted path traversal in ZIP archive.")
+                    zip_ref.extract(member, path=DATA_DIR)
             ZIP_DATA_PATH.unlink()
             print("🗑️ Cleaned up compressed archive downloads.")
 
         if not RAW_DATA_PATH.exists():
-            raise FileNotFoundError("Dataset downloaded, but target 'creditcard.csv' not found inside archive.")
+            raise FileNotFoundError(
+                "Dataset downloaded, but target 'creditcard.csv' not found inside archive."
+            )
 
     except Exception as error:
         if ZIP_DATA_PATH.exists():
             ZIP_DATA_PATH.unlink()
         raise RuntimeError(f"❌ Ingestion Pipeline Failure: {error}") from error
 
+
 def run_ingestion_pipeline():
     """Executes the ingestion lifecycle stages."""
     print("🚀 Starting Production Ingestion Pipeline Sequence...")
     download_raw_data()
-        
+
     print(f"📖 Reading raw matrix data from: {RAW_DATA_PATH.resolve()}...")
     raw_df = pd.read_csv(RAW_DATA_PATH)
-    
-    print("🛡️ Evaluating raw ingestion payloads against TransactionInputSchema parameters...")
-    sample_payloads = raw_df.drop('Class', axis=1, errors='ignore').head(100).to_dict(orient='records')
+
+    print(
+        "🛡️ Evaluating raw ingestion payloads against TransactionInputSchema parameters..."
+    )
+    sample_payloads = (
+        raw_df.drop("Class", axis=1, errors="ignore")
+        .head(100)
+        .to_dict(orient="records")
+    )
     try:
         for payload in sample_payloads:
             TransactionInputSchema(**payload)
         print("✅ Entry payload schema contract: VALID.")
     except Exception as validation_err:
-        raise ValueError(f"🚨 Ingestion block structural validation breach: {validation_err}")
+        raise ValueError(
+            f"🚨 Ingestion block structural validation breach: {validation_err}"
+        )
 
     print("⚙️ Initiating feature scaling transformations...")
     processed_df = clean_and_transform_features(raw_df)
-    
-    print("🛡️ Evaluating processed dataset weights against ProcessedTransactionSchema parameters...")
-    output_sample = processed_df.head(1).to_dict(orient='records')[0]
+
+    print(
+        "🛡️ Evaluating processed dataset weights against ProcessedTransactionSchema parameters..."
+    )
+    output_sample = processed_df.head(1).to_dict(orient="records")[0]
     try:
         ProcessedTransactionSchema(**output_sample)
         print("✅ Post-processing schema compliance: VALID.")
     except Exception as final_validation_err:
-        raise ValueError(f"🚨 Downstream model configuration schema mismatch anomaly: {final_validation_err}")
+        raise ValueError(
+            f"🚨 Downstream model configuration schema mismatch anomaly: {final_validation_err}"
+        )
 
     print(f"💾 Serializing optimized features to: {PROCESSED_OUTPUT_PATH.resolve()}")
-    processed_df.to_parquet(PROCESSED_OUTPUT_PATH, index=False, engine='pyarrow')
-    print("🏁 Ingestion Pipeline execution sequence completed cleanly with zero exceptions.")
+    processed_df.to_parquet(PROCESSED_OUTPUT_PATH, index=False, engine="pyarrow")
+    print(
+        "🏁 Ingestion Pipeline execution sequence completed cleanly with zero exceptions."
+    )
+
 
 if __name__ == "__main__":
     run_ingestion_pipeline()
