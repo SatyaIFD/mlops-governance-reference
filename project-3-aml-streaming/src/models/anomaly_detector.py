@@ -38,6 +38,11 @@ class AMLAnomalyDetector:
         sio.dump(self.model, artifact_path)
 
     def load(self, artifact_path: Path) -> None:
-        # CVE-2024-37065 Fix: Dynamically read unknown types instead of trusted=True
-        untrusted = sio.get_untrusted_types(file=artifact_path)
-        self.model = sio.load(artifact_path, trusted=untrusted)
+        # SECURE FIX: Hardcode trusted types to prevent arbitrary code execution
+        self.model = sio.load(
+            artifact_path,
+            trusted=[
+                "sklearn.ensemble._forest.RandomForestClassifier",
+                "sklearn.tree._tree.Tree",
+            ],
+        )

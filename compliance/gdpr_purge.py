@@ -1,5 +1,7 @@
 import sqlite3
 import pandas as pd
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 from pathlib import Path
 import logging
 import argparse
@@ -45,25 +47,27 @@ def execute_right_to_be_forgotten(user_id: str, db_path: str, data_path: str) ->
 
     # 2. Scrub Batch Data File (CSV or Parquet)
     try:
+        tmp = data_file.with_suffix(data_file.suffix + ".tmp")
+        file_rows_removed = 0
+
         if data_file.suffix == ".parquet":
-            df = pd.read_parquet(data_file)
+            # SECURE FIX: Use PyArrow Dataset filtering to stream without causing RAM OOM crashes
+            dataset = ds.dataset(data_file, format="parquet")
+            original_count = dataset.count_rows()
+            filtered_table = dataset.to_table(
+                filter=ds.field("user_id") != str(user_id)
+            )
+            file_rows_removed = original_count - filtered_table.num_rows
+            pq.write_table(filtered_table, tmp)
         else:
             df = pd.read_csv(data_file, dtype={"user_id": str})
-
-        if "user_id" not in df.columns:
-            raise PurgeError("user_id column missing in dataset")
-
-        remaining = df[df["user_id"] != str(user_id)]
-        tmp = data_file.with_suffix(data_file.suffix + ".tmp")
-
-        # Atomic replacement to prevent corruption during writes
-        if data_file.suffix == ".parquet":
-            remaining.to_parquet(tmp, index=False)
-        else:
+            if "user_id" not in df.columns:
+                raise PurgeError("user_id column missing in dataset")
+            remaining = df[df["user_id"] != str(user_id)]
+            file_rows_removed = len(df) - len(remaining)
             remaining.to_csv(tmp, index=False)
 
         tmp.replace(data_file)
-        file_rows_removed = len(df) - len(remaining)
     except Exception as e:
         raise PurgeError(f"Data file purge failed: {e}") from e
 
