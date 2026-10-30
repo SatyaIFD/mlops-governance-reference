@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.2...v0.4.3) (2026-10-30)
+
+
+### Bug Fixes
+
+* patch nginx aml routing and enforce strict payload validation in stream ingestor ([0c5e19d](https://github.com/SatyaIFD/mlops-governance-reference/commit/0c5e19d3b568f38d53824e67a5415abb69f16a64))
+* patch nginx aml routing and enforce strict payload validation in… ([7f27bdc](https://github.com/SatyaIFD/mlops-governance-reference/commit/7f27bdccde410a3acb29d5a3d02099426b0847f7))
+
 ## [0.4.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.1...v0.4.2) (2026-10-29)
 
 
