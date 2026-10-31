@@ -6,12 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     libssl-dev \
-    procps \
-    && apt-get upgrade -y \
-    && rm -rf /var/lib/apt/lists/*
+    procps && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY project-3-aml-streaming/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
@@ -19,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     rm -rf /usr/local/lib/python3.13/site-packages/pip* \
            /usr/local/lib/python3.13/site-packages/*.dist-info/sboms \
            /usr/local/lib/python3.13/ensurepip && \
-    find /usr - \( -iname "*spdx*" -o -iname "*cdx*" -o -iname "*sbom*" \) -delete 2>/dev/null || true
+    find /usr \( -iname "*spdx*" -o -iname "*cdx*" -o -iname "*sbom*" \) -delete 2>/dev/null || true
 
 COPY project-3-aml-streaming/src/ /app/src/
 COPY project-3-aml-streaming/scripts/ /app/scripts/
