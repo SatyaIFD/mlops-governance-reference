@@ -23,3 +23,7 @@ seaborn>=0.13.0
 
 # --- Production Testing Layer ---
 pytest>=8.0.0
+
+msgpack>=1.2.3
+setuptools>=78.1.1
+urllib3>=2.8.0

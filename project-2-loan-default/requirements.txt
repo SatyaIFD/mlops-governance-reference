@@ -10,3 +10,7 @@ uvicorn>=0.28.0
 pytest>=9.0.3
 httpx>=0.27.0
 kaggle>=1.6.0
+
+msgpack>=1.2.3
+setuptools>=78.1.1
+urllib3>=2.8.0
