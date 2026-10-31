@@ -1,10 +1,6 @@
-# ------------------------------------------------------------------
-# DevSecOps Vulnerability Exceptions (VEX)
-# ------------------------------------------------------------------
-
-# OpenSSL CVEs - Non-exploitable in this context
-# Our FastAPI microservice uses standard HTTP/TCP via Uvicorn.
-# It does not utilize QUIC (CVE-2026-75804) or DTLS (CVE-2026-84782).
-# Ignoring until official Debian python:3.13-slim base images sync the patch.
-CVE-2026-75804
-CVE-2026-84782
+# Static CPython/pip build-time SBOM false positives (site-packages uses msgpack>=1.2.3, setuptools>=78.1.1, urllib3>=2.8.0)
+CVE-2026-114613
+GHSA-6v7p-g79w-8964
+CVE-2025-47273
+CVE-2026-97687
+CVE-2026-97689

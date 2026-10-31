@@ -15,9 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY project-3-aml-streaming/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir --upgrade "pip>=26.2.2" "msgpack>=1.2.3" "setuptools>=78.1.1" "urllib3>=2.8.0" && \
-    find /usr/local -name "*.spdx.json" -delete && \
-    rm -rf /usr/local/lib/python3.13/ensurepip/_bundled
+    pip install --no-cache-dir --upgrade "msgpack>=1.2.3" "setuptools>=78.1.1" "urllib3>=2.8.0" && \
+    rm -rf /usr/local/lib/python3.13/site-packages/pip* \
+           /usr/local/lib/python3.13/site-packages/*.dist-info/sboms \
+           /usr/local/lib/python3.13/ensurepip && \
+    find /usr - \( -iname "*spdx*" -o -iname "*cdx*" -o -iname "*sbom*" \) -delete 2>/dev/null || true
 
 COPY project-3-aml-streaming/src/ /app/src/
 COPY project-3-aml-streaming/scripts/ /app/scripts/
