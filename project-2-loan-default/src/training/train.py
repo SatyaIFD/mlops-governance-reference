@@ -3,13 +3,13 @@ Production Training Engine - Project 2: Loan Default Prediction
 Trains the mitigated fair model using sample re-weighting and registers metrics via MLflow.
 """
 
+import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score, log_loss
 import mlflow
-import json
 import mlflow.xgboost
 from mlflow.models import infer_signature
 
@@ -51,7 +51,7 @@ class LoanModelTrainer:
         return weights
 
     def run_pipeline(self):
-        """Processes matrices, executes training, and writes to the MLflow tracking registry."""
+        """Processes matrices, executes training, persists feature vocabulary, and logs to MLflow."""
         print("📥 Ingesting validated Parquet frames...")
         train_df = pd.read_parquet(self.train_path)
         test_df = pd.read_parquet(self.test_path)
@@ -84,6 +84,12 @@ class LoanModelTrainer:
         )
 
         sample_weights = self.calculate_mitigation_weights(train_df)
+        artifacts_dir = self.data_dir.parent.parent / "artifacts"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+        feature_cols_path = artifacts_dir / "feature_columns.json"
+        with open(feature_cols_path, "w", encoding="utf-8") as f:
+            json.dump(list(X_train.columns), f, indent=2)
 
         mlflow.set_experiment("loan_default_risk_governance")
         with mlflow.start_run(run_name="mitigated_sample_reweighting"):
@@ -93,34 +99,37 @@ class LoanModelTrainer:
             )
             model.fit(X_train, y_train, sample_weight=sample_weights)
 
-            train_auc = roc_auc_score(y_train, model.predict_proba(X_train)[:, 1])
-            test_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-
+            train_probs = model.predict_proba(X_train)[:, 1]
+            test_probs = model.predict_proba(X_test)[:, 1]
             preds = model.predict(X_test)
+
+            train_auc = float(roc_auc_score(y_train, train_probs))
+            test_auc = float(roc_auc_score(y_test, test_probs))
+            test_acc = float(accuracy_score(y_test, preds))
+            test_logloss = float(log_loss(y_test, test_probs))
+
             df_audit = pd.DataFrame(
                 {"is_young": X_test["is_young"], "approved": (preds == 0).astype(int)}
             )
             approval_rates = df_audit.groupby("is_young")["approved"].mean()
             di_ratio = (
-                approval_rates[1] / approval_rates[0] if approval_rates[0] > 0 else 0
+                float(approval_rates[1] / approval_rates[0])
+                if approval_rates.get(0, 0) > 0
+                else 0.0
             )
 
             print(
-                f"📊 Run Completed: Test AUC = {test_auc:.4f} | Disparate Impact = {di_ratio:.4f}"
+                f"📊 Run Completed: Test ROC-AUC = {test_auc:.4f} | Test Acc = {test_acc:.4f} | Disparate Impact = {di_ratio:.4f}"
             )
 
-            # Export metrics for Governance Audit Script
-            eval_report_path = (
-                self.data_dir.parent.parent
-                / "artifacts"
-                / "compliance_audit_report.json"
-            )
-            eval_report_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(eval_report_path, "w") as f:
+            eval_report_path = artifacts_dir / "compliance_audit_report.json"
+            with open(eval_report_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
                         "performance_metrics": {
-                            "accuracy": f"{test_auc:.4f} (Test AUC)"
+                            "test_roc_auc": round(test_auc, 4),
+                            "test_accuracy": round(test_acc, 4),
+                            "log_loss": round(test_logloss, 4),
                         },
                         "fairness_metrics": {
                             "demographic_parity_status": "COMPLIANT (FAIR)"
@@ -137,9 +146,11 @@ class LoanModelTrainer:
             mlflow.log_param("mitigation_technique", "sample_reweighting")
             mlflow.log_metric("train_roc_auc", train_auc)
             mlflow.log_metric("test_roc_auc", test_auc)
+            mlflow.log_metric("test_accuracy", test_acc)
             mlflow.log_metric("disparate_impact_ratio", di_ratio)
+            mlflow.log_artifact(str(feature_cols_path), artifact_path="preprocessing")
 
-            signature = infer_signature(X_train, model.predict_proba(X_train)[:, 1])
+            signature = infer_signature(X_train, train_probs)
 
             try:
                 mlflow.xgboost.log_model(
@@ -163,7 +174,6 @@ if __name__ == "__main__":
     BASE_DIR = SRC_DIR.parents[1]
     DATA_DIR = BASE_DIR / "data" / "processed"
 
-    # FIX: Point tracking URI to the monorepo root database
     db_path = BASE_DIR.parent / "mlflow.db"
     mlflow.set_tracking_uri(f"sqlite:///{db_path}")
 

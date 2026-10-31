@@ -1,6 +1,7 @@
 """
 Model Training & Orchestration Module
-Executes hyperparameter runs and registers state models to the SQLite metadata registry.
+Fits preprocessing strictly on the training split when raw data is available,
+persists scaler parameters, trains XGBoost, and registers to MLflow.
 """
 
 import sys
@@ -11,22 +12,29 @@ import mlflow
 import mlflow.xgboost
 from mlflow.tracking import MlflowClient
 
-# Inject project root to resolve src
 BASE_DIR = Path(__file__).resolve().parents[2]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from src.training.data_splitter import prepare_stratified_splits  # noqa: E402
+from src.ingestion.utils import (  # noqa: E402
+    CANONICAL_FEATURE_COLS,
+    split_and_scale_without_leakage,
+    save_scaler_params,
+)
 
 
 def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
-    """Loads preprocessed parquet file, splits it, trains XGBoost, and registers to MLflow."""
+    """Loads dataset, prevents train/test scaling leakage, trains XGBoost, and registers to MLflow."""
     mlflow.set_tracking_uri(tracking_uri)
 
     data_path = Path(processed_data_file).resolve()
     project_root = (
         data_path.parents[1] if "data" in data_path.parts else data_path.parent
     )
+    raw_csv_path = project_root / "data" / "creditcard.csv"
+    scaler_artifact_path = project_root / "artifacts" / "scaler_params.json"
+    processed_dir = project_root / "data" / "processed"
 
     mlruns_dir = project_root.parent / "mlruns"
     mlruns_dir.mkdir(parents=True, exist_ok=True)
@@ -38,14 +46,29 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
         client.create_experiment(experiment_name, artifact_location=mlruns_dir.as_uri())
     mlflow.set_experiment(experiment_name)
 
-    if not data_path.exists():
-        raise FileNotFoundError(f"🚨 FATAL: Processed data missing at {data_path}.")
+    if raw_csv_path.exists():
+        print(
+            f"🔒 Splitting raw dataset ({raw_csv_path.name}) prior to scaling to prevent test leakage..."
+        )
+        raw_df = pd.read_csv(raw_csv_path)
+        train_df, test_df, scaler_params = split_and_scale_without_leakage(raw_df)
+        save_scaler_params(scaler_params, scaler_artifact_path)
 
-    # Load the single processed dataset
-    df = pd.read_parquet(data_path)
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        train_df.to_parquet(processed_dir / "train.parquet", index=False)
+        test_df.to_parquet(processed_dir / "test.parquet", index=False)
 
-    # Split the data in-memory
-    X_train, X_test, y_train, y_test = prepare_stratified_splits(df)
+        X_train = train_df[CANONICAL_FEATURE_COLS]
+        y_train = train_df["Class"]
+        X_test = test_df[CANONICAL_FEATURE_COLS]
+        y_test = test_df["Class"]
+    else:
+        if not data_path.exists():
+            raise FileNotFoundError(f"🚨 FATAL: Processed data missing at {data_path}.")
+        df = pd.read_parquet(data_path)
+        X_train, X_test, y_train, y_test = prepare_stratified_splits(df)
+        X_train = X_train[CANONICAL_FEATURE_COLS]
+        X_test = X_test[CANONICAL_FEATURE_COLS]
 
     with mlflow.start_run() as run:
         print(f"🚀 Training scaled model inside active run: {run.info.run_id}")
@@ -66,6 +89,11 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
         accuracy = float(model.score(X_test, y_test))
         mlflow.log_metric("accuracy", accuracy)
         print(f"📊 Scaled Run Accuracy: {accuracy:.4f}")
+
+        if scaler_artifact_path.exists():
+            mlflow.log_artifact(
+                str(scaler_artifact_path), artifact_path="preprocessing"
+            )
 
         mlflow.xgboost.log_model(
             xgb_model=model,

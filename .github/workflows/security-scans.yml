@@ -16,31 +16,38 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
 
     - name: Install Bandit
       run: pip install bandit
 
     - name: Run Bandit Security Scan
-      # Scans only source code (ignores tests which often use fake/dummy data)
-      # -ll flag reports only Medium and High severity issues
       run: bandit -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
 
   container-scan:
-    name: Container Vulnerability Scan (Trivy)
+    name: Container Vulnerability Scan (Trivy - All 3 Services)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: fraud
+            dockerfile: project-1-credit-card-fraud/Dockerfile
+          - service: loan
+            dockerfile: project-2-loan-default/Dockerfile
+          - service: aml
+            dockerfile: project-3-aml-streaming/Dockerfile
     steps:
     - uses: actions/checkout@v4
 
-    - name: Build local AML image for scanning
-      run: docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile .
+    - name: Build local image for scanning (${{ matrix.service }})
+      run: docker build -t ${{ matrix.service }}-security-test -f ${{ matrix.dockerfile }} .
 
-    - name: Run Trivy Vulnerability Scanner
-      uses: aquasecurity/trivy-action@master
+    - name: Run Trivy Vulnerability Scanner (${{ matrix.service }})
+      uses: aquasecurity/trivy-action@0.28.0
       with:
-        image-ref: 'aml-security-test'
+        image-ref: '${{ matrix.service }}-security-test'
         format: 'table'
-        exit-code: '1' # Fails the GitHub Action if vulnerabilities are found
+        exit-code: '1'
         ignore-unfixed: true
         vuln-type: 'os,library'
         severity: 'CRITICAL,HIGH'

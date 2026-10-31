@@ -1,10 +1,17 @@
+import shlex
 from pathlib import Path
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
 DAG_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = str(DAG_DIR.parents[1])
+CONTAINER_SCOPED_ROOT = Path("/opt/airflow")
+PROJECT_ROOT = (
+    str(CONTAINER_SCOPED_ROOT)
+    if (CONTAINER_SCOPED_ROOT / "project-2-loan-default" / "src").exists()
+    else str(DAG_DIR.parents[1])
+)
+QUOTED_ROOT = shlex.quote(PROJECT_ROOT)
 
 default_args = {
     "owner": "mlops_engine",
@@ -24,25 +31,24 @@ with DAG(
     catchup=False,
     max_active_runs=1,
 ) as dag:
-    # SECURE FIX: Wrap '{PROJECT_ROOT}' in double quotes to prevent shell injection via folder paths
     stream_traffic = BashOperator(
         task_id="stream_production_traffic",
-        bash_command=f'set -e; cd "{PROJECT_ROOT}" && PYTHONPATH=. python project-2-loan-default/src/monitoring/generate_traffic.py',
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/generate_traffic.py --mode representative --count 20",
     )
 
     audit_fairness = BashOperator(
         task_id="audit_fairness_metrics",
-        bash_command=f'set -e; cd "{PROJECT_ROOT}" && PYTHONPATH=. python project-2-loan-default/src/monitoring/drift_monitor.py',
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py",
     )
 
     check_data_drift = BashOperator(
         task_id="check_population_data_drift",
-        bash_command=f'set -e; cd "{PROJECT_ROOT}" && PYTHONPATH=. python project-2-loan-default/src/validation/drift_check.py',
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/validation/drift_check.py",
     )
 
     compile_model_card = BashOperator(
         task_id="compile_regulatory_model_card",
-        bash_command=f'set -e; cd "{PROJECT_ROOT}" && PYTHONPATH=. python project-2-loan-default/src/governance/audit.py',
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/governance/audit.py",
     )
 
     stream_traffic >> audit_fairness >> check_data_drift >> compile_model_card

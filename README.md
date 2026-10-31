@@ -5,85 +5,61 @@
 [![CI/CD](https://img.shields.io/badge/GitHub_Actions-Automated-success.svg)](https://github.com/features/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A reference architecture for production Machine Learning Operations (MLOps) across batch, shadow deployment, and real-time stateful streaming paradigms. This repository demonstrates enterprise-grade data quality enforcement, automated DevSecOps validation, and audit-ready artifact lineage.
+A reference architecture for Machine Learning Operations (MLOps) across batch fraud classification, fair-lending underwriting with human-in-the-loop (HITL) routing, and stateful streaming anomaly detection. This repository demonstrates schema validation, automated DevSecOps scanning, and programmatic governance engineering controls.
 
 ## 🏛️ Portfolio Architecture & System Pillars
 
-This repository is structured as a unified MLOps platform housing three distinct deployment paradigms:
+This repository is structured as a multi-service MLOps platform housing three deployment paradigms:
 
-*   **Project 1: Credit Card Fraud** (Batch Governance & Drift Tracking)
-*   **Project 2: Loan Default** (Shadow Deployment Engine)
-*   **Project 3: AML Streaming** (Real-Time Stateful Observability)
+* **Project 1: Credit Card Fraud** (Leakage-Free Batch Training, PSI Drift Validation & Segment Disparity Auditing)
+* **Project 2: Loan Default** (Sample-Reweighted Fair Lending API, HITL Routing & Live Telemetry Monitoring)
+* **Project 3: AML Streaming** (Headless Stateful Consumer with 7 Event-Time Watermarked Features & DLQ Replay)
 
 ## 🛡️ Automated DevSecOps Pipeline
 
-This repository enforces strict CI/CD and DevSecOps governance for every commit merged into the `main` branch.
+* **SAST & Linting:** Automated vulnerability scanning via **Bandit** (`make security`) and formatting baselines via **Ruff**.
+* **Container Security:** Automated OS-level and package vulnerability scanning across all three microservice images using **Trivy** (`aquasecurity/trivy-action@0.28.0`).
+* **Artifact Publishing:** Docker images are built and published to the **GitHub Container Registry (GHCR)** after passing unit and compliance test gates.
 
-*   **Branch Governance:** Direct pushes to `main` are disabled. All changes require a Pull Request and successful status checks.
-*   **SAST & Linting:** Automated vulnerability scanning via **Bandit** and strict formatting baselines enforced by **Ruff**.
-*   **Container Security:** Automated OS-level and package vulnerability scanning using **Trivy** (`.trivyignore` used for triaged CVEs).
-*   **Artifact Publishing:** Secure Docker images are automatically built and published to the **GitHub Container Registry (GHCR)**.
-*   **Release Automation:** Semantic versioning and changelog generation are handled entirely by Google's **Release Please** via Conventional Commits.
-*   **Dependency Management:** **Dependabot** automatically monitors and patches Python packages and GitHub Actions.
+## ⚖️ Programmatic Governance & Resilience Controls (`/compliance`)
 
-## 🔬 Core Projects Breakdown
+The `/compliance` package implements technical building blocks that support regulatory engineering workflows:
 
-### 1. Project 1: Credit Card Fraud — Batch Governance & Drift Tracking
-- **Scope:** Batch ML pipeline with automated drift monitoring and retrain trigger evaluation.
-- **Directory:** `/project-1-credit-card-fraud/`
-
-### 2. Project 2: Loan Default — Shadow Deployment & Near Real-Time Monitoring
-- **Scope:** Production shadow deployment engine comparing champion vs. candidate models live without impacting business decisions.
-- **Directory:** `/project-2-loan-default/`
-
-### 3. Project 3: Anti-Money Laundering (AML) — Real-Time Stateful Streaming Observability
-- **Scope:** High-throughput streaming inference engine intercepting financial crime patterns.
-- **Key Achievements:** 30.33% streaming recall, 100% data quality compliance across 200k records, 7 stateful graph/velocity features, 24h TTL memory eviction, and a 5-pillar governance suite.
-- **Directory:** `/project-3-aml-streaming/`
-
-## ⚖️ Regulatory Compliance & Legal Defensibility
-
-This architecture is designed to satisfy the strictest global regulatory frameworks for High-Risk AI systems. A dedicated `/compliance` directory provides centralized programmatic enforcement mechanisms:
-
-*   **GDPR (Right to be Forgotten):** Programmatic purge utilities (`gdpr_purge.py`) to permanently scrub PII from MLflow tracking databases and batch datasets.
-*   **EU AI Act (Human-in-the-Loop):** Decision routing gateways (`eu_ai_act_hitl_router.py`) that intercept borderline predictions and push them to manual auditor queues.
-*   **DORA (Operational Resilience):** Circuit breaker patterns (`dora_circuit_breaker.py`) ensuring inference degradation fails safely to rules-based fallbacks.
-*   **Automated Compliance Gates:** Property-based dynamic testing via `hypothesis` running in GitHub Actions to mathematically prove regulatory enforcement.
+* **GDPR Erasure Utility (`gdpr_purge.py`):** Journaled, crash-recoverable erasure utility (`INITIATED` $\rightarrow$ `FILE_STAGED` $\rightarrow$ `FILE_SWAPPED` $\rightarrow$ `DB_COMMITTED` $\rightarrow$ `VERIFIED`) that streams Parquet/CSV batch rewrites via PyArrow and scrubs scoped `user_id` records from SQLite tracking tables with automatic `.bak` rollback on failure.
+* **EU AI Act HITL Router (`eu_ai_act_hitl_router.py`):** Decision-routing helper that tags credit underwriting recommendations (`APPROVE` / `DECLINE`) with `MANUAL_REVIEW_REQUIRED` and `PENDING_HUMAN_REVIEW` status so downstream case-management systems can queue human adjudication.
+* **DORA Circuit Breaker (`dora_circuit_breaker.py`):** Thread-safe circuit breaker with exclusive `HALF_OPEN` single-probe locking that fails closed (`HTTP 503`) when repeated inference exceptions occur.
+* **Automated Verification (`test_compliance.py`):** Property-based (`hypothesis`), concurrency, and failure-injection tests verifying circuit-breaker exclusivity and journaled purge recovery.
 
 ## 🚀 Quickstart & Setup
 
-This repository is orchestrated using Docker Compose to deploy the fully containerized, three-project architecture simultaneously, fronted by a unified Nginx API Gateway and a centralized MLflow tracking server.
+### 1. Run Multi-Project Fleet
 
-### 1. Run Multi-Project Fleet (Recommended)
-
-bash
-git clone https://github.com/SatyaIFD/mlops-governance-reference.git
+```bash
+git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
 cd mlops-governance-reference
+cp .env.example .env
 sudo docker compose up -d
 
+```
 
 ### 2. Centralized Infrastructure Access
 
-Once the Docker Compose fleet is running, the services are unified under a single host footprint:
+* **API Gateway (Nginx on port 80):**
+* Project 1 (Fraud) Swagger UI: `http://localhost/api/v1/fraud/docs`
+* Project 2 (Loan) Swagger UI: `http://localhost/api/v1/loan/docs`
 
-*   **API Gateway (Nginx):** Routes traffic natively via HTTP port 80.
-    *   Project 1 (Fraud) Swagger UI: `http://localhost/api/v1/fraud/docs`
-    *   Project 2 (Loan) Swagger UI: `http://localhost/api/v1/loan/docs`
-*   **MLflow Tracking Server:** Centralized experiment registry tracking all three projects, accessible at `http://localhost:5000`.
 
-### 3. Local Development Setup
-If you wish to run the test suites or modify the architecture natively:
+* **Headless AML Streaming Worker:** Runs continuously in `mlops-aml-streaming`, writing execution reports and DLQ JSONL records to `project-3-aml-streaming/artifacts/`.
+* **MLflow Tracking UI:** Accessible at `http://localhost:5000`.
 
-bash
+### 3. Local Development & Verification
+
+```bash
 conda activate mlops-lab
-uv pip install pandas numpy scikit-learn joblib pytest faker time-machine anyio hydra-core pdoc kagglehub hypothesis
 make test
 make security
 
-
-## 🤖 Acknowledgments
-
-This enterprise reference architecture was conceptualized, structured, and developed with the assistance of Google Gemini. AI was utilized to accelerate CI/CD boilerplate generation, refine MLOps architectural patterns, and implement robust, enterprise-grade compliance frameworks.
+```
 
 ## 📜 License
 

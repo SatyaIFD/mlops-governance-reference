@@ -38,20 +38,13 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install pytest uv
-          uv pip install --system -r requirements.txt
           uv pip install --system -r requirements-dev.txt
           uv pip install --system -r project-1-credit-card-fraud/requirements.txt
           uv pip install --system -r project-2-loan-default/requirements.txt
           uv pip install --system -r project-3-aml-streaming/requirements.txt
 
-      - name: Run Global Compliance Tests
+      - name: Run Full Monorepo Test Suite
         run: make test
-
-      - name: Run Microservice Unit Tests
-        run: |
-          PYTHONPATH=project-1-credit-card-fraud pytest project-1-credit-card-fraud/tests/ -k "not test_disparate_impact_ratio_bounds and not test_health_check and not test_predict_success"
-          PYTHONPATH=project-2-loan-default pytest project-2-loan-default/tests/ -k "not test_predict_success"
-          PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
 
   docker-build-check:
     runs-on: ubuntu-latest
@@ -59,5 +52,5 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Verify Docker Compose Fleet
+      - name: Verify Docker Compose Fleet Build
         run: docker compose build

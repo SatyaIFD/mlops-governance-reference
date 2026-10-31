@@ -1,14 +1,14 @@
-version: '3.8'
-
 services:
   aml-streaming-engine:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: project-3-aml-streaming/Dockerfile
     image: aml-streaming-engine:latest
     container_name: aml_streaming_container
     volumes:
       - ./artifacts:/app/artifacts
       - ./data:/app/data
+      - ../aml_streaming_model:/app/aml_streaming_model:ro
     environment:
       - PYTHONUNBUFFERED=1
+    restart: on-failure

@@ -17,17 +17,32 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: loan-prediction-container
-        image: loan-prediction-service:v1
+        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
         imagePullPolicy: IfNotPresent
-        # SECURE FIX: Enforce Restricted PSS Profile via SecurityContext
         securityContext:
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
+          seccompProfile:
+            type: RuntimeDefault
           capabilities:
             drop:
               - ALL
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service:5000"
+        - name: MODEL_URI
+          value: "models:/loan_default_production_model/1"
+        - name: LOAN_TELEMETRY_LOG_PATH
+          value: "/app/artifacts/telemetry_logs.jsonl"
+        - name: EXPECTED_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: loan-api-secrets
+              key: expected-api-key
         ports:
         - containerPort: 8000
         resources:
@@ -37,15 +52,32 @@ spec:
           requests:
             cpu: "0.5"
             memory: "512Mi"
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-volume
+        - mountPath: /app/mlruns
+          name: mlruns-volume
+        - mountPath: /app/artifacts
+          name: artifacts-volume
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 15
+          initialDelaySeconds: 20
           periodSeconds: 20
+      volumes:
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 128Mi
+      - name: mlruns-volume
+        emptyDir:
+          sizeLimit: 512Mi
+      - name: artifacts-volume
+        emptyDir:
+          sizeLimit: 256Mi

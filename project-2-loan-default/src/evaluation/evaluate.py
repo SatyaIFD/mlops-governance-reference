@@ -7,8 +7,9 @@ import json
 import sys
 from pathlib import Path
 import pandas as pd
-from sklearn.metrics import roc_auc_score, log_loss
+from sklearn.metrics import roc_auc_score, accuracy_score, log_loss
 import mlflow
+import mlflow.xgboost
 
 
 class LoanModelEvaluator:
@@ -22,7 +23,6 @@ class LoanModelEvaluator:
         """Loads latest registered model, runs performance & fairness audits, and dumps a sign-off report."""
         print("📥 Loading validated test partition for governance audit...")
 
-        # FIX: Point tracking URI to the monorepo root database
         db_path = self.data_dir.parents[2] / "mlflow.db"
         mlflow.set_tracking_uri(f"sqlite:///{db_path}")
 
@@ -34,7 +34,6 @@ class LoanModelEvaluator:
         X_test = test_df.drop(columns=["Default"])
         y_test = test_df["Default"]
 
-        # Isolate demographic indicators
         X_test["is_young"] = (X_test["Age"] < 30).astype(int)
 
         cat_cols = X_test.select_dtypes(include=["object", "category"]).columns.tolist()
@@ -45,7 +44,6 @@ class LoanModelEvaluator:
             {col: "int8" for col in X_test.select_dtypes(include=["bool"]).columns}
         )
 
-        # Pull the latest run from MLflow registry
         experiment = mlflow.get_experiment_by_name("loan_default_risk_governance")
         if not experiment:
             raise ValueError(
@@ -67,13 +65,17 @@ class LoanModelEvaluator:
         print(f"🌲 Loading model binary from MLflow run context: {latest_run_id}")
         model = mlflow.xgboost.load_model(model_uri)
 
-        # Compute predictions
+        if hasattr(model, "get_booster") and model.get_booster().feature_names:
+            X_test = X_test.reindex(
+                columns=list(model.get_booster().feature_names), fill_value=0
+            )
+
         preds_proba = model.predict_proba(X_test)[:, 1]
         preds_labels = model.predict(X_test)
 
-        # Calculate metrics
-        auc = roc_auc_score(y_test, preds_proba)
-        bce_loss = log_loss(y_test, preds_proba)
+        auc = float(roc_auc_score(y_test, preds_proba))
+        acc = float(accuracy_score(y_test, preds_labels))
+        bce_loss = float(log_loss(y_test, preds_proba))
 
         df_audit = pd.DataFrame(
             {
@@ -82,19 +84,28 @@ class LoanModelEvaluator:
             }
         )
         approval_rates = df_audit.groupby("is_young")["approved"].mean()
-        di_ratio = approval_rates[1] / approval_rates[0] if approval_rates[0] > 0 else 0
+        di_ratio = (
+            float(approval_rates[1] / approval_rates[0])
+            if approval_rates.get(0, 0) > 0
+            else 0.0
+        )
 
-        # Strict regulatory gating conditions
         fairness_passed = bool(0.80 <= di_ratio <= 1.25)
         performance_passed = bool(auc >= 0.70)
         governance_signoff = bool(fairness_passed and performance_passed)
 
         audit_report = {
             "mlflow_run_id": latest_run_id,
-            "metrics": {
-                "roc_auc": round(float(auc), 4),
-                "log_loss": round(float(bce_loss), 4),
-                "disparate_impact_ratio": round(float(di_ratio), 4),
+            "performance_metrics": {
+                "test_roc_auc": round(auc, 4),
+                "test_accuracy": round(acc, 4),
+                "log_loss": round(bce_loss, 4),
+            },
+            "fairness_metrics": {
+                "demographic_parity_status": "COMPLIANT (FAIR)"
+                if fairness_passed
+                else "NON-COMPLIANT (BREACH)",
+                "disparate_impact_ratio": round(di_ratio, 4),
             },
             "compliance": {
                 "four_fifths_rule_passed": fairness_passed,
@@ -105,16 +116,12 @@ class LoanModelEvaluator:
             },
         }
 
-        # Export signature report to disk
         report_path = self.artifacts_dir / "compliance_audit_report.json"
-        with open(report_path, "w") as f:
+        with open(report_path, "w", encoding="utf-8") as f:
             json.dump(audit_report, f, indent=4)
 
         print(
             f"📊 Audit Completed: Sign-off Status -> {audit_report['compliance']['governance_signoff_status']}"
-        )
-        print(
-            f"💾 Report cleanly exported to: {report_path.relative_to(report_path.parents[2])}"
         )
 
         if not governance_signoff:

@@ -4,22 +4,18 @@ import zipfile
 from pathlib import Path
 import pandas as pd
 
-# 1. Capture the exact terminal workspace root directory
 cwd = Path.cwd()
 if (cwd / "project-1-credit-card-fraud").exists():
     ROOT_DIR = cwd
 else:
     ROOT_DIR = Path(__file__).resolve().parents[3]
 
-# 2. Derive the explicit Project 1 directory boundary path
 PROJECT_DIR = ROOT_DIR / "project-1-credit-card-fraud"
 DATA_DIR = PROJECT_DIR / "data"
 
-# 3. Inject PROJECT_DIR into sys.path so Python finds 'src/' immediately inside it
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-# 4. Map data file targets explicitly
 KAGGLE_JSON = DATA_DIR / "kaggle.json"
 RAW_DATA_PATH = DATA_DIR / "creditcard.csv"
 ZIP_DATA_PATH = DATA_DIR / "creditcardfraud.zip"

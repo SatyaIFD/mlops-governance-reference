@@ -22,9 +22,10 @@ services:
     container_name: mlops-fraud-api
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
+      - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./aml_streaming_model:/app/aml_streaming_model
+      - ./mlruns:/app/mlruns
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
@@ -42,10 +43,13 @@ services:
     container_name: mlops-loan-api
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
+      - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
+      - LOAN_TELEMETRY_LOG_PATH=/app/artifacts/telemetry_logs.jsonl
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./aml_streaming_model:/app/aml_streaming_model
+      - ./mlruns:/app/mlruns
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
+      - ./project-2-loan-default/artifacts:/app/artifacts
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
       interval: 10s
@@ -62,29 +66,41 @@ services:
     container_name: mlops-aml-streaming
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
+      - AML_HMAC_KEY_VERSION=${AML_HMAC_KEY_VERSION:-v1}
+      - AML_HMAC_SECRET_KEY=${AML_HMAC_SECRET_KEY:-aml-default-dev-hmac-secret-key}
+      - AML_DAEMON_MODE=1
+      - AML_SYNTHETIC_STREAM_FALLBACK=1
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./aml_streaming_model:/app/aml_streaming_model
-      - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
+      - ./aml_streaming_model:/app/aml_streaming_model:ro
+      - ./project-3-aml-streaming/data:/app/data
+      - ./project-3-aml-streaming/artifacts:/app/artifacts
+      - ./mlruns:/app/mlruns
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "pgrep -f 'src.streaming.pipeline' >/dev/null || exit 1"]
+      interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 60s
-    restart: unless-stopped
+      retries: 3
+      start_period: 30s
+    restart: on-failure
 
   airflow-standalone:
     image: apache/airflow:2.10.2
     container_name: mlops-airflow
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./project-2-loan-default/src:/opt/airflow/project-2-loan-default/src:ro
+      - ./project-2-loan-default/data/processed:/opt/airflow/project-2-loan-default/data/processed:ro
+      - ./project-2-loan-default/artifacts:/opt/airflow/project-2-loan-default/artifacts
+      - ./project-2-loan-default/docs:/opt/airflow/project-2-loan-default/docs
     environment:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
+      - LOAN_API_URL=http://mlops-api-gateway/api/v1/loan/predict
     command: standalone
     restart: unless-stopped
 
@@ -95,7 +111,8 @@ services:
       - "127.0.0.1:5000:5000"
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./aml_streaming_model:/app/aml_streaming_model
+      - ./aml_streaming_model:/app/aml_streaming_model:ro
+      - ./mlruns:/app/mlruns
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
-    command: /bin/bash -c "pip install mlflow && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /home/satyajit/Work/mlops-governance-reference/mlruns --host 0.0.0.0 --port 5000"
+    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.16.1 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped

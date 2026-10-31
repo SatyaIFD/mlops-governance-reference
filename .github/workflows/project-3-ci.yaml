@@ -12,7 +12,6 @@ on:
 jobs:
   continuous-deployment:
     runs-on: ubuntu-24.04
-    # 1. GRANT PERMISSIONS TO PUSH TO GHCR
     permissions:
       contents: read
       packages: write
@@ -34,18 +33,17 @@ jobs:
 
     - name: Execute Governance Validation Test Suite
       run: |
-        PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/
+        PYTHONPATH=project-3-aml-streaming pytest project-3-aml-streaming/tests/ -v
 
     - name: Auto-Generate Technical API Documentation
       run: |
-        pdoc project-3-aml-streaming/src/ -o project-3-aml-streaming/docs/api/
+        PYTHONPATH=project-3-aml-streaming pdoc project-3-aml-streaming/src/ -o project-3-aml-streaming/docs/api/
 
     - name: Enforce Operational Directory Structures
       run: |
         mkdir -p project-3-aml-streaming/data
         mkdir -p project-3-aml-streaming/artifacts
 
-    # 2. AUTHENTICATE WITH GHCR (Only runs on push to main)
     - name: Log in to GitHub Container Registry (GHCR)
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: docker/login-action@v3
@@ -54,22 +52,15 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    # 3. BUILD, TAG, AND PUSH
     - name: Build and Push Docker Container
       run: |
-        # GHCR requires lowercase repository names
         REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         IMAGE_ID="ghcr.io/$REPO/aml-stream-api"
 
-        # Always build the image (to test it)
         docker build -t $IMAGE_ID:latest -f project-3-aml-streaming/Dockerfile .
 
-        # Only push if we are on the main branch
         if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
-          echo "Pushing latest image to GHCR..."
           docker push $IMAGE_ID:latest
-
-          # Tag with the specific Git commit SHA for strict traceability
           docker tag $IMAGE_ID:latest $IMAGE_ID:${{ github.sha }}
           docker push $IMAGE_ID:${{ github.sha }}
         fi

@@ -2,10 +2,9 @@ FROM python:3.13-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY project-1-credit-card-fraud/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && pip install -U mlflow
+RUN pip install --no-cache-dir -r requirements.txt
 COPY project-1-credit-card-fraud/ .
 COPY compliance/ ./compliance/
-# SECURE FIX: Avoid chowning source code. Only grant permissions on runtime necessity folders.
 RUN useradd -m -u 10001 mlopsuser
 RUN mkdir -p /app/data /app/artifacts /app/mlruns && \
     chown -R mlopsuser:mlopsuser /app/data /app/artifacts /app/mlruns

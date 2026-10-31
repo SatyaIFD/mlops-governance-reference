@@ -1,20 +1,27 @@
+import json
 import sys
-import pandas as pd
 from pathlib import Path
-
-# Bind directly to the ingestion schema contract
-from src.ingestion.schemas import ProcessedTransactionSchema
+import pandas as pd
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+from src.ingestion.schemas import ProcessedTransactionSchema  # noqa: E402
+from src.monitoring.observability import calculate_psi, evaluate_drift_status  # noqa: E402
+
 PROCESSED_DATA_PATH = PROJECT_DIR / "data" / "processed_features.parquet"
+TRAIN_SPLIT_PATH = PROJECT_DIR / "data" / "processed" / "train.parquet"
+TEST_SPLIT_PATH = PROJECT_DIR / "data" / "processed" / "test.parquet"
+DRIFT_REPORT_PATH = PROJECT_DIR / "artifacts" / "drift_report.json"
 
 
-def run_statistical_validation():
+def run_statistical_validation() -> dict:
     """
-    Applies strict statistical validation checks to verify distribution consistency,
-    null thresholds, and schema contract alignment on engineered Parquet artifacts.
+    Applies schema contract checks, null/target integrity checks, and statistical
+    Population Stability Index (PSI) drift evaluation across reference vs. evaluation splits.
     """
-    print("📊 Initializing Statistical Data Validation Layer...")
+    print("📊 Initializing Statistical Data Validation & PSI Drift Layer...")
 
     if not PROCESSED_DATA_PATH.exists():
         raise FileNotFoundError(
@@ -24,37 +31,58 @@ def run_statistical_validation():
     df = pd.read_parquet(PROCESSED_DATA_PATH)
     print("🛡️ Evaluating data profiling expectations...")
 
-    # Expectation 1 & 5: Bind directly to Pydantic Schema Fields
     expected_columns = list(ProcessedTransactionSchema.model_fields.keys())
     if list(df.columns) != expected_columns:
         raise ValueError(
-            f"🚨 Schema Contract Violation! Mismatch between dataframe and Pydantic model.\nExpected: {expected_columns}\nFound: {list(df.columns)}"
+            f"🚨 Schema Contract Violation! Mismatch between dataframe and Pydantic model.\n"
+            f"Expected: {expected_columns}\nFound: {list(df.columns)}"
         )
 
-    # Expectation 2: Core feature null matrix integrity constraint
-    null_counts = df.isnull().sum().sum()
+    null_counts = int(df.isnull().sum().sum())
     if null_counts > 0:
         raise ValueError(
             f"🚨 Data integrity breach! Found {null_counts} missing values in the dataset."
         )
 
-    # Expectation 3: Verify target binary type properties
     unique_classes = set(df["Class"].unique())
     if not unique_classes.issubset({0, 1}):
         raise ValueError(
             f"🚨 Target validation failure! Invalid classes detected: {unique_classes}"
         )
 
-    # Expectation 4: Distribution sanity check on scaled time (Z-score boundaries)
-    time_min, time_max = df["scaled_time"].min(), df["scaled_time"].max()
-    if time_min < -3.5 or time_max > 3.5:
-        print(
-            f"⚠️ Warning: Outliers detected in scaled_time distribution: [{time_min:.2f}, {time_max:.2f}]"
-        )
+    # Compute PSI across key risk features using reference vs. evaluation partitions
+    if TRAIN_SPLIT_PATH.exists() and TEST_SPLIT_PATH.exists():
+        ref_df = pd.read_parquet(TRAIN_SPLIT_PATH)
+        eval_df = pd.read_parquet(TEST_SPLIT_PATH)
+    else:
+        midpoint = len(df) // 2
+        ref_df = df.iloc[:midpoint]
+        eval_df = df.iloc[midpoint:]
 
-    print(
-        "✅ Success! Statistical data profiling checks passed. No data drift or schema mutations detected."
-    )
+    monitored_features = ["V14", "V17", "V12", "scaled_amount", "scaled_time"]
+    psi_metrics = {}
+    overall_alert = False
+
+    for feat in monitored_features:
+        if feat in ref_df.columns and feat in eval_df.columns:
+            psi_val = calculate_psi(ref_df[feat].to_numpy(), eval_df[feat].to_numpy())
+            status = evaluate_drift_status(psi_val)
+            if status == "ALERT":
+                overall_alert = True
+            psi_metrics[feat] = {"psi": round(psi_val, 6), "status": status}
+
+    report = {
+        "schema_valid": True,
+        "null_count": null_counts,
+        "drift_alert_triggered": overall_alert,
+        "feature_psi": psi_metrics,
+    }
+    DRIFT_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DRIFT_REPORT_PATH, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+
+    print("✅ Success! Statistical data validation and PSI checks completed.")
+    return report
 
 
 if __name__ == "__main__":
