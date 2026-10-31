@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.3...v0.5.0) (2026-10-31)
+
+
+### Features
+
+* **governance:** final stage 4 multi-service deployment, hitl router, and aml streaming pipeline fixes ([656aed9](https://github.com/SatyaIFD/mlops-governance-reference/commit/656aed98ce53a9da91832503893a945c8bcb7b50))
+* **governance:** final stage 4 multi-service deployment, hitl router, and aml streaming pipeline fixes ([0e3ac50](https://github.com/SatyaIFD/mlops-governance-reference/commit/0e3ac50c4118af06d4f9aa910687aafbe0a467ff))
+* **governance:** final stage 4 multi-service deployment, hitl router… ([e85028f](https://github.com/SatyaIFD/mlops-governance-reference/commit/e85028f9a457602fa4b34dc186b33a5a404a9e13))
+
+
+### Bug Fixes
+
+* **ci:** remove stale base-image spdx sbom and align trivy check name for branch protection ([e1d6f5f](https://github.com/SatyaIFD/mlops-governance-reference/commit/e1d6f5f3e8c6daf7b63705a90d2683e8a95b0380))
+* **security:** bump msgpack, setuptools, and urllib3 to patched versions to resolve CVE-2026-114613, CVE-2025-47273, and CVE-2026-97687 ([fa40516](https://github.com/SatyaIFD/mlops-governance-reference/commit/fa4051609c32381eb422883554d751354d227d29))
+* **security:** explicitly upgrade msgpack, setuptools, and urllib3 in Dockerfiles ([bfe5b8e](https://github.com/SatyaIFD/mlops-governance-reference/commit/bfe5b8e5c8a81fdf0e789047a0df3409fd861249))
+* **security:** strip pip vendored sboms and add trivyignore for base python build metadata ([8dd0620](https://github.com/SatyaIFD/mlops-governance-reference/commit/8dd0620583c204cc7ca2617a947552dd47a6d3da))
+* **security:** upgrade debian os packages across all service dockerfiles ([5c82332](https://github.com/SatyaIFD/mlops-governance-reference/commit/5c8233207a03f18f542f8bbaa877abfa207363ee))
+* **security:** upgrade mlflow to 3.17.2 to resolve CVE-2026-116692, CVE-2026-116690, and CVE-2026-53995 ([40b2ca0](https://github.com/SatyaIFD/mlops-governance-reference/commit/40b2ca0dc19815ed81ba6f69cc537b3fc42d85eb))
+
 ## [0.4.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.2...v0.4.3) (2026-10-30)
 
 
