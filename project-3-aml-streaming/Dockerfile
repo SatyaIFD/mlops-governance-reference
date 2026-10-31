@@ -14,7 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY project-3-aml-streaming/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir --upgrade msgpack>=1.2.3 setuptools>=78.1.1 urllib3>=2.8.0
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --upgrade "pip>=26.2.2" "msgpack>=1.2.3" "setuptools>=78.1.1" "urllib3>=2.8.0" && \
+    find /usr/local -name "*.spdx.json" -delete && \
+    rm -rf /usr/local/lib/python3.13/ensurepip/_bundled
 
 COPY project-3-aml-streaming/src/ /app/src/
 COPY project-3-aml-streaming/scripts/ /app/scripts/
