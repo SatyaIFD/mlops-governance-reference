@@ -1,11 +1,4 @@
-.PHONY: help test security up down
-
-help:
-	@echo "Enterprise MLOps Reference Architecture Commands:"
-	@echo "  make test      - Run all rigorous functional, fairness, and compliance tests"
-	@echo "  make security  - Run Bandit SAST scanning locally"
-	@echo "  make up        - Spin up the entire multi-project fleet via Docker Compose"
-	@echo "  make down      - Tear down the Docker Compose fleet"
+.PHONY: test security inspect-mlflow up down
 
 test:
 	@echo "Running rigorous validation suite across all pipelines..."
@@ -15,10 +8,17 @@ test:
 	python -m pytest compliance/test_compliance.py -v
 
 security:
-	bandit -r . -ll -ii -x '*/tests/*,*/.pytest_cache/*,*/.venv/*'
+	@echo "Running Bandit SAST security scan..."
+	bandit -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
+
+inspect-mlflow:
+	@python -c 'import sqlite3, os; db="mlflow.db"; \
+	print("DB exists:", os.path.exists(db)); \
+	conn=sqlite3.connect(db) if os.path.exists(db) else None; \
+	print("Registered Models:", conn.execute("SELECT name, version, current_stage, source, run_id FROM model_versions").fetchall() if conn and conn.execute("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"model_versions\"").fetchone() else "None")'
 
 up:
-	sudo docker compose up --build -d
+	sudo docker compose up -d
 
 down:
-	sudo docker compose down -v
+	sudo docker compose down

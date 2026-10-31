@@ -33,7 +33,7 @@ jobs:
 
     - name: Execute Governance Validation Test Suite
       run: |
-        PYTHONPATH=project-2-loan-default pytest project-2-loan-default/tests/ || echo "Tests passed or skipped."
+        PYTHONPATH=project-2-loan-default pytest project-2-loan-default/tests/ -v
 
     - name: Log in to GitHub Container Registry (GHCR)
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -51,7 +51,6 @@ jobs:
         docker build -t $IMAGE_ID:latest -f project-2-loan-default/Dockerfile .
 
         if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
-          echo "Pushing latest image to GHCR..."
           docker push $IMAGE_ID:latest
           docker tag $IMAGE_ID:latest $IMAGE_ID:${{ github.sha }}
           docker push $IMAGE_ID:${{ github.sha }}

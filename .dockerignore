@@ -1,0 +1,27 @@
+# Prevent credentials, local databases, and build artifacts from leaking into images
+**/kaggle.json
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.coverage
+mlflow.db
+mlflow.db-*
+mlruns/
+**/data/*.csv
+**/data/*.zip
+**/data/*.parquet
+**/data/processed/
+**/artifacts/
+*.purge_journal.json
+*.bak
+*.tmp

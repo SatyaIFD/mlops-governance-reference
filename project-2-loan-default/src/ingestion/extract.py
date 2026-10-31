@@ -92,7 +92,6 @@ class LoanDataIngestionEngine:
 
 
 if __name__ == "__main__":
-    # Dynamic home path resolution matching execution context
     SRC_DIR = Path(__file__).resolve().parent
     BASE_DIR = SRC_DIR.parents[1]
     DATA_TARGET_DIR = BASE_DIR / "data"
