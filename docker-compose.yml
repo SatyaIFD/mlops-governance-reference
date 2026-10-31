@@ -114,5 +114,5 @@ services:
       - ./aml_streaming_model:/app/aml_streaming_model:ro
       - ./mlruns:/app/mlruns
       - ./mlruns:/home/satyajit/Work/mlops-governance-reference/mlruns
-    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.16.1 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --host 0.0.0.0 --port 5000"
+    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.17.2 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped

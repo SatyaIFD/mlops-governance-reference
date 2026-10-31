@@ -7,5 +7,5 @@ kagglehub
 pytest>=8.0.0
 msgpack>=1.1.0
 setuptools>=78.1.1
-mlflow==3.16.1
+mlflow==3.17.2
 skops>=0.9.0
