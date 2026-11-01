@@ -1,51 +1,77 @@
 version: 2
 updates:
-  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 2
 
-  # Root Monorepo Dependencies (pyproject.toml / uv)
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-
-  # Project 1: Credit Card Fraud
   - package-ecosystem: "pip"
     directory: "/project-1-credit-card-fraud"
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 2
+    groups:
+      project-1-dependencies:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/project-2-loan-default"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    groups:
+      project-2-dependencies:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/project-3-aml-streaming"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    groups:
+      project-3-dependencies:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "docker"
     directory: "/project-1-credit-card-fraud"
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "python"
+        versions: [">= 3.14.a0"]
 
-  # Project 2: Loan Default
-  - package-ecosystem: "pip"
-    directory: "/project-2-loan-default"
-    schedule:
-      interval: "weekly"
-      day: "monday"
   - package-ecosystem: "docker"
     directory: "/project-2-loan-default"
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "python"
+        versions: [">= 3.14.a0"]
 
-  # Project 3: AML Streaming
-  - package-ecosystem: "pip"
-    directory: "/project-3-aml-streaming"
-    schedule:
-      interval: "weekly"
-      day: "monday"
   - package-ecosystem: "docker"
     directory: "/project-3-aml-streaming"
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "python"
+        versions: [">= 3.14.a0"]

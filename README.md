@@ -18,7 +18,7 @@ This repository is structured as a multi-service MLOps platform housing three de
 ## 🛡️ Automated DevSecOps Pipeline
 
 * **SAST & Linting:** Automated vulnerability scanning via **Bandit** (`make security`) and formatting baselines via **Ruff**.
-* **Container Security:** Automated OS-level and package vulnerability scanning across all three microservice images using **Trivy** (`aquasecurity/trivy-action@0.28.0`).
+* **Container Security:** Automated OS-level and package vulnerability scanning across all three microservice images using **Trivy** (`aquasecurity/trivy-action@v0.36.0`).
 * **Artifact Publishing:** Docker images are built and published to the **GitHub Container Registry (GHCR)** after passing unit and compliance test gates.
 
 ## ⚖️ Programmatic Governance & Resilience Controls (`/compliance`)
@@ -35,7 +35,7 @@ The `/compliance` package implements technical building blocks that support regu
 ### 1. Run Multi-Project Fleet
 
 ```bash
-git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
+git clone https://github.com/SatyaIFD/mlops-governance-reference.git
 cd mlops-governance-reference
 cp .env.example .env
 sudo docker compose up -d

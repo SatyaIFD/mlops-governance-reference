@@ -20,8 +20,8 @@ Verifies schema ordering, null counts, and binary class integrity, and computes 
 
 ## Technical Specifications
 
-* **Core Frameworks:** Python 3.13, XGBoost 3.4.1, MLflow 3.16.1, FastAPI, Uvicorn, SHAP, Pytest, Pandas, PyArrow
-* **Container Environment:** `python:3.13-slim` running as non-root `UID 10001`
+* **Core Frameworks:** Python 3.13, XGBoost 3.4.1, MLflow 3.17.2, FastAPI, Uvicorn, SHAP, Pytest, Pandas, PyArrow
+* **Container Environment:** `python:3.13.14-slim` running as non-root `UID 10001`
 
 ---
 
