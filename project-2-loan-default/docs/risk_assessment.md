@@ -1,26 +1,30 @@
+
 # ⚖️ Model Risk Assessment & Algorithmic Mitigation Protocol
+
 **Project 2: Loan Default Risk Underwriting Engine**
 
 ---
 
 ## 1. Core Model Failure Modes & Operational Risk
-This model operates as an automated gatekeeper for capital allocation. Systemic failure introduces two primary vectors of corporate risk:
-* **False Negatives (Under-prediction of Risk):** Approving applicants with a high structural probability of default. This directly increases the bank's Non-Performing Loan (NPL) ratio and degrades asset quality.
-* **False Positives (Over-prediction of Risk):** Systematically denying creditworthy individuals. This results in direct loss of market share, customer churn, and potential regulatory fair-lending penalties.
 
-## 2. Quantitative Threshold Guardrails & Incident Response
-The automated MLOps pipeline evaluates performance and drift metrics at the conclusion of every batch lifecycle. Deviations trigger distinct severity levels:
+This model scores retail loan applications to assist human credit underwriting. Unmitigated failures introduce two primary risks:
 
-| Metric Type | Monitoring Indicator | Tolerance Range | Action Required upon Breach |
-| :--- | :--- | :--- | :--- |
-| **Data Drift** | Population Stability Index (PSI) | $PSI < 0.10$ | **Stable.** Retain current production serving layer. |
-| **Data Drift** | Population Stability Index (PSI) | $0.10 \le PSI < 0.25$ | **Moderate Shift.** Trigger automated model retraining queue. |
-| **Performance** | Validation Accuracy | $< 88.0\%$ | **Degradation.** Raise Sev-2 ticket; verify upstream data integrity. |
-| **Fairness / Bias**| Disparate Impact Ratio | $0.80 \text{ to } 1.25$ | **Compliant.** Adheres to the HUD 4/5ths lending rule. |
+* **False Negatives (Under-prediction of Default Risk):** Recommending approval for high-risk applicants, increasing Non-Performing Loan (NPL) ratios.
+* **False Positives & Demographic Disparity:** Systematically recommending rejection for younger applicants (`Age < 30`) due to shorter credit histories.
 
-## 3. Mandatory Fair Lending Mitigation Protocol
-When a fairness metric registers as **`NON-COMPLIANT (BREACH)`** (e.g., Disparate Impact drops below 0.80 for protected age groups), the following automated and human protocols are legally mandated:
+## 2. Quantitative Guardrails Implemented in Code
 
-* **Automated Traffic Throttling:** The deployment engine caps automated inference approvals for the affected segment to minimize legal liability exposure.
-* **Equalized Odds Retraining:** The scheduler initiates an emergency pipeline run, loading the baseline training pool with compensatory weights or adversarial fairness debiasing constraints applied to the sensitive feature attributes.
-* **Human-in-the-Loop Fallback:** All incoming underwriting applications flagged by a biased model version are automatically rerouted away from direct API auto-rejection and pushed to a manual queue for human credit officer adjudication.
+The pipeline enforces automated checks across evaluation (`src/evaluation/evaluate.py`), drift validation (`src/validation/drift_check.py`), and live telemetry auditing (`src/monitoring/drift_monitor.py`):
+
+| Check Layer | Metric / Indicator | Implemented Threshold | Pipeline Behavior in Code |
+| --- | --- | --- | --- |
+| **Holdout Performance** | Test ROC-AUC (`evaluate.py`) | $\text{ROC-AUC} \ge 0.70$ | Sets `minimum_performance_passed = True`; exits non-zero if breached. |
+| **Holdout & Live Fairness** | Disparate Impact Ratio (`Age < 30` vs. `Age >= 30`) | $0.80 \le \text{DI} \le 1.25$ | Reports `COMPLIANT` within bounds, `NON-COMPLIANT (BREACH)` outside bounds, or `INCONCLUSIVE (INSUFFICIENT_DATA)` when cohort/baseline counts are zero. |
+| **Population Drift** | Population Stability Index (`drift_check.py`) | $\text{PSI} < 0.10$ (`STABLE`), $0.10 \le \text{PSI} < 0.25$ (`MODERATE_SHIFT`), $\text{PSI} \ge 0.25$ (`SEVERE_DRIFT`) | Evaluates `CreditScore`, `Income`, `LoanAmount`, and `DTIRatio`; exits non-zero when `--fail-on-drift` or `--simulate-drift` detects severe drift. |
+| **Operational Resilience** | Consecutive Inference Exceptions (`dora_circuit_breaker.py`) | $\ge 3$ failures (`recovery_timeout_s = 30.0`) | Trips `MLSystemCircuitBreaker` to `OPEN`, returning `HTTP 503` with single-probe `HALF_OPEN` recovery locking. |
+
+## 3. Implemented Fair Lending & Resilience Controls
+
+* **Pre-Processing Sample Reweighting (`src/training/train.py`):** `calculate_mitigation_weights()` computes inverse joint-probability weights across age cohorts (`Age < 30` vs. `Age >= 30`) and default labels (`Default == 0` vs. `Default == 1`) prior to fitting `XGBClassifier`.
+* **Single-Row Categorical Preservation (`src/inference/main.py`):** `prepare_single_row_features()` encodes incoming requests with `drop_first=False` before reindexing to the model's exact training feature columns so single-row payloads never lose their active category level.
+* **Mandatory Human-in-the-Loop Routing (`src/inference/main.py`):** Every `/predict` call invokes `enforce_human_in_the_loop()`, setting `action: "MANUAL_REVIEW_REQUIRED"`, `review_status: "PENDING_HUMAN_REVIEW"`, and `final_decision: null`.

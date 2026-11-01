@@ -1,6 +1,6 @@
 # Enterprise MLOps Governance & Observability Monorepo
 
-[![Python](https://img.shields.io/badge/Python-3.13--slim-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.13.14--slim-blue.svg)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED.svg)](https://www.docker.com/)
 [![CI/CD](https://img.shields.io/badge/GitHub_Actions-Automated-success.svg)](https://github.com/features/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -35,9 +35,9 @@ The `/compliance` package implements technical building blocks that support regu
 ### 1. Run Multi-Project Fleet
 
 ```bash
-git clone https://github.com/SatyaIFD/mlops-governance-reference.git
+git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
 cd mlops-governance-reference
-cp .env.example .env
+[ -f .env.example ] && cp -n .env.example .env || true
 sudo docker compose up -d
 
 ```

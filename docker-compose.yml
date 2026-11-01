@@ -105,7 +105,7 @@ services:
     restart: unless-stopped
 
   mlflow-server:
-    image: python:3.13-slim
+    image: python:3.13.14-slim
     container_name: mlops-mlflow-server
     ports:
       - "127.0.0.1:5000:5000"

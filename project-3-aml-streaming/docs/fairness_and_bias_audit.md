@@ -1,28 +1,29 @@
+
 # Fairness & Bias Audit: AML Streaming Anomaly Detector
 
-This document defines the bias auditing criteria, fairness metrics, and anti-discrimination controls for the **Project 3 Real-Time AML Streaming Engine**.
+This document defines the bias prevention design and operational fairness controls for the **Project 3 Real-Time AML Streaming Engine**.
 
 ---
 
 ## 1. Bias Prevention Principles
-Financial crime monitoring models carry inherent risk of indirect bias or demographic profiling. To guarantee ethical operation:
 
-* **No Demographic Predictors:** The feature matrix strictly excludes age, gender, nationality, ethnicity, postal code, or socio-economic indicators.
-* **Neutral Network Topology:** Features measure transaction flow dynamics (`pass_through_ratio_1h`, `velocity_acceleration`, `fan_out_count_24h`) rather than entity identity.
-* **Disparate Impact Threshold:** Model scoring must maintain a Disparate Impact Ratio between $0.80$ and $1.25$ across all transaction amount corridors.
+Financial crime monitoring models carry inherent risk of indirect bias or demographic profiling. To ensure objective behavioral scoring:
 
----
-
-## 2. Protected Class & Proxy Discrimination Audit
-
-| Potential Proxy Risk | Assessment | Mitigation Strategy |
-|---|---|---|
-| **Geographic / Country Corridors** | High-risk cross-border corridors can be over-flagged. | Scoring weights reflect account velocity acceleration rather than origin region. |
-| **Transaction Size Disparity** | Small-business accounts with high volume may resemble "smurfing" patterns. | `velocity_acceleration` normalizes 1-hour activity against the account's own 24-hour baseline. |
-| **New Account Cold Start** | Accounts without historical state risk artificially high pass-through scores. | Warmup lookback threshold delays high-severity auto-escalation until baseline state establishes. |
+* **Zero Demographic Predictors:** The 7-feature matrix (`CANONICAL_AML_FEATURES`) strictly excludes age, gender, nationality, ethnicity, postal code, and bank location strings (`Sender_bank_location` and `Receiver_bank_location` are ignored during feature extraction).
+* **Behavioral Graph Topology:** Features measure relative transaction flow dynamics (`pass_through_ratio_1h`, `velocity_acceleration`, `fan_out_count_24h`, `receiver_inflow_count_1h`, `receiver_inflow_amount_1h`, `is_structuring`, `Amount`) rather than static entity identity.
 
 ---
 
-## 3. Human-In-The-Loop (HITL) Fairness Protections
-* **Non-Automated Freezing:** High anomaly scores ($> 0.80$) trigger compliance queue items for human investigation. No account is frozen purely by machine decision (GDPR Article 22 compliance).
-* **Feedback Loop Auditing:** Investigator overrides (False Positives) are logged to detect systemic feature bias during quarterly model retraining cycles.
+## 2. Proxy Risk & Feature Normalization Controls
+
+| Potential Proxy Risk | Assessment | Implemented Control in Code |
+| --- | --- | --- |
+| **Geographic / Country Corridors** | High-risk cross-border corridors can be over-flagged if location columns are fed to the classifier. | `AMLAnomalyDetector._align_features()` filters strictly to `CANONICAL_AML_FEATURES`, dropping country/currency fields prior to training and inference. |
+| **Transaction Frequency Differences** | High-volume accounts could be over-flagged by raw transaction counts. | `velocity_acceleration` normalizes each account's 1-hour outgoing count against its own 24-hour average hourly baseline (`out_count_24h / 24.0`). |
+| **Class Imbalance Distortion** | Laundering events represent ~0.1% of stream volume. | `RandomForestClassifier` uses `class_weight="balanced"` and `select_empirical_threshold()` (`src/models/train.py`) calibrates the probability cutoff (default `0.40`). |
+
+---
+
+## 3. Human-In-The-Loop (HITL) Operational Protections
+
+* **Non-Autonomous Blocking:** Transactions scoring at or above the calibrated threshold (`prob >= 0.40`) are flagged as anomalies (`is_anomaly = 1`) for compliance review rather than triggering automated account freezes.
