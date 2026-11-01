@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.0...v0.5.1) (2026-11-01)
+
+
+### Documentation
+
+* **governance:** synchronize factual model cards, gdpr matrices, and compose specs ([a820bc3](https://github.com/SatyaIFD/mlops-governance-reference/commit/a820bc3806ff7ac108cb1f02f74e52e9c5380941))
+* **governance:** synchronize model cards, gdpr matrices, and compose specs to v0.5.0 baseline ([5d7ea35](https://github.com/SatyaIFD/mlops-governance-reference/commit/5d7ea35be979dd776011f22781277956c254f4ef))
+
 ## [0.5.0](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.4.3...v0.5.0) (2026-10-31)
 
 
