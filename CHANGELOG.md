@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.1...v0.5.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* **governance:** enforce p2 vocabulary, persist p3 threshold, and sync real audit artifacts ([9822374](https://github.com/SatyaIFD/mlops-governance-reference/commit/98223740b6932f19b7d6ffc81e644cfecc4ee196))
+* **governance:** enforce P2 vocabulary, persist P3 threshold, and sync real audit artifacts ([625753b](https://github.com/SatyaIFD/mlops-governance-reference/commit/625753b81b005022cf83fc44a53a3b1c77764ae8))
+
 ## [0.5.1](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.0...v0.5.1) (2026-11-01)
 
 
