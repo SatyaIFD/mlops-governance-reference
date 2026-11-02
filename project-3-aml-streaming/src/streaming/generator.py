@@ -1,7 +1,8 @@
 import csv
+import itertools
 import os
-import time
 import shutil
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -55,7 +56,6 @@ def ensure_dataset_exists(csv_path: Path):
     print(f"\n📦 Dataset missing at {csv_path}. Initiating automatic download...")
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1. Try kagglehub auto-fetch
     try:
         import kagglehub
 
@@ -71,7 +71,6 @@ def ensure_dataset_exists(csv_path: Path):
     except Exception as e:
         print(f"ℹ️ kagglehub download skipped/failed ({e}). Trying Kaggle API...")
 
-    # 2. Try Kaggle API fallback
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
 
@@ -88,7 +87,6 @@ def ensure_dataset_exists(csv_path: Path):
     except Exception as e:
         print(f"⚠️ Kaggle API download failed ({e}).")
 
-    # 3. Opt-in synthetic fallback for headless container environments
     if os.getenv("AML_SYNTHETIC_STREAM_FALLBACK", "0") == "1":
         print(
             f"⚙️ AML_SYNTHETIC_STREAM_FALLBACK=1 enabled: generating deterministic SAML-D stream at {csv_path}..."
@@ -98,18 +96,22 @@ def ensure_dataset_exists(csv_path: Path):
 
     raise FileNotFoundError(
         f"Missing base transaction data ledger at: {csv_path}\n"
-        f"Automatic fetch requires 'kagglehub' or Kaggle credentials (~/.kaggle/kaggle.json).\n"
-        f"Please run 'uv pip install kagglehub' or place SAML-D.csv manually into {csv_path.parent}."
+        f"Automatic fetch requires 'kagglehub' or Kaggle credentials (~/.kaggle/kaggle.json)."
     )
 
 
-def transaction_stream_generator(csv_path: Path, delay_seconds: float = 0.0):
+def transaction_stream_generator(
+    csv_path: Path, delay_seconds: float = 0.0, skip_rows: int = 0
+):
     """Yields live transactions from SAML-D dataset row-by-row as a streaming simulation."""
     ensure_dataset_exists(csv_path)
 
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        stream_iter = (
+            itertools.islice(reader, skip_rows, None) if skip_rows > 0 else reader
+        )
+        for row in stream_iter:
             if delay_seconds > 0:
                 time.sleep(delay_seconds)
 

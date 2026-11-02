@@ -12,10 +12,10 @@ PROJECT_ROOT = INGEST_DIR.parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import pandas as pd  # noqa: E402
-from src.ingestion.extract import LoanDataIngestionEngine  # noqa: E402
-from src.ingestion.schemas import RAW_LOAN_DATA_SCHEMA  # noqa: E402
-from src.ingestion.utils import initialize_directories, get_project_root  # noqa: E402
+import pandas as pd
+from src.ingestion.extract import LoanDataIngestionEngine
+from src.ingestion.schemas import RAW_LOAN_DATA_SCHEMA
+from src.ingestion.utils import get_project_root, initialize_directories
 
 
 def validate_raw_dataset(df: pd.DataFrame) -> bool:

@@ -110,7 +110,7 @@ class StreamingIngestionEngine:
             else:
                 candidate["Amount"] = amount
         except (ValueError, TypeError) as e:
-            errors.append(f"ERR_INVALID_AMOUNT: {str(e)}")
+            errors.append(f"ERR_INVALID_AMOUNT: {e!s}")
 
         try:
             ts_val = candidate["Timestamp"]
@@ -123,7 +123,7 @@ class StreamingIngestionEngine:
                     "ERR_MALFORMED_TIMESTAMP: Timestamp must be string or datetime."
                 )
         except (ValueError, TypeError) as e:
-            errors.append(f"ERR_MALFORMED_TIMESTAMP: {str(e)}")
+            errors.append(f"ERR_MALFORMED_TIMESTAMP: {e!s}")
 
         if errors:
             self._route_to_dlq(candidate, errors)

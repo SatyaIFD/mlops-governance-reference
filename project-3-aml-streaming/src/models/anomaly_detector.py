@@ -1,5 +1,7 @@
+import json
 from pathlib import Path
-from typing import Dict, Any, Tuple, List
+from typing import Any
+
 import pandas as pd
 import skops.io as sio
 from sklearn.ensemble import RandomForestClassifier
@@ -16,14 +18,18 @@ class AMLAnomalyDetector:
     """Supervised anomaly detection classifier tuned for streaming AML detection."""
 
     def __init__(self, threshold: float = 0.40):
-        self.feature_cols: List[str] = list(CANONICAL_AML_FEATURES)
+        self.feature_cols: list[str] = list(CANONICAL_AML_FEATURES)
         self.threshold: float = float(threshold)
         self.model: RandomForestClassifier = RandomForestClassifier(
             n_estimators=50, max_depth=10, class_weight="balanced", random_state=42
         )
 
+    @staticmethod
+    def _meta_path_for(artifact_path: Path) -> Path:
+        return artifact_path.with_name(artifact_path.name + ".meta.json")
+
     def _align_features(
-        self, df_or_dict: pd.DataFrame | Dict[str, Any]
+        self, df_or_dict: pd.DataFrame | dict[str, Any]
     ) -> pd.DataFrame:
         active_cols = (
             list(self.model.feature_names_in_)
@@ -45,7 +51,7 @@ class AMLAnomalyDetector:
         y = df[target_col].astype(int)
         self.model.fit(X, y)
 
-    def score_transaction(self, enriched_tx: Dict[str, Any]) -> Tuple[float, int]:
+    def score_transaction(self, enriched_tx: dict[str, Any]) -> tuple[float, int]:
         X_single = self._align_features(enriched_tx)
         prob = float(self.model.predict_proba(X_single)[0][1])
         is_anomaly = 1 if prob >= self.threshold else 0
@@ -55,6 +61,13 @@ class AMLAnomalyDetector:
         target = Path(artifact_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         sio.dump(self.model, target)
+        meta_path = self._meta_path_for(target)
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"threshold": self.threshold, "feature_cols": self.feature_cols},
+                f,
+                indent=2,
+            )
 
     def load(self, artifact_path: Path | str) -> None:
         target = (
@@ -66,3 +79,12 @@ class AMLAnomalyDetector:
             target,
             trusted=TRUSTED_SKOPS_TYPES,
         )
+        meta_path = self._meta_path_for(target)
+        if meta_path.is_file():
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                if "threshold" in meta:
+                    self.threshold = float(meta["threshold"])
+            except Exception:
+                pass

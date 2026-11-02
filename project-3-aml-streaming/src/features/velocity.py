@@ -1,8 +1,8 @@
 from collections import deque
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Any
 
-CANONICAL_AML_FEATURES: List[str] = [
+CANONICAL_AML_FEATURES: list[str] = [
     "Amount",
     "pass_through_ratio_1h",
     "is_structuring",
@@ -22,10 +22,10 @@ class StreamingStateManager:
     """
 
     def __init__(self):
-        self.state: Dict[str, deque] = {}
+        self.state: dict[str, deque] = {}
         self.watermark: datetime | None = None
         self._seen_events: deque[tuple[datetime, str]] = deque()
-        self._seen_event_map: Dict[str, Dict[str, Any]] = {}
+        self._seen_event_map: dict[str, dict[str, Any]] = {}
 
     def _advance_watermark(self, event_ts: datetime) -> datetime:
         if self.watermark is None or event_ts > self.watermark:
@@ -37,7 +37,7 @@ class StreamingStateManager:
             _, old_id = self._seen_events.popleft()
             self._seen_event_map.pop(old_id, None)
 
-    def update_and_enrich(self, tx: Dict[str, Any]) -> Dict[str, Any]:
+    def update_and_enrich(self, tx: dict[str, Any]) -> dict[str, Any]:
         """Updates internal lookback state and appends the 7 canonical graph/velocity features."""
         sender = str(tx["Sender_account"])
         receiver = str(tx["Receiver_account"])

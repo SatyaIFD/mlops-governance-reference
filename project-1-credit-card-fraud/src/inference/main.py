@@ -9,18 +9,18 @@ import secrets
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Any, List
+from typing import Annotated, Any
 
+import mlflow
+import mlflow.xgboost
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel, Field
-import mlflow
-import mlflow.xgboost
 from mlflow.tracking import MlflowClient
+from pydantic import BaseModel, Field
 
 from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
 
@@ -132,7 +132,7 @@ FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 
 
 class TransactionData(BaseModel):
-    features: List[FiniteFloat] = Field(
+    features: list[FiniteFloat] = Field(
         ...,
         description="Array of V1-V28 PCA features, scaled_amount, and scaled_time",
         min_length=30,

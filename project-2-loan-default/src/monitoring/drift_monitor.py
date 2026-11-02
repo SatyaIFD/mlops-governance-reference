@@ -1,18 +1,20 @@
 """
 Real-Time Fairness & Recommendation Disparity Monitor - Project 2: Loan Default Prediction
 Evaluates live telemetry logs across protected (<30) and baseline (>=30) age cohorts.
-Never reports COMPLIANT when observations are missing, rejected, or have zero baseline rates.
+Preserves holdout evaluation metrics in compliance_audit_report.json while recording
+live telemetry fairness under live_telemetry_fairness (and fairness_metrics).
 """
 
 import json
 from pathlib import Path
+
 import pandas as pd
 
 
 def run_production_audit(
     log_path: Path | None = None,
     report_path: Path | None = None,
-    min_cohort_size: int = 1,
+    min_cohort_size: int = 30,
 ) -> dict:
     print("🕵️‍♂️ Initializing real-time governance & recommendation parity scanner...")
 
@@ -31,6 +33,16 @@ def run_production_audit(
         except Exception:
             existing_report = {}
 
+    # Preserve holdout fairness block if present before updating live telemetry
+    if (
+        "fairness_metrics" in existing_report
+        and "holdout_fairness_metrics" not in existing_report
+        and "protected_cohort_count" not in existing_report["fairness_metrics"]
+    ):
+        existing_report["holdout_fairness_metrics"] = existing_report[
+            "fairness_metrics"
+        ].copy()
+
     if not log_path.exists():
         print(f"⚠️ Telemetry log ledger not found at: {log_path}")
         status_block = {
@@ -38,6 +50,7 @@ def run_production_audit(
             "disparate_impact_ratio": None,
             "sample_size_valid": False,
         }
+        existing_report["live_telemetry_fairness"] = status_block
         existing_report["fairness_metrics"] = status_block
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as f:
@@ -49,16 +62,17 @@ def run_production_audit(
         for line in f:
             if line.strip():
                 rec = json.loads(line.strip())
-                if rec.get("status_code") == 200:
+                if rec.get("status_code") == 200 and rec.get("schema_version", 2) == 2:
                     records.append(rec)
 
     if not records:
-        print("⚠️ No valid HTTP 200 inference records in telemetry log.")
+        print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")
         status_block = {
             "demographic_parity_status": "INCONCLUSIVE (INSUFFICIENT_DATA)",
             "disparate_impact_ratio": None,
             "sample_size_valid": False,
         }
+        existing_report["live_telemetry_fairness"] = status_block
         existing_report["fairness_metrics"] = status_block
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as f:
@@ -76,6 +90,7 @@ def run_production_audit(
             "disparate_impact_ratio": None,
             "sample_size_valid": False,
         }
+        existing_report["live_telemetry_fairness"] = status_block
         existing_report["fairness_metrics"] = status_block
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(existing_report, f, indent=4)
@@ -92,12 +107,13 @@ def run_production_audit(
             "disparate_impact_ratio": None,
             "sample_size_valid": False,
         }
+        existing_report["live_telemetry_fairness"] = status_block
         existing_report["fairness_metrics"] = status_block
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(existing_report, f, indent=4)
         return existing_report
 
-    valid_decisions = {"APPROVE", "APPROVED", "DECLINE", "REJECTED"}
+    valid_decisions = {"APPROVE", "APPROVED", "DECLINE", "REJECTED", "DENIED"}
     audit_df = audit_df[audit_df[decision_col].isin(valid_decisions)].copy()
 
     young_df = audit_df[audit_df["Age"] < 30]
@@ -134,11 +150,11 @@ def run_production_audit(
             else:
                 fairness_status = "NON-COMPLIANT (BREACH)"
 
-    existing_report["fairness_metrics"] = {
+    live_block = {
         "demographic_parity_status": fairness_status,
         "disparate_impact_ratio": di_ratio,
-        "protected_cohort_count": int(len(young_df)),
-        "baseline_cohort_count": int(len(mature_df)),
+        "protected_cohort_count": len(young_df),
+        "baseline_cohort_count": len(mature_df),
         "protected_approval_rate": round(approval_protected, 4)
         if approval_protected is not None
         else None,
@@ -146,6 +162,8 @@ def run_production_audit(
         if approval_baseline is not None
         else None,
     }
+    existing_report["live_telemetry_fairness"] = live_block
+    existing_report["fairness_metrics"] = live_block
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(report_path, "w", encoding="utf-8") as f:

@@ -1,8 +1,10 @@
 import shlex
-from pathlib import Path
 from datetime import datetime, timedelta
-from airflow import DAG
+from pathlib import Path
+
 from airflow.operators.bash import BashOperator
+
+from airflow import DAG
 
 DAG_DIR = Path(__file__).resolve().parent
 CONTAINER_SCOPED_ROOT = Path("/opt/airflow")

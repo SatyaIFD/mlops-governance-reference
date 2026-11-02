@@ -80,7 +80,6 @@ project-3-aml-streaming/artifacts/
 !project-3-aml-streaming/data/processed/*.parquet
 # Large datasets and artifacts
 *.csv
-data/
 *.joblib
 project-3-aml-streaming/docs/api/
 
@@ -112,3 +111,7 @@ airflow/logs/
 logs/*
 !logs/.gitkeep
 *.log
+
+aml_streaming_model
+*.meta.json
+project-1-credit-card-fraud/artifacts/

@@ -8,10 +8,7 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    libssl-dev \
-    procps && \
+    apt-get install -y --no-install-recommends procps && \
     rm -rf /var/lib/apt/lists/*
 
 COPY project-3-aml-streaming/requirements.txt .

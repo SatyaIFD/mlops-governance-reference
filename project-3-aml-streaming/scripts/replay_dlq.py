@@ -1,8 +1,9 @@
 import json
 import logging
 from pathlib import Path
-from src.ingestion.stream_ingestor import StreamingIngestionEngine
+
 from src.features.velocity import StreamingStateManager
+from src.ingestion.stream_ingestor import StreamingIngestionEngine
 from src.models.anomaly_detector import AMLAnomalyDetector
 
 logging.basicConfig(

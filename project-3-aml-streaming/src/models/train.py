@@ -1,12 +1,13 @@
 import os
 import sys
 from pathlib import Path
+
+import mlflow
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score, f1_score
-import mlflow
 from mlflow.models import infer_signature
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import f1_score, roc_auc_score
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 SERVICE_ROOT = SRC_DIR.parent
@@ -18,9 +19,15 @@ REPO_ROOT = (
 if str(SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICE_ROOT))
 
-from src.features.velocity import StreamingStateManager, CANONICAL_AML_FEATURES  # noqa: E402
-from src.models.anomaly_detector import AMLAnomalyDetector, TRUSTED_SKOPS_TYPES  # noqa: E402
-from src.streaming.generator import ensure_dataset_exists  # noqa: E402
+from src.features.velocity import (
+    CANONICAL_AML_FEATURES,
+    StreamingStateManager,
+)
+from src.models.anomaly_detector import (
+    TRUSTED_SKOPS_TYPES,
+    AMLAnomalyDetector,
+)
+from src.streaming.generator import ensure_dataset_exists
 
 
 def _extract_label(tx: dict) -> int:
@@ -32,11 +39,16 @@ def _extract_label(tx: dict) -> int:
     )
 
 
-def prepare_training_data(csv_path: Path, max_rows: int = 50000) -> pd.DataFrame:
-    print(f"🧠 Building historical 7-feature state matrix (limit: {max_rows} rows)...")
+def prepare_training_data(
+    csv_path: Path, warmup_rows: int = 50000, train_rows: int = 50000
+) -> pd.DataFrame:
+    total_rows = warmup_rows + train_rows
+    print(
+        f"🧠 Building historical 7-feature state matrix ({warmup_rows} warmup + {train_rows} training rows)..."
+    )
     ensure_dataset_exists(csv_path)
 
-    df = pd.read_csv(csv_path, nrows=max_rows)
+    df = pd.read_csv(csv_path, nrows=total_rows)
 
     if "Date" in df.columns and "Time" in df.columns:
         df["Timestamp"] = pd.to_datetime(
@@ -54,11 +66,12 @@ def prepare_training_data(csv_path: Path, max_rows: int = 50000) -> pd.DataFrame
     manager = StreamingStateManager()
     enriched_records = []
 
-    for tx in df.to_dict("records"):
+    for idx, tx in enumerate(df.to_dict("records")):
         target = _extract_label(tx)
         enriched_tx = manager.update_and_enrich(tx)
         enriched_tx["Is_laundering"] = target
-        enriched_records.append(enriched_tx)
+        if idx >= warmup_rows or len(df) <= warmup_rows:
+            enriched_records.append(enriched_tx)
 
     return pd.DataFrame(enriched_records)
 
@@ -69,7 +82,7 @@ def select_empirical_threshold(y_true: np.ndarray, probs: np.ndarray) -> float:
         return 0.40
     best_thresh = 0.40
     best_f1 = -1.0
-    for candidate in np.linspace(0.20, 0.80, 13):
+    for candidate in np.linspace(0.25, 0.75, 11):
         preds = (probs >= candidate).astype(int)
         score = float(f1_score(y_true, preds, zero_division=0))
         if score > best_f1:
@@ -128,7 +141,6 @@ def train_and_register():
         mlflow.log_param("feature_count", len(CANONICAL_AML_FEATURES))
         mlflow.log_param("calibrated_threshold", optimal_threshold)
 
-        # Save identical artifact to local skops path so container and MLflow stay 1:1
         detector = AMLAnomalyDetector(threshold=optimal_threshold)
         detector.model = model
         detector.save(skops_artifact_path)

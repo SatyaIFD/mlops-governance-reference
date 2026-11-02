@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -7,7 +8,7 @@ AML_DIR = ROOT_DIR / "project-3-aml-streaming"
 if str(AML_DIR) not in sys.path:
     sys.path.insert(0, str(AML_DIR))
 
-from src.models.anomaly_detector import AMLAnomalyDetector  # noqa: E402
+from src.models.anomaly_detector import AMLAnomalyDetector
 
 print("Training baseline 7-feature Random Forest...")
 df = pd.DataFrame(

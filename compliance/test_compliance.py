@@ -5,17 +5,19 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+
 import pandas as pd
 import pytest
 from faker import Faker
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from compliance.eu_ai_act_hitl_router import (
-    enforce_human_in_the_loop,
-    HIGH_RISK_ACTIONS,
-)
 from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
-from compliance.gdpr_purge import execute_right_to_be_forgotten, PurgeError
+from compliance.eu_ai_act_hitl_router import (
+    HIGH_RISK_ACTIONS,
+    enforce_human_in_the_loop,
+)
+from compliance.gdpr_purge import PurgeError, execute_right_to_be_forgotten
 
 fake = Faker()
 

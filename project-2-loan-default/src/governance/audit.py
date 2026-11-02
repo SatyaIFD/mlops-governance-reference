@@ -34,11 +34,13 @@ def compile_compliance_audit():
         with open(drift_report_path, "r", encoding="utf-8") as f:
             drift_data = json.load(f)
 
-    fairness_block = eval_data.get("fairness_metrics", {})
+    holdout_fairness = eval_data.get(
+        "holdout_fairness_metrics", eval_data.get("fairness_metrics", {})
+    )
     perf_block = eval_data.get("performance_metrics", eval_data.get("metrics", {}))
 
-    fairness_status = fairness_block.get("demographic_parity_status", "UNKNOWN")
-    disparate_impact_ratio = fairness_block.get("disparate_impact_ratio", "N/A")
+    fairness_status = holdout_fairness.get("demographic_parity_status", "UNKNOWN")
+    disparate_impact_ratio = holdout_fairness.get("disparate_impact_ratio", "N/A")
 
     test_auc = perf_block.get("test_roc_auc", perf_block.get("roc_auc", "N/A"))
     test_acc = perf_block.get("test_accuracy", perf_block.get("accuracy", "N/A"))
@@ -85,7 +87,7 @@ def compile_compliance_audit():
 
     docs_dir.mkdir(parents=True, exist_ok=True)
     with open(model_card_path, "w", encoding="utf-8") as f:
-        f.write(markdown_content.strip())
+        f.write(markdown_content.strip() + "\n")
 
     print(
         f"🎉 Governance Audit complete. Updated compliance sheet exported to: {model_card_path}"

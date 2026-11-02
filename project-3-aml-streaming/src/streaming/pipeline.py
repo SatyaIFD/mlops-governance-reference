@@ -4,9 +4,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from src.models.anomaly_detector import AMLAnomalyDetector
+
+from src.features.velocity import CANONICAL_AML_FEATURES, StreamingStateManager
 from src.ingestion.stream_ingestor import StreamingIngestionEngine
-from src.features.velocity import StreamingStateManager
+from src.models.anomaly_detector import AMLAnomalyDetector
 from src.streaming.generator import transaction_stream_generator
 
 
@@ -54,24 +55,109 @@ def resolve_runtime_paths() -> tuple[Path, Path, Path, Path]:
     return data_path, dlq_dir, report_path, model_path
 
 
+def _write_heartbeat(artifacts_dir: Path, processed_count: int) -> None:
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    hb_path = artifacts_dir / "heartbeat.json"
+    with open(hb_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "processed_count": processed_count,
+                "status": "HEALTHY",
+            },
+            f,
+        )
+
+
+def _write_report(
+    report_path: Path,
+    quality_report: dict,
+    model_path: Path,
+    threshold: float,
+    warmup_events: int,
+    processed_count: int,
+    anomaly_count: int,
+    actual_laundering: int,
+    laundering_intercepted: int,
+) -> dict:
+    recall_pct = (
+        round((laundering_intercepted / actual_laundering) * 100.0, 2)
+        if actual_laundering > 0
+        else 0.0
+    )
+    precision_pct = (
+        round((laundering_intercepted / anomaly_count) * 100.0, 2)
+        if anomaly_count > 0
+        else 0.0
+    )
+    execution_summary = {
+        "execution_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "data_governance": quality_report,
+        "model_metadata": {
+            "artifact_path": str(model_path.name),
+            "calibrated_threshold": threshold,
+            "features_used": list(CANONICAL_AML_FEATURES),
+            "warmup_events_count": warmup_events,
+        },
+        "streaming_performance": {
+            "total_processed": processed_count,
+            "anomalies_flagged": anomaly_count,
+            "actual_laundering_events": actual_laundering,
+            "laundering_intercepted": laundering_intercepted,
+            "recall_percentage": recall_pct,
+            "precision_percentage": precision_pct,
+        },
+    }
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_report = report_path.with_suffix(".json.tmp")
+    with open(tmp_report, "w", encoding="utf-8") as f:
+        json.dump(execution_summary, f, indent=2)
+    os.replace(tmp_report, report_path)
+    return execution_summary
+
+
 def run_production_stream_pipeline(
-    max_events: int | None = None, delay_seconds: float = 0.01
+    max_events: int | None = None,
+    delay_seconds: float | None = None,
+    warmup_events: int | None = None,
 ) -> dict:
     data_path, dlq_dir, report_path, model_path = resolve_runtime_paths()
+    artifacts_dir = report_path.parent
+    alerts_path = artifacts_dir / "aml_alerts.jsonl"
+
+    if max_events is None:
+        max_events = int(os.getenv("AML_MAX_EVENTS", "100000"))
+    if delay_seconds is None:
+        delay_seconds = float(os.getenv("AML_STREAM_DELAY_SECONDS", "0.0"))
+    if warmup_events is None:
+        warmup_events = int(os.getenv("AML_WARMUP_EVENTS", "100000"))
+
+    pseudonymize = os.getenv("AML_PSEUDONYMIZE_ACCOUNTS", "1") == "1"
 
     print("🚀 Initializing AML Streaming Pipeline Components...")
-    ingestor = StreamingIngestionEngine(dlq_output_dir=dlq_dir)
+    ingestor = StreamingIngestionEngine(
+        dlq_output_dir=dlq_dir, pseudonymize_accounts=pseudonymize
+    )
     state_manager = StreamingStateManager()
     detector = AMLAnomalyDetector()
 
     try:
         detector.load(model_path)
-        print(f"✅ Successfully loaded verified skops AML model from {model_path}.")
+        print(
+            f"✅ Loaded verified skops AML model from {model_path} (threshold={detector.threshold})."
+        )
     except Exception as e:
         print(f"❌ FATAL: Failed to load AML model artifact at {model_path}: {e}")
         sys.exit(1)
 
-    print(f"📡 Listening for stream events from {data_path}...")
+    _write_heartbeat(artifacts_dir, 0)
+    if alerts_path.exists():
+        alerts_path.unlink()
+
+    print(
+        f"📡 Streaming from {data_path} (warmup={warmup_events}, out-of-sample window={max_events})..."
+    )
+    warmup_count = 0
     processed_count = 0
     anomaly_count = 0
     actual_laundering = 0
@@ -87,6 +173,16 @@ def run_production_stream_pipeline(
                     continue
 
                 enriched_tx = state_manager.update_and_enrich(clean_tx)
+
+                # Phase 1: Warm up rolling state across training/warmup prefix without scoring in-sample
+                if warmup_count < warmup_events:
+                    warmup_count += 1
+                    if warmup_count % 2000 == 0:
+                        state_manager._evict_dormant_accounts()
+                        _write_heartbeat(artifacts_dir, 0)
+                    continue
+
+                # Phase 2: Score strictly out-of-sample events
                 prob, is_anomaly = detector.score_transaction(enriched_tx)
                 processed_count += 1
 
@@ -103,11 +199,36 @@ def run_production_stream_pipeline(
                     anomaly_count += 1
                     if is_true_laundering:
                         laundering_intercepted += 1
+                    alert_entry = {
+                        "event_id": clean_tx.get("event_id"),
+                        "timestamp": str(enriched_tx.get("Timestamp")),
+                        "sender_account": clean_tx.get("Sender_account"),
+                        "receiver_account": clean_tx.get("Receiver_account"),
+                        "amount": clean_tx.get("Amount"),
+                        "anomaly_probability": prob,
+                        "threshold": detector.threshold,
+                    }
+                    with open(alerts_path, "a", encoding="utf-8") as af:
+                        af.write(json.dumps(alert_entry) + "\n")
 
                 if processed_count % 500 == 0:
                     state_manager._evict_dormant_accounts()
+                    _write_heartbeat(artifacts_dir, processed_count)
 
-                if max_events is not None and processed_count >= max_events:
+                if processed_count % 5000 == 0:
+                    _write_report(
+                        report_path,
+                        ingestor.get_data_quality_report(),
+                        model_path,
+                        detector.threshold,
+                        warmup_count,
+                        processed_count,
+                        anomaly_count,
+                        actual_laundering,
+                        laundering_intercepted,
+                    )
+
+                if max_events > 0 and processed_count >= max_events:
                     break
 
             except Exception as event_err:
@@ -124,34 +245,24 @@ def run_production_stream_pipeline(
         print(f"\n❌ Stream fatally interrupted: {fatal_err}")
         sys.exit(1)
 
-    quality_report = ingestor.get_data_quality_report()
-    recall_pct = (
-        round((laundering_intercepted / actual_laundering) * 100.0, 2)
-        if actual_laundering > 0
-        else 0.0
+    _write_heartbeat(artifacts_dir, processed_count)
+    execution_summary = _write_report(
+        report_path,
+        ingestor.get_data_quality_report(),
+        model_path,
+        detector.threshold,
+        warmup_count,
+        processed_count,
+        anomaly_count,
+        actual_laundering,
+        laundering_intercepted,
     )
 
-    execution_summary = {
-        "execution_timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "data_governance": quality_report,
-        "streaming_performance": {
-            "total_processed": processed_count,
-            "anomalies_flagged": anomaly_count,
-            "actual_laundering_events": actual_laundering,
-            "laundering_intercepted": laundering_intercepted,
-            "recall_percentage": recall_pct,
-        },
-    }
-
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(execution_summary, f, indent=2)
-
     print(
-        f"\n📊 Session Summary: {processed_count} scored, {anomaly_count} anomalies detected."
-    )
-    print(
-        f"🛡️ Data Quality: {quality_report['data_quality_pct']}% clean ({quality_report['dlq_events']} quarantined to DLQ)."
+        f"\n📊 Out-of-Sample Summary: {processed_count} scored (after {warmup_count} warmup), "
+        f"{anomaly_count} anomalies flagged, {laundering_intercepted}/{actual_laundering} laundering intercepted "
+        f"(recall={execution_summary['streaming_performance']['recall_percentage']}%, "
+        f"precision={execution_summary['streaming_performance']['precision_percentage']}%)."
     )
     return execution_summary
 

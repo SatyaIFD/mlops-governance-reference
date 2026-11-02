@@ -11,20 +11,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
+import mlflow
+import mlflow.xgboost
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel, Field, ConfigDict
-import mlflow
-import mlflow.xgboost
 from mlflow.tracking import MlflowClient
-
-from compliance.eu_ai_act_hitl_router import enforce_human_in_the_loop
-from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
+from pydantic import BaseModel, ConfigDict, Field
 from src.monitoring.observability import ModelObservabilityLogger
+
+from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
+from compliance.eu_ai_act_hitl_router import enforce_human_in_the_loop
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -133,25 +133,15 @@ class LoanApplicationPayload(BaseModel):
     NumCreditLines: int = Field(..., ge=0)
     LoanTerm: int = Field(..., ge=1)
 
-    Education: Literal[
-        "High School", "Bachelors", "Bachelor's", "Masters", "Master's", "PhD"
-    ] = Field(...)
+    Education: Literal["Bachelor's", "High School", "Master's", "PhD"] = Field(...)
     EmploymentType: Literal["Full-time", "Part-time", "Self-employed", "Unemployed"] = (
         Field(...)
     )
-    MaritalStatus: Literal["Single", "Married", "Divorced", "Widowed"] = Field(...)
-    HasMortgage: Literal["Yes", "No"] = Field(...)
-    HasDependents: Literal["Yes", "No"] = Field(...)
-    LoanPurpose: Literal[
-        "Auto",
-        "Home",
-        "Personal",
-        "Debt Consolidation",
-        "Business",
-        "Education",
-        "Other",
-    ] = Field(...)
-    HasCoSigner: Literal["Yes", "No"] = Field(...)
+    MaritalStatus: Literal["Divorced", "Married", "Single"] = Field(...)
+    HasMortgage: Literal["No", "Yes"] = Field(...)
+    HasDependents: Literal["No", "Yes"] = Field(...)
+    LoanPurpose: Literal["Auto", "Business", "Education", "Home", "Other"] = Field(...)
+    HasCoSigner: Literal["No", "Yes"] = Field(...)
 
     model_config = ConfigDict(
         extra="forbid",
@@ -166,7 +156,7 @@ class LoanApplicationPayload(BaseModel):
                 "InterestRate": 5.4,
                 "NumCreditLines": 3,
                 "LoanTerm": 36,
-                "Education": "Bachelors",
+                "Education": "Bachelor's",
                 "EmploymentType": "Full-time",
                 "MaritalStatus": "Single",
                 "HasMortgage": "No",

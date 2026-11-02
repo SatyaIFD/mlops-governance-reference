@@ -1,6 +1,2 @@
-# Static CPython/pip build-time SBOM false positives (site-packages uses msgpack>=1.2.3, setuptools>=78.1.1, urllib3>=2.8.0)
-CVE-2026-114613
-GHSA-6v7p-g79w-8964
-CVE-2025-47273
-CVE-2026-97687
-CVE-2026-97689
+# No active CVE suppressions required.
+# Base OS layers are upgraded via apt-get upgrade -y and pip build-time SBOMs are stripped in Dockerfiles.

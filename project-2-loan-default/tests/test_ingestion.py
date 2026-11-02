@@ -3,17 +3,18 @@ Unit Test Suite - Project 2 Ingestion Layer
 Validates data contract compliance, column integrity, and type validation rules.
 """
 
-import pandas as pd
 import sys
 from pathlib import Path
+
+import pandas as pd
 
 # Ensure project source root is on path context for importing
 tests_dir = Path(__file__).resolve().parent
 project_root = tests_dir.parent
 sys.path.append(str(project_root))
 
-from src.ingestion.ingestion import validate_raw_dataset  # noqa: E402
-from src.ingestion.schemas import RAW_LOAN_DATA_SCHEMA  # noqa: E402
+from src.ingestion.ingestion import validate_raw_dataset
+from src.ingestion.schemas import RAW_LOAN_DATA_SCHEMA
 
 
 def test_schema_contract_valid_data():

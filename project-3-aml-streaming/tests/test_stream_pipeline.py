@@ -1,14 +1,14 @@
 import json
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-from src.ingestion.stream_ingestor import (
-    StreamingIngestionEngine,
-    KeyVersionedPseudonymizer,
-)
-from src.features.velocity import StreamingStateManager, CANONICAL_AML_FEATURES
-from src.models.anomaly_detector import AMLAnomalyDetector
+
+import pandas as pd
 from scripts.replay_dlq import replay_dlq_events
+from src.features.velocity import CANONICAL_AML_FEATURES, StreamingStateManager
+from src.ingestion.stream_ingestor import (
+    KeyVersionedPseudonymizer,
+    StreamingIngestionEngine,
+)
+from src.models.anomaly_detector import AMLAnomalyDetector
 
 
 def test_streaming_ingestion_engine_validation(tmp_path):
@@ -90,12 +90,10 @@ def test_event_time_watermark_eviction_preserves_historical_window():
         }
     )
 
-    # Evict using event-time watermark (t1 - 24h): both accounts are within 2 hours of t1 and MUST survive
     manager._evict_dormant_accounts()
     assert "OLD_ACC" in manager.state  # nosec B101
     assert "RECENT_ACC" in manager.state  # nosec B101
 
-    # Advance watermark by 25 hours: OLD_ACC is now >24h behind watermark and must be evicted
     t2 = t0 + timedelta(hours=25)
     manager.update_and_enrich(
         {
@@ -134,7 +132,6 @@ def test_dlq_jsonl_replay_and_hmac_continuity(tmp_path):
     )
     state = StreamingStateManager()
 
-    # 1. Quarantine a record with a malformed timestamp, then repair the timestamp in JSONL
     ingestor.validate_and_route(
         {
             "Timestamp": "BAD_DATE",
@@ -147,12 +144,10 @@ def test_dlq_jsonl_replay_and_hmac_continuity(tmp_path):
     assert dlq_file.exists()  # nosec B101
 
     record = json.loads(dlq_file.read_text(encoding="utf-8").strip())
-    # Account IDs in DLQ are already HMAC-pseudonymized with v1 prefix
     assert record["raw_payload"]["Sender_account"].startswith("hmac_v1_")  # nosec B101
     record["raw_payload"]["Timestamp"] = "2024-03-15 11:00:00"
     dlq_file.write_text(json.dumps(record) + "\n", encoding="utf-8")
 
-    # 2. Replay the repaired JSONL and verify it recovers cleanly without double-hashing
     summary = replay_dlq_events(tmp_path, ingestor, state_manager=state)
     assert summary["replayed_clean"] == 1  # nosec B101
     assert summary["replayed_failed"] == 0  # nosec B101
@@ -160,28 +155,46 @@ def test_dlq_jsonl_replay_and_hmac_continuity(tmp_path):
     assert expected_sender_token in state.state  # nosec B101
 
 
-@patch("src.models.anomaly_detector.sio.load")
-def test_anomaly_detector_skops_integration(mock_sio_load):
-    mock_sklearn = MagicMock()
-    mock_sklearn.predict_proba.return_value = [[0.1, 0.85]]
-    mock_sio_load.return_value = mock_sklearn
-
-    detector = AMLAnomalyDetector()
-    detector.load(Path("mock_model.skops"))
-    sample_enriched = {
-        "Amount": 9000.00,
-        "pass_through_ratio_1h": 0.95,
-        "receiver_inflow_count_1h": 3,
-        "receiver_inflow_amount_1h": 27000.00,
-    }
-    prob, is_anomaly = detector.score_transaction(sample_enriched)
-
-    assert prob == 0.85  # nosec B101
-    assert is_anomaly == 1  # nosec B101
-    mock_sio_load.assert_called_once_with(
-        Path("mock_model.skops"),
-        trusted=[
-            "sklearn.ensemble._forest.RandomForestClassifier",
-            "sklearn.tree._tree.Tree",
-        ],
+def test_anomaly_detector_real_skops_roundtrip_and_threshold_persistence(tmp_path):
+    """Trains a real RandomForestClassifier, saves via skops with custom threshold, reloads, and scores."""
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9500.0, 10.0, 25000.0, 120.0, 8900.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0, 0.05, 0.92],
+            "is_structuring": [0, 1, 0, 0, 0, 1],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0, 1.1, 9.5],
+            "fan_out_count_24h": [1, 8, 1, 14, 2, 6],
+            "receiver_inflow_count_1h": [1, 5, 1, 15, 1, 7],
+            "receiver_inflow_amount_1h": [
+                50.0,
+                45000.0,
+                10.0,
+                150000.0,
+                120.0,
+                62000.0,
+            ],
+            "Is_laundering": [0, 1, 0, 1, 0, 1],
+        }
     )
+    artifact_file = tmp_path / "aml_streaming_model"
+    detector = AMLAnomalyDetector(threshold=0.65)
+    detector.train(df)
+    detector.save(artifact_file)
+
+    reloaded = AMLAnomalyDetector(threshold=0.40)
+    reloaded.load(artifact_file)
+    assert reloaded.threshold == 0.65  # nosec B101
+
+    prob, is_anomaly = reloaded.score_transaction(
+        {
+            "Amount": 9500.0,
+            "pass_through_ratio_1h": 0.95,
+            "is_structuring": 1,
+            "velocity_acceleration": 12.5,
+            "fan_out_count_24h": 8,
+            "receiver_inflow_count_1h": 5,
+            "receiver_inflow_amount_1h": 45000.0,
+        }
+    )
+    assert prob >= 0.65  # nosec B101
+    assert is_anomaly == 1  # nosec B101

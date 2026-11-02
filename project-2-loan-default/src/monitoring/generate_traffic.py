@@ -8,30 +8,54 @@ import argparse
 import os
 import random
 import time
+
 import httpx
 
 DEFAULT_URL = os.getenv("LOAN_API_URL", "http://localhost/api/v1/loan/predict")
 
 
-def generate_representative_applicant(is_young: bool) -> dict:
-    """Generates realistic applicant profiles spanning creditworthy and higher-risk segments."""
-    age = random.randint(21, 29) if is_young else random.randint(30, 65)  # nosec B311
+def generate_representative_applicant(is_young: bool, high_risk: bool = False) -> dict:
+    """Generates applicant profiles matching the training distribution (including both approvals and declines)."""
+    age = random.randint(21, 29) if is_young else random.randint(30, 68)  # nosec B311
+    if high_risk:
+        return {
+            "Age": age,
+            "Income": random.randint(15000, 32000),  # nosec B311
+            "CreditScore": random.randint(320, 520),  # nosec B311
+            "LoanAmount": random.randint(95000, 220000),  # nosec B311
+            "DTIRatio": round(random.uniform(0.65, 0.89), 2),  # nosec B311
+            "MonthsEmployed": random.randint(0, 6),  # nosec B311
+            "InterestRate": round(random.uniform(19.0, 24.9), 2),  # nosec B311
+            "NumCreditLines": random.randint(1, 4),  # nosec B311
+            "LoanTerm": random.choice([48, 60]),  # nosec B311
+            "Education": random.choice(["High School", "Bachelor's"]),  # nosec B311
+            "EmploymentType": random.choice(["Unemployed", "Part-time"]),  # nosec B311
+            "MaritalStatus": random.choice(["Single", "Divorced"]),  # nosec B311
+            "HasMortgage": "No",
+            "HasDependents": random.choice(["Yes", "No"]),  # nosec B311
+            "LoanPurpose": random.choice(["Auto", "Other", "Business"]),  # nosec B311
+            "HasCoSigner": "No",
+        }
     return {
         "Age": age,
-        "Income": random.randint(45000, 140000),  # nosec B311
-        "CreditScore": random.randint(620, 820),  # nosec B311
-        "LoanAmount": random.randint(8000, 45000),  # nosec B311
-        "DTIRatio": round(random.uniform(0.12, 0.45), 2),  # nosec B311
-        "MonthsEmployed": random.randint(12, 120),  # nosec B311
-        "InterestRate": round(random.uniform(4.5, 11.5), 1),  # nosec B311
-        "NumCreditLines": random.randint(2, 6),  # nosec B311
-        "LoanTerm": random.choice([24, 36, 48, 60]),  # nosec B311
-        "Education": random.choice(["High School", "Bachelors", "Masters", "PhD"]),  # nosec B311
-        "EmploymentType": random.choice(["Full-time", "Part-time", "Self-employed"]),  # nosec B311
-        "MaritalStatus": random.choice(["Single", "Married", "Divorced"]),  # nosec B311
+        "Income": random.randint(35000, 145000),  # nosec B311
+        "CreditScore": random.randint(560, 840),  # nosec B311
+        "LoanAmount": random.randint(10000, 180000),  # nosec B311
+        "DTIRatio": round(random.uniform(0.12, 0.65), 2),  # nosec B311
+        "MonthsEmployed": random.randint(12, 118),  # nosec B311
+        "InterestRate": round(random.uniform(4.0, 18.5), 2),  # nosec B311
+        "NumCreditLines": random.randint(1, 4),  # nosec B311
+        "LoanTerm": random.choice([12, 24, 36, 48, 60]),  # nosec B311
+        "Education": random.choice(["Bachelor's", "High School", "Master's", "PhD"]),  # nosec B311
+        "EmploymentType": random.choice(
+            ["Full-time", "Part-time", "Self-employed", "Unemployed"]
+        ),  # nosec B311
+        "MaritalStatus": random.choice(["Divorced", "Married", "Single"]),  # nosec B311
         "HasMortgage": random.choice(["Yes", "No"]),  # nosec B311
         "HasDependents": random.choice(["Yes", "No"]),  # nosec B311
-        "LoanPurpose": random.choice(["Auto", "Home", "Personal", "Business"]),  # nosec B311
+        "LoanPurpose": random.choice(
+            ["Auto", "Business", "Education", "Home", "Other"]
+        ),  # nosec B311
         "HasCoSigner": random.choice(["Yes", "No"]),  # nosec B311
     }
 
@@ -41,27 +65,27 @@ def generate_stress_applicant(is_young: bool) -> dict:
     age = random.randint(18, 29) if is_young else random.randint(30, 65)  # nosec B311
     return {
         "Age": age,
-        "Income": random.randint(4000, 9000),  # nosec B311
-        "CreditScore": random.randint(300, 400),  # nosec B311
-        "LoanAmount": random.randint(85000, 150000),  # nosec B311
-        "DTIRatio": round(random.uniform(0.85, 0.99), 2),  # nosec B311
+        "Income": random.randint(15000, 22000),  # nosec B311
+        "CreditScore": random.randint(300, 380),  # nosec B311
+        "LoanAmount": random.randint(150000, 245000),  # nosec B311
+        "DTIRatio": round(random.uniform(0.82, 0.90), 2),  # nosec B311
         "MonthsEmployed": random.randint(0, 2),  # nosec B311
-        "InterestRate": round(random.uniform(18.0, 26.5), 1),  # nosec B311
-        "NumCreditLines": random.randint(10, 15),  # nosec B311
+        "InterestRate": round(random.uniform(21.0, 24.9), 2),  # nosec B311
+        "NumCreditLines": 4,
         "LoanTerm": 60,
         "Education": "High School",
         "EmploymentType": "Unemployed",
         "MaritalStatus": "Single",
         "HasMortgage": "No",
         "HasDependents": "Yes",
-        "LoanPurpose": "Personal",
+        "LoanPurpose": "Other",
         "HasCoSigner": "No",
     }
 
 
 def run_traffic_simulation(
     url: str = DEFAULT_URL,
-    count: int = 40,
+    count: int = 80,
     mode: str = "representative",
 ) -> int:
     api_key = os.getenv("EXPECTED_API_KEY", "")
@@ -75,10 +99,11 @@ def run_traffic_simulation(
     with httpx.Client(timeout=10.0) as client:
         for i in range(count):
             is_young = i % 2 == 0
+            high_risk = i % 4 == 0
             payload = (
                 generate_stress_applicant(is_young)
                 if mode == "stress"
-                else generate_representative_applicant(is_young)
+                else generate_representative_applicant(is_young, high_risk=high_risk)
             )
 
             try:
@@ -100,7 +125,7 @@ def run_traffic_simulation(
             except Exception as e:
                 print(f"❌ Transmission failure at packet {i + 1}: {e}")
 
-            time.sleep(0.05)
+            time.sleep(0.02)
 
     print(f"🏁 Traffic stream completed ({succeeded}/{count} successful responses).")
     return succeeded
@@ -109,7 +134,7 @@ def run_traffic_simulation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default=DEFAULT_URL)
-    parser.add_argument("--count", type=int, default=40)
+    parser.add_argument("--count", type=int, default=80)
     parser.add_argument(
         "--mode", choices=["representative", "stress"], default="representative"
     )

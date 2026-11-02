@@ -1,53 +1,46 @@
 """
-Automated Regulatory Compliance and Bias Tests
+Automated Regulatory Compliance and Segment Disparity Tests
 """
 
 import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from unittest.mock import patch, MagicMock
+import pytest
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
-from src.ingestion.utils import clean_and_transform_features  # noqa: E402
+from src.ingestion.utils import split_and_scale_without_leakage  # noqa: E402
 
 
-@patch("mlflow.pyfunc.load_model")
-def test_disparate_impact_ratio_bounds(mock_load_model):
-    """Verifies disparate impact ratio logic without requiring local artifacts."""
-
-    # MOCK MLFLOW REGISTRY BEHAVIOR
-    mock_model = MagicMock()
-
-    def mock_predict(df_in):
-        return (df_in["scaled_amount"] > 0).astype(int)
-
-    mock_model.predict.side_effect = mock_predict
-    mock_load_model.return_value = mock_model
-
-    # GENERATE SYNTHETIC DATA
+def test_leakage_free_split_and_disparity_calculation():
+    """Verifies that split_and_scale_without_leakage fits strictly on train and computes exact segment disparity."""
     np.random.seed(42)
-    n_rows = 100
+    n_rows = 200
 
-    # FIX: Added "Class" to satisfy clean_and_transform_features column indexing
     data = {
-        "Time": np.random.uniform(0, 100000, n_rows),
-        "Amount": np.random.exponential(50, n_rows),
-        "Class": np.zeros(n_rows),
+        "Time": np.linspace(0, 10000, n_rows),
+        "Amount": np.concatenate([np.full(160, 20.0), np.full(40, 500.0)]),
+        "Class": np.array([0] * 150 + [1] * 10 + [0] * 30 + [1] * 10),
     }
     for i in range(1, 29):
         data[f"V{i}"] = np.random.normal(0, 1, n_rows)
 
-    df = pd.DataFrame(data).drop_duplicates().reset_index(drop=True)
-    processed_df = clean_and_transform_features(df.copy())
+    raw_df = pd.DataFrame(data)
+    train_df, test_df, scaler_params = split_and_scale_without_leakage(
+        raw_df, test_size=0.25, random_state=42
+    )
 
-    feature_names = [f"V{i}" for i in range(1, 29)] + ["scaled_amount", "scaled_time"]
-    df["predictions"] = mock_model.predict(processed_df[feature_names])
+    assert len(train_df) == 150  # nosec B101
+    assert len(test_df) == 50  # nosec B101
+    assert scaler_params["amount_center"] == pytest.approx(20.0)  # nosec B101
 
-    threshold = df["Amount"].quantile(0.80)
-    high_flag_rate = df[df["Amount"] >= threshold]["predictions"].mean()
-    low_flag_rate = df[df["Amount"] < threshold]["predictions"].mean()
+    threshold = test_df["scaled_amount"].quantile(0.80)
+    high_group = test_df[test_df["scaled_amount"] >= threshold]
+    low_group = test_df[test_df["scaled_amount"] < threshold]
 
-    ratio = high_flag_rate / low_flag_rate if low_flag_rate > 0 else 0.0
-    assert isinstance(ratio, float)  # nosec B101
+    high_rate = float(high_group["Class"].mean())
+    low_rate = float(low_group["Class"].mean())
+    ratio = high_rate / low_rate
+    assert ratio > 1.25  # nosec B101
+    assert ratio == pytest.approx(10.2857, rel=1e-3)  # nosec B101

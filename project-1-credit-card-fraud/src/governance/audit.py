@@ -9,16 +9,17 @@ import json
 import os
 import sys
 from pathlib import Path
-import pandas as pd
+
 import mlflow
 import mlflow.xgboost
+import pandas as pd
 from mlflow.tracking import MlflowClient
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from src.ingestion.utils import (  # noqa: E402
+from src.ingestion.utils import (
     CANONICAL_FEATURE_COLS,
     clean_and_transform_features,
     load_scaler_params,

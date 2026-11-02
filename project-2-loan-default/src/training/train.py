@@ -5,13 +5,14 @@ Trains the mitigated fair model using sample re-weighting and registers metrics 
 
 import json
 from pathlib import Path
-import numpy as np
-import pandas as pd
-from xgboost import XGBClassifier
-from sklearn.metrics import roc_auc_score, accuracy_score, log_loss
+
 import mlflow
 import mlflow.xgboost
+import numpy as np
+import pandas as pd
 from mlflow.models import infer_signature
+from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
+from xgboost import XGBClassifier
 
 
 class LoanModelTrainer:

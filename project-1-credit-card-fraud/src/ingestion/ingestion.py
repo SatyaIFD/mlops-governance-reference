@@ -2,6 +2,7 @@ import os
 import sys
 import zipfile
 from pathlib import Path
+
 import pandas as pd
 
 cwd = Path.cwd()
@@ -27,8 +28,11 @@ print(f"Python Package Injection:    {PROJECT_DIR}")
 print(f"Data Target Directory Path:  {DATA_DIR}")
 print("============================================================\n")
 
-from src.ingestion.schemas import TransactionInputSchema, ProcessedTransactionSchema  # noqa: E402
-from src.ingestion.utils import clean_and_transform_features  # noqa: E402
+from src.ingestion.schemas import (
+    ProcessedTransactionSchema,
+    TransactionInputSchema,
+)
+from src.ingestion.utils import clean_and_transform_features
 
 
 def download_raw_data():
