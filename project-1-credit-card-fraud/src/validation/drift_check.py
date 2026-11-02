@@ -1,14 +1,18 @@
 import json
 import sys
 from pathlib import Path
+
 import pandas as pd
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from src.ingestion.schemas import ProcessedTransactionSchema  # noqa: E402
-from src.monitoring.observability import calculate_psi, evaluate_drift_status  # noqa: E402
+from src.ingestion.schemas import ProcessedTransactionSchema
+from src.monitoring.observability import (
+    calculate_psi,
+    evaluate_drift_status,
+)
 
 PROCESSED_DATA_PATH = PROJECT_DIR / "data" / "processed_features.parquet"
 TRAIN_SPLIT_PATH = PROJECT_DIR / "data" / "processed" / "train.parquet"

@@ -1,15 +1,16 @@
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
-import sys
-from unittest.mock import patch, MagicMock
 
 tests_dir = Path(__file__).resolve().parent
 project_root = tests_dir.parent
 sys.path.append(str(project_root))
 
-from src.inference.main import app, verify_api_key  # noqa: E402
-from src.inference import main as p2_main  # noqa: E402
+from src.inference import main as p2_main
+from src.inference.main import app, verify_api_key
 
 EXPECTED_MOCK_FEATURES = [
     "Age",
@@ -23,7 +24,7 @@ EXPECTED_MOCK_FEATURES = [
     "LoanTerm",
     "is_young",
     "Education_High School",
-    "Education_Masters",
+    "Education_Master's",
     "Education_PhD",
     "EmploymentType_Part-time",
     "EmploymentType_Self-employed",
@@ -33,15 +34,16 @@ EXPECTED_MOCK_FEATURES = [
     "HasMortgage_Yes",
     "HasDependents_Yes",
     "LoanPurpose_Business",
+    "LoanPurpose_Education",
     "LoanPurpose_Home",
-    "LoanPurpose_Personal",
+    "LoanPurpose_Other",
     "HasCoSigner_Yes",
 ]
 
 
 @pytest.fixture(autouse=True)
 def mock_mlflow_model(tmp_path, monkeypatch):
-    """Injects a mock model with realistic training one-hot columns and isolates telemetry logs."""
+    """Injects a mock model with the exact 25 training one-hot columns and isolates telemetry logs."""
     monkeypatch.setenv("LOAN_TELEMETRY_LOG_PATH", str(tmp_path / "telemetry.jsonl"))
     app.dependency_overrides[verify_api_key] = lambda: None
 
@@ -79,12 +81,12 @@ def valid_payload():
         "InterestRate": 5.4,
         "NumCreditLines": 3,
         "LoanTerm": 48,
-        "Education": "PhD",
+        "Education": "Master's",
         "EmploymentType": "Self-employed",
         "MaritalStatus": "Single",
         "HasMortgage": "Yes",
         "HasDependents": "No",
-        "LoanPurpose": "Business",
+        "LoanPurpose": "Education",
         "HasCoSigner": "Yes",
     }
 
@@ -119,12 +121,25 @@ def test_single_row_categorical_features_preserved(client, valid_payload):
 
     passed_df = p2_main.model.predict_proba.call_args[0][0]
     assert list(passed_df.columns) == EXPECTED_MOCK_FEATURES  # nosec B101
-    assert int(passed_df["Education_PhD"].iloc[0]) == 1  # nosec B101
+    assert int(passed_df["Education_Master's"].iloc[0]) == 1  # nosec B101
     assert int(passed_df["EmploymentType_Self-employed"].iloc[0]) == 1  # nosec B101
     assert int(passed_df["HasMortgage_Yes"].iloc[0]) == 1  # nosec B101
     assert int(passed_df["HasDependents_Yes"].iloc[0]) == 0  # nosec B101
-    assert int(passed_df["LoanPurpose_Business"].iloc[0]) == 1  # nosec B101
+    assert int(passed_df["LoanPurpose_Education"].iloc[0]) == 1  # nosec B101
     assert int(passed_df["HasCoSigner_Yes"].iloc[0]) == 1  # nosec B101
+
+
+def test_unknown_categorical_levels_rejected_with_422(client, valid_payload):
+    """Verifies that out-of-vocabulary categories ('Masters', 'Personal', 'Widowed') return HTTP 422."""
+    for field, bad_val in [
+        ("Education", "Masters"),
+        ("LoanPurpose", "Personal"),
+        ("MaritalStatus", "Widowed"),
+    ]:
+        bad_payload = valid_payload.copy()
+        bad_payload[field] = bad_val
+        response = client.post("/predict", json=bad_payload)
+        assert response.status_code == 422  # nosec B101
 
 
 def test_predict_success_high_risk(client, valid_payload):
@@ -140,7 +155,7 @@ def test_predict_success_high_risk(client, valid_payload):
 
 
 def test_invalid_payload_schema(client):
-    malformed_payload = {"Age": 25, "Education": "Bachelors"}
+    malformed_payload = {"Age": 25, "Education": "Bachelor's"}
     response = client.post("/predict", json=malformed_payload)
     assert response.status_code == 422  # nosec B101
 
@@ -148,7 +163,7 @@ def test_invalid_payload_schema(client):
 def test_predict_rejects_nan_float(client, valid_payload):
     response = client.post(
         "/predict",
-        content='{"Age": 25, "Income": 55000, "CreditScore": 680, "LoanAmount": 15000, "DTIRatio": NaN, "MonthsEmployed": 36, "InterestRate": 5.4, "NumCreditLines": 3, "LoanTerm": 48, "Education": "Bachelors", "EmploymentType": "Full-time", "MaritalStatus": "Single", "HasMortgage": "No", "HasDependents": "No", "LoanPurpose": "Auto", "HasCoSigner": "No"}',
+        content='{"Age": 25, "Income": 55000, "CreditScore": 680, "LoanAmount": 15000, "DTIRatio": NaN, "MonthsEmployed": 36, "InterestRate": 5.4, "NumCreditLines": 3, "LoanTerm": 48, "Education": "Bachelor\'s", "EmploymentType": "Full-time", "MaritalStatus": "Single", "HasMortgage": "No", "HasDependents": "No", "LoanPurpose": "Auto", "HasCoSigner": "No"}',
         headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 422  # nosec B101

@@ -11,8 +11,8 @@ tests_dir = Path(__file__).resolve().parent
 project_root = tests_dir.parent
 sys.path.append(str(project_root))
 
-from src.governance.audit import compile_compliance_audit  # noqa: E402
-from src.monitoring.drift_monitor import run_production_audit  # noqa: E402
+from src.governance.audit import compile_compliance_audit
+from src.monitoring.drift_monitor import run_production_audit
 
 
 def test_audit_report_generation_execution(tmp_path, monkeypatch):

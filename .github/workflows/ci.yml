@@ -18,8 +18,13 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install Security Tools
-        run: pip install bandit
+      - name: Install Security & Lint Tools
+        run: pip install bandit ruff
+
+      - name: Run Ruff Linter & Format Check
+        run: |
+          ruff check .
+          ruff format --check .
 
       - name: Run SAST Scanner
         run: make security

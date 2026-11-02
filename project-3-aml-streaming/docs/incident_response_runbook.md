@@ -31,7 +31,6 @@ Operational procedures for responding to pipeline failures, memory spikes, recal
 1. Trigger event-time watermark garbage collection (defaults to `self.watermark - timedelta(hours=24)`):
 ```python
 state_manager._evict_dormant_accounts()
-
 ```
 
 

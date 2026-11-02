@@ -1,10 +1,7 @@
 pandas>=2.0.0,<3.0.0
 numpy>=1.26.0
 scikit-learn>=1.4.0
-joblib
-faker
 kagglehub
-pytest>=8.0.0
 msgpack>=1.2.3
 setuptools>=78.1.1
 mlflow==3.17.2

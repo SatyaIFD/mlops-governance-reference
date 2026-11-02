@@ -35,7 +35,7 @@ The `/compliance` package implements technical building blocks that support regu
 ### 1. Run Multi-Project Fleet
 
 ```bash
-git clone [https://github.com/SatyaIFD/mlops-governance-reference.git](https://github.com/SatyaIFD/mlops-governance-reference.git)
+git clone https://github.com/SatyaIFD/mlops-governance-reference.git
 cd mlops-governance-reference
 [ -f .env.example ] && cp -n .env.example .env || true
 sudo docker compose up -d

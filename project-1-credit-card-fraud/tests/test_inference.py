@@ -2,12 +2,12 @@
 API Integration Tests - Project 1: Credit Card Fraud Detection
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-
-from src.inference.main import app, verify_api_key
 from src.inference import main
+from src.inference.main import app, verify_api_key
 
 
 @pytest.fixture(autouse=True)

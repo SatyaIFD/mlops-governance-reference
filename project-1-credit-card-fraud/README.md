@@ -12,7 +12,7 @@ Validates incoming payloads against `TransactionInputSchema` and `ProcessedTrans
 2. **Leakage-Free Preprocessing & Training (`src/training/train.py`)**
 Performs a stratified train/test split on deduplicated raw data *before* fitting `RobustScaler` (`Amount`) and `StandardScaler` (`Time`) exclusively on the training partition, persisting `scaler_params.json` and registering `fraud_detection_xgb` in MLflow.
 3. **Segment Disparity Auditing (`src/governance/audit.py`)**
-Evaluates flagging rate disparity between high-value ($\ge 80\text{th}$ percentile) and low-value transaction segments (`--enforce-gate` exits non-zero when outside `[0.80, 1.25]`). Note: this is an operational transaction-size segment check, not a demographic protected-class audit.
+Evaluates flagging rate disparity between high-value ($\ge 80\text{th}$ percentile) and low-value transaction segments (`--enforce-gate` exits non-zero when outside `[0.80, 1.25]`). Note: this is an operational transaction-size segment check, not a demographic transaction-size segment audit.
 4. **Statistical Validation & PSI Drift (`src/validation/drift_check.py`)**
 Verifies schema ordering, null counts, and binary class integrity, and computes Population Stability Index (PSI) scores across `V14`, `V17`, `V12`, `scaled_amount`, and `scaled_time`.
 

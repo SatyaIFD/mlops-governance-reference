@@ -6,9 +6,10 @@ Handles native KaggleApi authentication, extraction, schema downcasting, and Par
 import os
 import zipfile
 from pathlib import Path
+
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from kaggle.api.kaggle_api_extended import KaggleApi
+from sklearn.model_selection import train_test_split
 
 
 class LoanDataIngestionEngine:

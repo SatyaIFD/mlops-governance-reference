@@ -8,6 +8,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -98,7 +99,7 @@ class DataDriftMonitor:
 
         report = {
             "data_source": source_label,
-            "observation_count": int(len(production_df)),
+            "observation_count": len(production_df),
             "drift_detected_alert": drift_detected,
             "overall_status": "DRIFT DETECTED" if drift_detected else "STABLE",
             "metrics": drift_metrics,
@@ -121,7 +122,11 @@ def load_live_telemetry_dataframe(
         for line in f:
             if line.strip():
                 rec = json.loads(line.strip())
-                if rec.get("status_code") == 200 and "payload_snapshot" in rec:
+                if (
+                    rec.get("status_code") == 200
+                    and rec.get("schema_version") == 2
+                    and "payload_snapshot" in rec
+                ):
                     snapshots.append(rec["payload_snapshot"])
     if len(snapshots) < min_rows:
         return None

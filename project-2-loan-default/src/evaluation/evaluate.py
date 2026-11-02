@@ -6,10 +6,11 @@ Evaluates registered models against data contracts and exports compliance audit 
 import json
 import sys
 from pathlib import Path
-import pandas as pd
-from sklearn.metrics import roc_auc_score, accuracy_score, log_loss
+
 import mlflow
 import mlflow.xgboost
+import pandas as pd
+from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
 
 class LoanModelEvaluator:

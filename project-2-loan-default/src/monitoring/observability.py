@@ -6,7 +6,9 @@ Logs runtime inference request summaries, latencies, model recommendations, revi
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
+TELEMETRY_SCHEMA_VERSION = 2
 
 
 class ModelObservabilityLogger:
@@ -16,8 +18,8 @@ class ModelObservabilityLogger:
 
     def log_inference_transaction(
         self,
-        request_payload: Dict[str, Any],
-        response_data: Dict[str, Any],
+        request_payload: dict[str, Any],
+        response_data: dict[str, Any],
         latency_ms: float,
         status_code: int = 200,
     ):
@@ -40,6 +42,7 @@ class ModelObservabilityLogger:
         )
 
         telemetry_entry = {
+            "schema_version": TELEMETRY_SCHEMA_VERSION,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
             "status_code": status_code,
             "latency_ms": round(latency_ms, 2),
@@ -76,32 +79,3 @@ class ModelObservabilityLogger:
             lines = [line.strip() for line in f if line.strip()]
 
         return [json.loads(line) for line in lines[-tail_count:]]
-
-
-if __name__ == "__main__":
-    SRC_DIR = Path(__file__).resolve().parent
-    BASE_DIR = SRC_DIR.parents[1]
-    LOG_FILE = BASE_DIR / "artifacts" / "telemetry_logs.jsonl"
-
-    logger = ModelObservabilityLogger(telemetry_log_path=LOG_FILE)
-    mock_request = {
-        "Age": 24,
-        "Income": 62000,
-        "CreditScore": 710,
-        "LoanAmount": 12000,
-        "DTIRatio": 0.28,
-    }
-    mock_response = {
-        "risk_metrics": {"default_probability": 0.0475},
-        "governance": {
-            "action": "MANUAL_REVIEW_REQUIRED",
-            "model_recommendation": "APPROVE",
-            "review_status": "PENDING_HUMAN_REVIEW",
-            "final_decision": None,
-            "age_group": "UNDER_30",
-        },
-    }
-    logger.log_inference_transaction(
-        request_payload=mock_request, response_data=mock_response, latency_ms=14.25
-    )
-    print(json.dumps(logger.read_latest_telemetry(1), indent=4))

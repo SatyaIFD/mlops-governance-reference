@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Any
+
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, RobustScaler
+from sklearn.preprocessing import RobustScaler, StandardScaler
 
 CANONICAL_FEATURE_COLS = [f"V{i}" for i in range(1, 29)] + [
     "scaled_amount",
@@ -10,7 +11,7 @@ CANONICAL_FEATURE_COLS = [f"V{i}" for i in range(1, 29)] + [
 ]
 
 
-def fit_scalers_on_training_split(train_df: pd.DataFrame) -> Dict[str, Any]:
+def fit_scalers_on_training_split(train_df: pd.DataFrame) -> dict[str, Any]:
     """
     Fits RobustScaler (Amount) and StandardScaler (Time) strictly on the training split
     to prevent train/test preprocessing leakage, returning JSON-serializable parameters.
@@ -33,20 +34,20 @@ def fit_scalers_on_training_split(train_df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def save_scaler_params(scaler_params: Dict[str, float], path: Path) -> None:
+def save_scaler_params(scaler_params: dict[str, float], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(scaler_params, f, indent=2)
 
 
-def load_scaler_params(path: Path) -> Dict[str, float]:
+def load_scaler_params(path: Path) -> dict[str, float]:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def clean_and_transform_features(
     df: pd.DataFrame,
-    scaler_params: Dict[str, float] | None = None,
+    scaler_params: dict[str, float] | None = None,
     drop_duplicates: bool = True,
 ) -> pd.DataFrame:
     """
@@ -90,7 +91,7 @@ def split_and_scale_without_leakage(
     raw_df: pd.DataFrame,
     test_size: float = 0.2,
     random_state: int = 42,
-) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, float]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
     """
     Deduplicates raw data, performs a stratified train/test split FIRST, fits scalers
     exclusively on the training split, and transforms both splits without leakage.

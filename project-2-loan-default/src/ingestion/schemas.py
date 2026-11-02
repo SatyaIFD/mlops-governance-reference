@@ -1,11 +1,11 @@
 """
 Ingestion Schema Definitions - Project 2: Loan Default Prediction
-Defines the explicit data contract for raw loan underwriting data.
+Defines the explicit data contract and exact categorical vocabularies for loan underwriting data.
 """
 
-from typing import Dict, Any
+from typing import Any
 
-RAW_LOAN_DATA_SCHEMA: Dict[str, Any] = {
+RAW_LOAN_DATA_SCHEMA: dict[str, Any] = {
     "expected_columns": [
         "LoanID",
         "Age",
@@ -48,8 +48,12 @@ RAW_LOAN_DATA_SCHEMA: Dict[str, Any] = {
         "HasCoSigner",
     ],
     "categorical_allowed_values": {
-        "HasMortgage": ["Yes", "No"],
-        "HasDependents": ["Yes", "No"],
-        "HasCoSigner": ["Yes", "No"],
+        "Education": ["Bachelor's", "High School", "Master's", "PhD"],
+        "EmploymentType": ["Full-time", "Part-time", "Self-employed", "Unemployed"],
+        "MaritalStatus": ["Divorced", "Married", "Single"],
+        "HasMortgage": ["No", "Yes"],
+        "HasDependents": ["No", "Yes"],
+        "LoanPurpose": ["Auto", "Business", "Education", "Home", "Other"],
+        "HasCoSigner": ["No", "Yes"],
     },
 }
