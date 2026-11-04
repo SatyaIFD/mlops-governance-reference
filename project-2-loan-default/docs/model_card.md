@@ -13,8 +13,9 @@
 * **Test Classification Accuracy:** `0.8853`
 * **Test Log-Loss:** `0.3245`
 
-## 📡 Population Stability & Production Drift
+## 📡 Population Stability & Distribution Drift
 * **Data Distribution Status:** `STABLE`
+* **Evaluated Comparison Source:** `holdout_evaluation_split`
 * **Calculated Features Monitored:**
   * **CreditScore:** PSI = `0.0001` [STABLE]
   * **Income:** PSI = `0.0002` [STABLE]

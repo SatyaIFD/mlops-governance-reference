@@ -46,6 +46,7 @@ def compile_compliance_audit():
     test_acc = perf_block.get("test_accuracy", perf_block.get("accuracy", "N/A"))
     test_logloss = perf_block.get("log_loss", "N/A")
 
+    drift_source = drift_data.get("data_source", "NONE")
     if not drift_report_exists:
         drift_status = "UNKNOWN (NO_DRIFT_REPORT)"
     elif drift_data.get("drift_detected_alert") is True:
@@ -68,8 +69,9 @@ def compile_compliance_audit():
 * **Test Classification Accuracy:** `{test_acc}`
 * **Test Log-Loss:** `{test_logloss}`
 
-## 📡 Population Stability & Production Drift
+## 📡 Population Stability & Distribution Drift
 * **Data Distribution Status:** `{drift_status}`
+* **Evaluated Comparison Source:** `{drift_source}`
 * **Calculated Features Monitored:**
 """
 

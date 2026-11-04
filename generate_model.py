@@ -28,5 +28,5 @@ detector = AMLAnomalyDetector(threshold=0.40)
 detector.train(df)
 
 print("Serializing secure skops artifact...")
-detector.save(ROOT_DIR / "aml_streaming_model")
+detector.save(AML_DIR / "artifacts" / "aml_streaming_model")
 print("✅ Secure 7-feature model 'aml_streaming_model' generated successfully!")

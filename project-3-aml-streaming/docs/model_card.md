@@ -2,35 +2,35 @@
 
 ## 1. Model Details
 * **Model Name:** Streaming Random Forest AML Classifier
-* **Version:** 1.1.0
+* **Version:** 1.2.0
 * **Model Type:** Supervised Ensemble Classifier (`sklearn.ensemble.RandomForestClassifier`)
 * **Target Variable:** `Is_laundering` (Binary: `0` = Normal Transaction, `1` = Money Laundering)
-* **Release Date:** July 2026
 * **Maintainers:** MLOps Governance & Financial Crime Engineering Team
 
 ---
 
 ## 2. Intended Use & Scope
-* **Primary Intended Use:** Real-time scoring of streaming transaction events to intercept complex money laundering typologies (smurfing, layering, structuring, and pass-through mules).
+* **Primary Intended Use:** Real-time scoring of streaming transaction events to flag suspicious money laundering typologies (smurfing, layering, structuring, and pass-through mules) into `artifacts/aml_alerts.jsonl`.
 * **Out-of-Scope Uses:** Autonomous account blocking without human investigator review; credit risk scoring; individual consumer behavioral profiling.
 
 ---
 
-## 3. Training & Validation Data
+## 3. Training & Out-of-Sample Evaluation Windows
 * **Base Dataset:** Synthetic AML Transaction Data (SAML-D)
-* **Training Window:** 50,000 mature streaming transaction events following lookback cache warmup.
-* **Sampling Strategy:** Dynamic class-weight balancing combined with downsampling to handle extreme class imbalance (~0.1% baseline laundering prevalence).
+* **Training Window (`src/models/train.py`):** Ingests the first `100,000` events—using events `1–50,000` strictly to warm up the rolling 1h/24h state caches and events `50,001–100,000` (`40,000` train / `10,000` validation) to fit the classifier and calibrate the F1 probability threshold.
+* **Out-of-Sample Streaming Window (`src/streaming/pipeline.py`):** Warms up `StreamingStateManager` across the entire `100,000`-event training prefix (`warmup_events_count: 100000`) before scoring events `100,001–200,000` (`total_processed: 100000`) strictly out-of-sample.
+* **Imbalance Strategy:** Uses `class_weight="balanced"` in `RandomForestClassifier` with empirical F1 threshold selection (`select_empirical_threshold()`).
 
 ---
 
 ## 4. Model Feature Matrix
-The model intentionally excludes demographic or personal attributes, operating strictly on transactional amount and stateful graph dynamics:
+The model excludes demographic attributes, operating strictly on transactional amount and stateful graph dynamics:
 
 | Feature Name | Feature Type | Description |
 |---|---|---|
 | `Amount` | Continuous | Numerical transaction value in USD. |
 | `pass_through_ratio_1h` | Continuous $[0, 1]$ | Ratio of 1-hour outgoing volume to incoming volume. |
-| `is_structuring` | Binary $\{0, 1\}$ | Flag for transactions in the $\$8,000$–$\$9,999$ CTR threshold evasion range. |
+| `is_structuring` | Binary (0 or 1) | Flag for transactions in the $8,000–$9,999.99 CTR threshold evasion range. |
 | `velocity_acceleration` | Continuous | Ratio of 1-hour transaction frequency vs. 24-hour average hourly rate. |
 | `fan_out_count_24h` | Integer | Count of unique beneficiary accounts receiving funds in 24 hours. |
 | `receiver_inflow_count_1h` | Integer | Count of inbound transactions to the beneficiary in 1 hour. |
@@ -38,13 +38,8 @@ The model intentionally excludes demographic or personal attributes, operating s
 
 ---
 
-## 5. Performance & Operational Guardrails
-* **Alert Threshold:** Prediction probability cutoff tuned to $0.40$ to optimize streaming recall while containing False Positive Rates (FPR).
-* **Latency SLA:** Sub-10ms per-event inference time under rolling state lookback lookups.
-* **Fallback Strategy:** If model inference fails or payload is malformed, payload routes to Dead-Letter Queue (DLQ) while maintaining zero data loss on stream flow.
-
----
-
-## 6. Ethical Considerations & Fairness
-* **Demographic Neutrality:** Features depend solely on network transaction flow and velocity, completely avoiding protected demographic attributes (age, location, gender, nationality).
-* **Human-in-the-Loop (HITL):** High-risk alerts generate compliance queue items for human SAR (Suspicious Activity Report) review rather than executing automated funds confiscation.
+## 5. Out-of-Sample Performance & Operational Guardrails
+* **Calibrated Alert Threshold:** `0.65` (persisted in `aml_streaming_model.meta.json`).
+* **Out-of-Sample Recall:** `23.77%` (`29 / 122` laundering events intercepted).
+* **Out-of-Sample Alert Precision:** `0.47%` (`6,172` alerts written to `artifacts/aml_alerts.jsonl`).
+* **Fallback Strategy:** Malformed events route to `artifacts/dlq/dead_letter_queue.jsonl` without interrupting stream flow.

@@ -1,117 +1,53 @@
-# =====================================================================
 # Byte-compiled / optimized / DLL files
-# =====================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 
-# =====================================================================
 # Virtual Environments & Packages
-# =====================================================================
 .venv/
 venv/
 ENV/
 env/
 .uv/
 
-# =====================================================================
-# Jupyter Notebook Checkpoints & Playgrounds
-# =====================================================================
+# Jupyter Notebook Checkpoints & IDE
 .ipynb_checkpoints/
-
-# =====================================================================
-# IDE Configurations
-# =====================================================================
 .vscode/
 .idea/
 
-# =====================================================================
-# MLOps Pipeline State & Artifact Isolation
-# =====================================================================
+# MLOps Pipeline State & Backups
+.backups/
+*.db
 mlflow.db
 mlruns/
+aml_streaming_model
+aml_streaming_model.meta.json
 
-# =====================================================================
-# Project 1 Data Security & Storage Boundaries
-# =====================================================================
-project-1-credit-card-fraud/data/*.csv
-project-1-credit-card-fraud/data/*.zip
-project-1-credit-card-fraud/data/kaggle.json
-
-# ALLOW Project 1 clean validation Parquet files to pass into LFS tracking
-!project-1-credit-card-fraud/data/processed/*.parquet
-
-# =====================================================================
-# Project 2 Data Security & Storage Boundaries (Loan Default Showcase)
-# =====================================================================
-project-2-loan-default/data/*.csv
-project-2-loan-default/data/*.zip
-project-2-loan-default/data/kaggle.json
-
-# Block all generated transaction ledgers, performance drift maps, and audit reports
-project-2-loan-default/artifacts/
-
-# ALLOW Project 2 clean validation Parquet files to pass into LFS tracking
-!project-2-loan-default/data/processed/*.parquet
-
-# ==========================================
-# Apache Airflow Ephemeral & Governance State
-# ==========================================
-project-2-loan-default/airflow/airflow.db
-project-2-loan-default/airflow/airflow.db-journal
-project-2-loan-default/airflow/logs/
-project-2-loan-default/airflow/*.log
-project-2-loan-default/airflow/*.pid
-project-2-loan-default/airflow/airflow.cfg
-project-2-loan-default/airflow/webserver_config.py
-*.log
-
-# =====================================================================
-# Project 3 Data Security & Storage Boundaries (AML Streaming)
-# =====================================================================
-project-3-aml-streaming/data/*.csv
-project-3-aml-streaming/data/*.zip
-project-3-aml-streaming/data/kaggle.json
-
-# Block ephemeral live monitoring outputs or transient drift telemetry logs
-project-3-aml-streaming/artifacts/
-
-# ALLOW Project 3 clean validation Parquet files to pass into LFS tracking
-!project-3-aml-streaming/data/processed/*.parquet
-# Large datasets and artifacts
+# Data & Credentials Isolation
+**/kaggle.json
 *.csv
+*.zip
+*.parquet
 *.joblib
+project-1-credit-card-fraud/data/
+project-1-credit-card-fraud/artifacts/
+project-2-loan-default/data/
+project-2-loan-default/artifacts/
+project-3-aml-streaming/data/
+project-3-aml-streaming/artifacts/
 project-3-aml-streaming/docs/api/
 
-# Databases & MLflow
-*.db
-mlruns/
-
-# Airflow
-airflow/airflow-webserver.pid
-airflow/logs/
-
-# Caches
-.pytest_cache/
-.ruff_cache/
-__pycache__/
-*.pyc
-
-# ==========================================
-# Apache Airflow Configurations & Secrets
-# ==========================================
+# Apache Airflow Ephemeral State
 airflow/airflow.cfg
 airflow/webserver_config.py
-airflow/airflow.db
+airflow/airflow.db*
+airflow/airflow-webserver.pid
 airflow/logs/
+project-2-loan-default/airflow/
 
-# ==========================================
-# Log Management
-# ==========================================
+# Caches & Logs
+.pytest_cache/
+.ruff_cache/
 logs/*
 !logs/.gitkeep
 *.log
-
-aml_streaming_model
-*.meta.json
-project-1-credit-card-fraud/artifacts/

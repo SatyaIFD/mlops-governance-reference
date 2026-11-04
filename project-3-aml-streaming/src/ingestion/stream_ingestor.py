@@ -30,6 +30,7 @@ class KeyVersionedPseudonymizer:
             "AML_HMAC_SECRET_KEY", "aml-default-dev-hmac-secret-key"
         )
         self._secret_bytes = raw_secret.encode("utf-8")
+        self._cache: dict[str, str] = {}
 
     def pseudonymize(self, account_id: Any) -> str:
         val = str(account_id).strip()
@@ -38,10 +39,15 @@ class KeyVersionedPseudonymizer:
         # Idempotency: do not double-hash already pseudonymized identifiers
         if val.startswith("hmac_v") and len(val.split("_")) == 3:
             return val
+        cached = self._cache.get(val)
+        if cached is not None:
+            return cached
         digest = hmac.new(
             self._secret_bytes, val.encode("utf-8"), hashlib.sha256
         ).hexdigest()[:16]
-        return f"hmac_{self.key_version}_{digest}"
+        token = f"hmac_{self.key_version}_{digest}"
+        self._cache[val] = token
+        return token
 
 
 class StreamingIngestionEngine:
@@ -115,9 +121,13 @@ class StreamingIngestionEngine:
         try:
             ts_val = candidate["Timestamp"]
             if isinstance(ts_val, str):
-                candidate["Timestamp"] = datetime.strptime(
-                    ts_val.strip(), "%Y-%m-%d %H:%M:%S"
-                )
+                s_ts = ts_val.strip()
+                if len(s_ts) == 19 and s_ts[10] == " ":
+                    candidate["Timestamp"] = datetime.fromisoformat(s_ts)
+                else:
+                    candidate["Timestamp"] = datetime.strptime(
+                        s_ts, "%Y-%m-%d %H:%M:%S"
+                    )
             elif not isinstance(ts_val, datetime):
                 errors.append(
                     "ERR_MALFORMED_TIMESTAMP: Timestamp must be string or datetime."

@@ -65,9 +65,10 @@ Measures incoming transaction frequency and total volume at beneficiary accounts
 
 | Metric | Benchmark Value |
 | --- | --- |
-| **Total Stream Ingestion** | 200,000 records |
+| **Total Stream Ingestion** | 200,000 records (100,000 warmup + 100,000 out-of-sample scored) |
 | **Data Quality Compliance** | 100.0% clean events (0 DLQ drops) |
-| **Real-Time Streaming Recall** | **30.33%** (37 / 122 laundering events intercepted) |
+| **Out-of-Sample Streaming Recall** | **23.77%** (29 / 122 laundering events intercepted) |
+| **Out-of-Sample Alert Precision** | **0.47%** (6,172 alerts written to `artifacts/aml_alerts.jsonl` at threshold `0.65`) |
 | **Stateful Feature Matrix** | 7 graph & velocity features |
 | **State Memory Bounds** | Safe under 24h event-time watermark eviction |
 

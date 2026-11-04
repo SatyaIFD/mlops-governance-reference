@@ -80,8 +80,6 @@ services:
       - AML_STREAM_DELAY_SECONDS=0.0
     volumes:
       - ./mlflow.db:/mlflow.db
-      - ./aml_streaming_model:/app/aml_streaming_model:ro
-      - ./aml_streaming_model.meta.json:/app/aml_streaming_model.meta.json:ro
       - ./project-3-aml-streaming/data:/app/data
       - ./project-3-aml-streaming/artifacts:/app/artifacts
       - ./mlruns:/app/mlruns
@@ -100,6 +98,8 @@ services:
   airflow-standalone:
     image: apache/airflow:2.10.2
     container_name: mlops-airflow
+    group_add:
+      - "1000"
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -126,5 +126,5 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/app/mlruns
-    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.17.2 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --host 0.0.0.0 --port 5000"
+    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.17.2 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --serve-artifacts --artifacts-destination /app/mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped

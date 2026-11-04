@@ -94,7 +94,17 @@ async def lifespan(app: FastAPI):
         else:
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
-        loaded = mlflow.xgboost.load_model(model_uri)
+        try:
+            loaded = mlflow.xgboost.load_model(model_uri)
+        except Exception:
+            dl_uri = client.get_model_version_download_uri(
+                model_name, str(latest_version if versions else 1)
+            )
+            if "mlruns/" in dl_uri:
+                rel_path = dl_uri.split("mlruns/", 1)[1]
+                loaded = mlflow.xgboost.load_model(str(Path("/app/mlruns") / rel_path))
+            else:
+                raise
         feature_columns = _extract_feature_columns(loaded)
         model = loaded
         print(f"🟢 Production model loaded successfully via URI: {model_uri}")

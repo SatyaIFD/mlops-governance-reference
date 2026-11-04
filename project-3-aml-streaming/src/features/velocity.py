@@ -44,7 +44,12 @@ class StreamingStateManager:
         amount = float(tx["Amount"])
         ts = tx["Timestamp"]
         if isinstance(ts, str):
-            ts = datetime.strptime(ts.strip(), "%Y-%m-%d %H:%M:%S")
+            s_ts = ts.strip()
+            ts = (
+                datetime.fromisoformat(s_ts)
+                if len(s_ts) == 19 and s_ts[10] == " "
+                else datetime.strptime(s_ts, "%Y-%m-%d %H:%M:%S")
+            )
 
         wm = self._advance_watermark(ts)
         cutoff_1h = wm - timedelta(hours=1)
