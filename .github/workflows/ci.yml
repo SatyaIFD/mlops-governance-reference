@@ -19,7 +19,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install Security & Lint Tools
-        run: pip install bandit ruff
+        run: pip install bandit ruff==0.11.2
 
       - name: Run Ruff Linter & Format Check
         run: |

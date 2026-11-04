@@ -99,7 +99,7 @@ def run_traffic_simulation(
     with httpx.Client(timeout=10.0) as client:
         for i in range(count):
             is_young = i % 2 == 0
-            high_risk = i % 4 == 0
+            high_risk = (i // 2) % 4 == 0
             payload = (
                 generate_stress_applicant(is_young)
                 if mode == "stress"

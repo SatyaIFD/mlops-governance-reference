@@ -98,7 +98,7 @@ def train_and_register():
         if (REPO_ROOT / "data" / "SAML-D.csv").exists()
         else SERVICE_ROOT / "data" / "SAML-D.csv"
     )
-    skops_artifact_path = REPO_ROOT / "aml_streaming_model"
+    skops_artifact_path = SERVICE_ROOT / "artifacts" / "aml_streaming_model"
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", f"sqlite:///{db_path}")
     mlflow.set_tracking_uri(tracking_uri)
@@ -118,7 +118,7 @@ def train_and_register():
     X_val = val_df[CANONICAL_AML_FEATURES]
     y_val = val_df["Is_laundering"].astype(int)
 
-    with mlflow.start_run(run_name="random_forest_7feature_calibrated"):
+    with mlflow.start_run(run_name="random_forest_7feature_calibrated") as run:
         model = RandomForestClassifier(
             n_estimators=50,
             max_depth=10,
@@ -143,7 +143,7 @@ def train_and_register():
 
         detector = AMLAnomalyDetector(threshold=optimal_threshold)
         detector.model = model
-        detector.save(skops_artifact_path)
+        detector.save(skops_artifact_path, mlflow_run_id=run.info.run_id)
 
         signature = infer_signature(X_train, model.predict_proba(X_train)[:, 1])
         try:

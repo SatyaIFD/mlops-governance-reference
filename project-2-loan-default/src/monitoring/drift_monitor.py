@@ -62,7 +62,7 @@ def run_production_audit(
         for line in f:
             if line.strip():
                 rec = json.loads(line.strip())
-                if rec.get("status_code") == 200 and rec.get("schema_version", 2) == 2:
+                if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
                     records.append(rec)
 
     if not records:
@@ -113,7 +113,7 @@ def run_production_audit(
             json.dump(existing_report, f, indent=4)
         return existing_report
 
-    valid_decisions = {"APPROVE", "APPROVED", "DECLINE", "REJECTED", "DENIED"}
+    valid_decisions = {"APPROVE", "APPROVED", "DECLINE", "REJECTED"}
     audit_df = audit_df[audit_df[decision_col].isin(valid_decisions)].copy()
 
     young_df = audit_df[audit_df["Age"] < 30]

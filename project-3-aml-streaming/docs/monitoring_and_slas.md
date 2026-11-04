@@ -22,7 +22,7 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
 
 ```json
 {
-  "execution_timestamp_utc": "2026-11-02T07:04:42.645505+00:00",
+  "execution_timestamp_utc": "2026-11-03T07:12:34.460652+00:00",
   "data_governance": {
     "total_ingested": 200000,
     "clean_events": 200000,
@@ -32,6 +32,8 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   "model_metadata": {
     "artifact_path": "aml_streaming_model",
     "calibrated_threshold": 0.65,
+    "model_sha256": "102de2e6a69635a54a45b33d8820c67de9f2ef2c264f4fe0b498fdb775be1d13",
+    "mlflow_run_id": "d3bec84c3b0841f8b9e5266f0b8069ab",
     "features_used": [
       "Amount",
       "pass_through_ratio_1h",
@@ -45,10 +47,11 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   },
   "streaming_performance": {
     "total_processed": 100000,
-    "anomalies_flagged": 3720,
+    "anomalies_flagged": 6172,
     "actual_laundering_events": 122,
-    "laundering_intercepted": 37,
-    "recall_percentage": 30.33,
-    "precision_percentage": 0.99
+    "laundering_intercepted": 29,
+    "recall_percentage": 23.77,
+    "precision_percentage": 0.47
   }
 }
+```

@@ -27,12 +27,20 @@ def run_statistical_validation() -> dict:
     """
     print("📊 Initializing Statistical Data Validation & PSI Drift Layer...")
 
-    if not PROCESSED_DATA_PATH.exists():
+    if TRAIN_SPLIT_PATH.exists() and TEST_SPLIT_PATH.exists():
+        ref_df = pd.read_parquet(TRAIN_SPLIT_PATH)
+        eval_df = pd.read_parquet(TEST_SPLIT_PATH)
+        df = pd.concat([ref_df, eval_df], ignore_index=True)
+    elif PROCESSED_DATA_PATH.exists():
+        df = pd.read_parquet(PROCESSED_DATA_PATH)
+        midpoint = len(df) // 2
+        ref_df = df.iloc[:midpoint]
+        eval_df = df.iloc[midpoint:]
+    else:
         raise FileNotFoundError(
-            f"❌ Processed features not found at: {PROCESSED_DATA_PATH.resolve()}. Run ingestion first."
+            f"❌ Processed splits not found at: {TRAIN_SPLIT_PATH.resolve()}. Run train.py first."
         )
 
-    df = pd.read_parquet(PROCESSED_DATA_PATH)
     print("🛡️ Evaluating data profiling expectations...")
 
     expected_columns = list(ProcessedTransactionSchema.model_fields.keys())
@@ -53,15 +61,6 @@ def run_statistical_validation() -> dict:
         raise ValueError(
             f"🚨 Target validation failure! Invalid classes detected: {unique_classes}"
         )
-
-    # Compute PSI across key risk features using reference vs. evaluation partitions
-    if TRAIN_SPLIT_PATH.exists() and TEST_SPLIT_PATH.exists():
-        ref_df = pd.read_parquet(TRAIN_SPLIT_PATH)
-        eval_df = pd.read_parquet(TEST_SPLIT_PATH)
-    else:
-        midpoint = len(df) // 2
-        ref_df = df.iloc[:midpoint]
-        eval_df = df.iloc[midpoint:]
 
     monitored_features = ["V14", "V17", "V12", "scaled_amount", "scaled_time"]
     psi_metrics = {}
