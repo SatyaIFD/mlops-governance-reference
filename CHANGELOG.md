@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.2...v0.5.3) (2026-11-04)
+
+
+### Bug Fixes
+
+* **governance:** resolve v0.5.2 container artifact loading, airflow permissions, and streaming throughput ([#137](https://github.com/SatyaIFD/mlops-governance-reference/issues/137)) ([9fa1523](https://github.com/SatyaIFD/mlops-governance-reference/commit/9fa15232c67cabd02feb7a8ffe129efc36699a56))
+
 ## [0.5.2](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.1...v0.5.2) (2026-11-02)
 
 
