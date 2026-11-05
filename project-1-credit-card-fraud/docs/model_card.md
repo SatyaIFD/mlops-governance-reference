@@ -4,7 +4,7 @@
 * **Developer:** Enterprise Risk MLOps Team
 * **Model Architecture:** XGBoost Classifier (`XGBClassifier`)
 * **Engine Dependencies:** `xgboost==3.4.1`, `mlflow==3.17.2`, `python 3.13.14`
-* **Registered Model URI:** `models:/fraud_detection_xgb/1` (SQLite Backend Tracking Registry)
+* **Registered Model URI:** `models:/fraud_detection_xgb/3` (SQLite Backend Tracking Registry)
 * **License:** Internal Financial Operations Use Only
 
 ## 2. Intended Use
@@ -19,4 +19,4 @@
 ## 4. Operational Transaction Segment Disparity Audit (`src/governance/audit.py`)
 * **High-Value Segment ($\ge 80\text{th}$ Percentile) Flag Rate:** `0.001670` (0.167%)
 * **Low-Value Segment ($< 80\text{th}$ Percentile) Flag Rate:** `0.001190` (0.119%)
-* **Segment Disparity Ratio:** **`1.4036`** (Evaluated on leakage-free holdout `data/processed/test.parquet`)
+* **Segment Disparity Ratio:** **`1.4036`** (`within_guardrail_bounds: false` — exceeds the `[0.80, 1.25]` operational guardrail envelope on `data/processed/test.parquet` when `--enforce-gate` is enabled)

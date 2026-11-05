@@ -10,53 +10,26 @@ Every event entering the pipeline must satisfy the following schema rules before
 
 | Field Name | Type | Required | Valid Range / Format | Description |
 |---|---|---|---|---|
-| `Timestamp` | `string` / `datetime` | **Yes** | `YYYY-MM-DD HH:MM:SS` | UTC timestamp of the transaction event. |
-| `Sender_account` | `string` | **Yes** | Non-empty alphanumeric string | Unique identifier for the sending entity/account. |
-| `Receiver_account` | `string` | **Yes** | Non-empty alphanumeric string | Unique identifier for the receiving beneficiary account. |
-| `Amount` | `float` | **Yes** | $> 0.0$ | Transaction currency amount (must be positive). |
-| `Payment_type` | `string` | No | `CHEQUE`, `CREDIT`, `ACH`, `CASH`, `WIRE` | Medium used to initiate transfer. |
-| `Is_laundering` | `integer` | No | `0` or `1` | Binary ground-truth target label (0 = Normal, 1 = Laundering). |
+| `Timestamp` | `string` / `datetime` | **Yes** | `YYYY-MM-DD HH:MM:SS` | Event timestamp (derived from `Date` + `Time` in SAML-D). |
+| `Sender_account` | `string` | **Yes** | Non-empty string | Unique identifier for the sending account (HMAC-pseudonymized when enabled). |
+| `Receiver_account` | `string` | **Yes** | Non-empty string | Unique identifier for the receiving account (HMAC-pseudonymized when enabled). |
+| `Amount` | `float` | **Yes** | $> 0.0$ (finite) | Nominal transaction amount in the record's `Payment_currency` (`UK pounds`, `US dollar`, `Euro`, etc.). |
+| `Payment_type` | `string` | No | `Credit card`, `Debit card`, `Cheque`, `ACH`, `Cross-border`, `Cash Deposit`, `Cash Withdrawal`, `WIRE` | Transfer medium in SAML-D (not used as a model feature). |
+| `Is_laundering` | `integer` | No | `0` or `1` | Binary ground-truth target label (`0` = Normal, `1` = Laundering). |
 
 ---
 
 ## 🧮 2. Stateful & Graph Feature Definitions
 
-These features are computed dynamically in-memory by `StreamingStateManager` using rolling time-based lookback windows (1h and 24h) with automated TTL key eviction.
+These 7 features (`CANONICAL_AML_FEATURES`) are computed dynamically in-memory by `StreamingStateManager` using rolling event-time lookback windows (`1h` and `24h`):
 
-### A. Pass-Through Ratio (1-Hour Lookback)
-* **Variable Name:** `pass_through_ratio_1h` | **Type:** `float` | **Range:** $[0.0, 1.0]$
-* **Purpose:** Detects "mule" layering where incoming funds are rapidly transferred out within 60 minutes.
-* **Formula:**
-
-$$\text{Pass-Through Ratio}_{1h} = \min\left(1.0, \frac{\text{Outgoing Volume}_{1h}}{\text{Incoming Volume}_{1h} + \epsilon}\right)$$
-
----
-
-### B. Structuring Indicator Flag
-* **Variable Name:** `is_structuring` | **Type:** `integer` | **Range:** $\{0, 1\}$
-* **Purpose:** Flags transaction amounts falling in the $\$8,000.00$ to $\$9,999.99$ corridor designed to evade mandatory $\$10,000$ Currency Transaction Reporting (CTR) thresholds.
-* **Formula:** $\text{is\_structuring} = 1 \text{ if } 8000.0 \le \text{Amount} < 10000.0 \text{ else } 0$.
-
----
-
-### C. Velocity Acceleration Rate
-* **Variable Name:** `velocity_acceleration` | **Type:** `float` | **Range:** $[0.0, \infty)$
-* **Purpose:** Measures sudden transaction frequency spikes by comparing the sender's 1-hour outgoing transaction count against their 24-hour average hourly rate.
-* **Formula:**
-
-$$\text{Velocity Acceleration} = \frac{\text{Outgoing Count}_{1h}}{\left(\frac{\text{Outgoing Count}_{24h}}{24.0}\right) + \epsilon}$$
-
----
-
-### D. Fan-Out Dispersion Count (24-Hour Lookback)
-* **Variable Name:** `fan_out_count_24h` | **Type:** `integer` | **Range:** $[0, \infty)$
-* **Purpose:** Tracks the count of distinct beneficiary accounts receiving funds from the sender over a 24-hour window to catch fan-out dispersion networks.
-
----
-
-### E. Receiver Inflow Count & Amount (1-Hour Lookback)
-* **Variable Names:** `receiver_inflow_count_1h` (`integer`), `receiver_inflow_amount_1h` (`float`)
-* **Purpose:** Tracks inbound transaction volume and count at beneficiary accounts within 60 minutes to catch smurfing aggregation.
+1. **`Amount` (`float`):** Raw positive transaction amount.
+2. **`pass_through_ratio_1h` (`float`, $[0.0, 1.0]$):** $\min(1.0, \text{Outgoing Volume}_{1h} / (\text{Incoming Volume}_{1h} + \epsilon))$.
+3. **`is_structuring` (`int`, 0 or 1):** Nominal band indicator (`1` if $8000.0 \le \text{Amount} < 10000.0$ else `0`; applied directly to raw `Amount` without FX conversion).
+4. **`velocity_acceleration` (`float`, $[0.0, \infty)$):** $\text{Outgoing Count}_{1h} / ((\text{Outgoing Count}_{24h} / 24.0) + \epsilon)$.
+5. **`fan_out_count_24h` (`int`, $[0, \infty)$):** Distinct beneficiary accounts paid by the sender within the 24-hour event-time window.
+6. **`receiver_inflow_count_1h` (`int`, $[1, \infty)$):** Inbound transaction count at the beneficiary account within 1 hour.
+7. **`receiver_inflow_amount_1h` (`float`, $(0.0, \infty)$):** Cumulative inbound transaction amount at the beneficiary account within 1 hour.
 
 ---
 
@@ -64,6 +37,8 @@ $$\text{Velocity Acceleration} = \frac{\text{Outgoing Count}_{1h}}{\left(\frac{\
 
 | Error Code | Trigger Condition | Severity | DLQ Action |
 |---|---|---|---|
-| `ERR_MISSING_MANDATORY` | Field `Timestamp`, `Sender_account`, `Receiver_account`, or `Amount` is null/missing. | **High** | Quarantine immediately; log field name. |
-| `ERR_INVALID_AMOUNT` | `Amount <= 0.0` or non-numeric type conversion failure. | **High** | Quarantine immediately; reject negative/zero transfers. |
-| `ERR_MALFORMED_TIMESTAMP` | Date string cannot be parsed into a valid UTC `datetime` object. | **Medium** | Quarantine immediately; inspect date format string. |
+| `ERR_INVALID_PAYLOAD_TYPE` | Incoming payload is not a Python `dict`. | **High** | Quarantine immediately in `dead_letter_queue.jsonl`. |
+| `ERR_MISSING_MANDATORY` | `Timestamp`, `Sender_account`, `Receiver_account`, or `Amount` is null/empty. | **High** | Quarantine immediately; log missing field. |
+| `ERR_INVALID_AMOUNT` | `Amount <= 0.0`, `NaN`/`Inf`, or non-numeric string. | **High** | Quarantine immediately. |
+| `ERR_MALFORMED_TIMESTAMP` | String cannot be parsed as `YYYY-MM-DD HH:MM:SS`. | **Medium** | Quarantine immediately. |
+| `ERR_ENRICHMENT_FAILURE` / `ERR_SCORING_FAILURE` | Runtime exception during feature enrichment or model scoring. | **High** | Decrements `clean_events` via `record_processing_failure()` and quarantines record. |

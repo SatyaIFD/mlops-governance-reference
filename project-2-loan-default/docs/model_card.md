@@ -5,21 +5,21 @@
 
 ## ⚖️ Model Governance & Fairness Summary
 * **Demographic Parity Status:** `COMPLIANT (FAIR)`
-* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `0.9989`
+* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `1.0001`
 * **Mitigation Mechanism:** `Sample Reweighting (Pre-processing Demographic Parity)`
 
 ## 📊 Core Holdout Evaluation Metrics
-* **Test ROC-AUC:** `0.7218`
-* **Test Classification Accuracy:** `0.8853`
-* **Test Log-Loss:** `0.3245`
+* **Test ROC-AUC:** `0.7227`
+* **Test Classification Accuracy:** `0.885`
+* **Test Log-Loss:** `0.3253`
 
 ## 📡 Population Stability & Distribution Drift
 * **Data Distribution Status:** `STABLE`
 * **Evaluated Comparison Source:** `holdout_evaluation_split`
 * **Calculated Features Monitored:**
-  * **CreditScore:** PSI = `0.0001` [STABLE]
+  * **CreditScore:** PSI = `0.0003` [STABLE]
   * **Income:** PSI = `0.0002` [STABLE]
-  * **LoanAmount:** PSI = `0.0001` [STABLE]
+  * **LoanAmount:** PSI = `0.0005` [STABLE]
   * **DTIRatio:** PSI = `0.0002` [STABLE]
 
 ---

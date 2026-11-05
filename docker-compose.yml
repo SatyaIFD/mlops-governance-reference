@@ -20,6 +20,7 @@ services:
       dockerfile: project-1-credit-card-fraud/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
     container_name: mlops-fraud-api
+    user: "1000:1000"
     group_add:
       - "1000"
     environment:
@@ -28,6 +29,7 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/app/mlruns
+      - ./project-1-credit-card-fraud/src:/app/src:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
       interval: 10s
@@ -42,6 +44,7 @@ services:
       dockerfile: project-2-loan-default/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
     container_name: mlops-loan-api
+    user: "1000:1000"
     group_add:
       - "1000"
     environment:
@@ -51,6 +54,7 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/app/mlruns
+      - ./project-2-loan-default/src:/app/src:ro
       - ./project-2-loan-default/artifacts:/app/artifacts
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
@@ -66,6 +70,7 @@ services:
       dockerfile: project-3-aml-streaming/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
+    user: "1000:1000"
     group_add:
       - "1000"
     environment:
@@ -80,6 +85,7 @@ services:
       - AML_STREAM_DELAY_SECONDS=0.0
     volumes:
       - ./mlflow.db:/mlflow.db
+      - ./project-3-aml-streaming/src:/app/src:ro
       - ./project-3-aml-streaming/data:/app/data
       - ./project-3-aml-streaming/artifacts:/app/artifacts
       - ./mlruns:/app/mlruns

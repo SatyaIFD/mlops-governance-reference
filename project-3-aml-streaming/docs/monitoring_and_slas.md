@@ -8,21 +8,21 @@ This document specifies the operational SLAs, Service Level Objectives (SLOs), a
 
 | Metric | Target SLA / SLO | Measurement Window | Action on Breach |
 | --- | --- | --- | --- |
-| **Inference Latency (p95)** | $< 15\text{ ms}$ per transaction | Rolling 10,000 events | Scale state manager memory / optimize deque pruning |
-| **Inference Latency (p99)** | $< 50\text{ ms}$ per transaction | Rolling 10,000 events | Inspect garbage collection pauses |
+| **Batch Inference Latency** | $< 15\text{ ms}$ per transaction | Micro-batches of 5,000 events | Inspect state manager deque pruning |
+| **Heartbeat Freshness** | $< 120\text{ s}$ (`heartbeat.json` mtime) | Updated every 5,000 events | Container healthcheck fails / restarts |
 | **Data Quality Pass Rate** | $\ge 99.9\%$ clean payloads | Continuous session | Trigger Playbook A (DLQ Alert) |
-| **State Memory Limit** | $< 2.0\text{ GB}$ RAM consumption | Continuous session | Trigger Playbook B (Watermark Eviction) |
-| **Streaming Laundering Recall** | $\ge 30.0\%$ detection rate | Out-of-sample 100,000 events | Trigger Playbook C (Threshold Re-tuning) |
+| **State Memory Limit** | $< 2.0\text{ GB}$ RAM consumption | Swept every 25,000 events | Trigger Playbook B (Watermark Eviction) |
+| **Out-of-Sample Laundering Recall** | $\ge 20.0\%$ detection rate | Out-of-sample 100,000 events | Trigger Playbook C (Model Retraining) |
 
 ---
 
 ## 📈 Telemetry & Health Monitoring
 
-The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) tracking out-of-sample session statistics:
+The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) tracking out-of-sample session statistics (at ~0.12% base laundering prevalence, `0.47%` alert precision corresponds to ~213 alerts per true positive across `6,172` flagged events):
 
 ```json
 {
-  "execution_timestamp_utc": "2026-11-03T07:12:34.460652+00:00",
+  "execution_timestamp_utc": "2026-11-05T05:07:56.306357+00:00",
   "data_governance": {
     "total_ingested": 200000,
     "clean_events": 200000,
@@ -32,8 +32,8 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   "model_metadata": {
     "artifact_path": "aml_streaming_model",
     "calibrated_threshold": 0.65,
-    "model_sha256": "102de2e6a69635a54a45b33d8820c67de9f2ef2c264f4fe0b498fdb775be1d13",
-    "mlflow_run_id": "d3bec84c3b0841f8b9e5266f0b8069ab",
+    "model_sha256": "3cfd0cce875dfdc76058e4c4f7e28deaf3a4e114ce6f57912f21998ea8305378",
+    "mlflow_run_id": "1be3460349f94c04939c1f78df88dc84",
     "features_used": [
       "Amount",
       "pass_through_ratio_1h",

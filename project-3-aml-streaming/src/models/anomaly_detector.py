@@ -121,6 +121,7 @@ class AMLAnomalyDetector:
             if not isinstance(artifact_path, Path)
             else artifact_path
         )
+        actual_sha256 = self._compute_sha256(target)
         self.model = sio.load(
             target,
             trusted=TRUSTED_SKOPS_TYPES,
@@ -133,8 +134,15 @@ class AMLAnomalyDetector:
                 meta = json.load(f)
             if "threshold" not in meta:
                 raise ValueError(f"Missing 'threshold' key in {meta_path}")
+            expected_sha256 = meta.get("sha256")
+            if expected_sha256 and expected_sha256 != actual_sha256:
+                raise ValueError(
+                    f"Model SHA-256 mismatch for {target}: expected {expected_sha256}, got {actual_sha256}"
+                )
             self.threshold = float(meta["threshold"])
             if "feature_cols" in meta and isinstance(meta["feature_cols"], list):
                 self.feature_cols = [str(c) for c in meta["feature_cols"]]
-            self.model_sha256 = meta.get("sha256")
+            self.model_sha256 = actual_sha256
             self.mlflow_run_id = meta.get("mlflow_run_id")
+        else:
+            self.model_sha256 = actual_sha256

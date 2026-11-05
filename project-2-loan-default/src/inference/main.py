@@ -52,7 +52,9 @@ def verify_api_key(api_key: str = Depends(api_key_header)):
         raise HTTPException(
             status_code=500, detail="Server authentication configuration error."
         )
-    if not api_key or not secrets.compare_digest(api_key, expected_key):
+    if not api_key or not secrets.compare_digest(
+        api_key.encode("utf-8"), expected_key.encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 
@@ -64,6 +66,37 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     if hasattr(loaded_model, "feature_names_in_"):
         return list(loaded_model.feature_names_in_)
     return None
+
+
+def _load_xgboost_model_portable(
+    client: MlflowClient, model_name: str, model_uri: str, version_num: int
+):
+    """Loads XGBoost model from MLflow URI with portable fallback across host/container mlruns mounts."""
+    try:
+        return mlflow.xgboost.load_model(model_uri)
+    except Exception:
+        mv = client.get_model_version(model_name, str(version_num))
+        candidates = []
+        for raw_loc in (
+            getattr(mv, "storage_location", None),
+            getattr(mv, "source", None),
+        ):
+            if not raw_loc:
+                continue
+            if "mlruns/" in raw_loc:
+                rel = raw_loc.split("mlruns/", 1)[1]
+                candidates.append(Path("/app/mlruns") / rel)
+            if raw_loc.startswith("models:/m-"):
+                model_id = raw_loc.split("models:/", 1)[1].strip("/")
+                candidates.extend(
+                    Path("/app/mlruns").glob(f"*/models/{model_id}/artifacts")
+                )
+        if getattr(mv, "run_id", None):
+            candidates.extend(Path("/app/mlruns").glob(f"*/{mv.run_id}/artifacts/*"))
+        for cand in candidates:
+            if cand.exists() and (cand / "MLmodel").exists():
+                return mlflow.xgboost.load_model(str(cand))
+        raise
 
 
 @asynccontextmanager
@@ -94,17 +127,8 @@ async def lifespan(app: FastAPI):
         else:
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
-        try:
-            loaded = mlflow.xgboost.load_model(model_uri)
-        except Exception:
-            dl_uri = client.get_model_version_download_uri(
-                model_name, str(latest_version if versions else 1)
-            )
-            if "mlruns/" in dl_uri:
-                rel_path = dl_uri.split("mlruns/", 1)[1]
-                loaded = mlflow.xgboost.load_model(str(Path("/app/mlruns") / rel_path))
-            else:
-                raise
+        target_ver = latest_version if (prod_versions or versions) else 1
+        loaded = _load_xgboost_model_portable(client, model_name, model_uri, target_ver)
         feature_columns = _extract_feature_columns(loaded)
         model = loaded
         print(f"🟢 Production model loaded successfully via URI: {model_uri}")

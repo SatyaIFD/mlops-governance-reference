@@ -16,8 +16,7 @@ logging.basicConfig(
 class KeyVersionedPseudonymizer:
     """
     Key-versioned HMAC-SHA256 pseudonymizer for account identifiers.
-    Ensures normal stream processing and DLQ replay produce identical pseudonyms
-    while supporting key rotation via explicit version prefixes (e.g., 'hmac_v1_<digest>').
+    Stateless per-call hashing ensures zero in-memory retention of raw account IDs.
     """
 
     def __init__(
@@ -30,24 +29,17 @@ class KeyVersionedPseudonymizer:
             "AML_HMAC_SECRET_KEY", "aml-default-dev-hmac-secret-key"
         )
         self._secret_bytes = raw_secret.encode("utf-8")
-        self._cache: dict[str, str] = {}
 
     def pseudonymize(self, account_id: Any) -> str:
         val = str(account_id).strip()
         if not val:
             return "hmac_empty"
-        # Idempotency: do not double-hash already pseudonymized identifiers
         if val.startswith("hmac_v") and len(val.split("_")) == 3:
             return val
-        cached = self._cache.get(val)
-        if cached is not None:
-            return cached
         digest = hmac.new(
             self._secret_bytes, val.encode("utf-8"), hashlib.sha256
         ).hexdigest()[:16]
-        token = f"hmac_{self.key_version}_{digest}"
-        self._cache[val] = token
-        return token
+        return f"hmac_{self.key_version}_{digest}"
 
 
 class StreamingIngestionEngine:
@@ -93,7 +85,6 @@ class StreamingIngestionEngine:
         candidate = raw_payload.copy()
         errors = []
 
-        # 1. Check for structural completeness (Required Fields)
         required_fields = ["Timestamp", "Sender_account", "Receiver_account", "Amount"]
         for field in required_fields:
             val = candidate.get(field)
@@ -106,7 +97,6 @@ class StreamingIngestionEngine:
             self._route_to_dlq(candidate, errors)
             return False, None
 
-        # 2. Assert strict numerical finiteness, positive bounds, and timestamp format
         try:
             amount = float(candidate["Amount"])
             if not math.isfinite(amount) or amount <= 0.0:
@@ -150,6 +140,12 @@ class StreamingIngestionEngine:
         candidate["event_id"] = self._compute_event_id(candidate)
         self.metrics["clean_events"] += 1
         return True, candidate
+
+    def record_processing_failure(self, payload: dict, errors: list[str]) -> None:
+        """Adjusts clean_events counter when a post-validation enrichment or scoring error occurs."""
+        if self.metrics["clean_events"] > 0:
+            self.metrics["clean_events"] -= 1
+        self._route_to_dlq(payload, errors)
 
     def _route_to_dlq(self, payload: dict, errors: list[str]) -> None:
         """Routes failed payloads to the Dead Letter Queue with deterministic HMAC pseudonymization."""
