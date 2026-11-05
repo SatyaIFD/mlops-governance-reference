@@ -112,7 +112,7 @@ def _write_report(
         },
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_report = report_path.with_suffix(".json.tmp")
+    tmp_report = report_path.with_name(f"{report_path.name}.{os.getpid()}.tmp")
     with open(tmp_report, "w", encoding="utf-8") as f:
         json.dump(execution_summary, f, indent=2)
     os.replace(tmp_report, report_path)
@@ -138,6 +138,10 @@ def run_production_stream_pipeline(
     pseudonymize = os.getenv("AML_PSEUDONYMIZE_ACCOUNTS", "1") == "1"
 
     print("🚀 Initializing AML Streaming Pipeline Components...")
+    dlq_file = dlq_dir / "dead_letter_queue.jsonl"
+    if dlq_file.exists():
+        dlq_file.unlink()
+
     ingestor = StreamingIngestionEngine(
         dlq_output_dir=dlq_dir, pseudonymize_accounts=pseudonymize
     )
@@ -154,7 +158,7 @@ def run_production_stream_pipeline(
         sys.exit(1)
 
     _write_heartbeat(artifacts_dir, 0)
-    tmp_alerts_path = alerts_path.with_suffix(".jsonl.tmp")
+    tmp_alerts_path = alerts_path.with_name(f"{alerts_path.name}.{os.getpid()}.tmp")
     if tmp_alerts_path.exists():
         tmp_alerts_path.unlink()
 
@@ -169,95 +173,110 @@ def run_production_stream_pipeline(
     pending_batch: list[dict] = []
     batch_size = 5000
 
-    def _flush_batch(alert_file) -> None:
+    def _record_scored_item(
+        tx_item: dict, prob: float, is_anomaly: int, alert_file
+    ) -> None:
         nonlocal \
             processed_count, \
             anomaly_count, \
             actual_laundering, \
             laundering_intercepted
+        processed_count += 1
+        raw_label = tx_item.get("Is_laundering", tx_item.get("Is_Laundering", 0))
+        is_true_laundering = (
+            int(float(raw_label)) == 1 if raw_label not in (None, "") else False
+        )
+        if is_true_laundering:
+            actual_laundering += 1
+        if is_anomaly:
+            anomaly_count += 1
+            if is_true_laundering:
+                laundering_intercepted += 1
+            alert_entry = {
+                "event_id": tx_item.get("event_id"),
+                "timestamp": str(tx_item.get("Timestamp")),
+                "sender_account": tx_item.get("Sender_account"),
+                "receiver_account": tx_item.get("Receiver_account"),
+                "amount": tx_item.get("Amount"),
+                "anomaly_probability": prob,
+                "threshold": detector.threshold,
+            }
+            alert_file.write(json.dumps(alert_entry) + "\n")
+
+    def _flush_batch(alert_file) -> None:
         if not pending_batch:
             return
-        scores = detector.score_batch(pending_batch)
-        for tx_item, (prob, is_anomaly) in zip(pending_batch, scores):
-            processed_count += 1
-            raw_label = tx_item.get("Is_laundering", tx_item.get("Is_Laundering", 0))
-            is_true_laundering = (
-                int(float(raw_label)) == 1 if raw_label not in (None, "") else False
-            )
-            if is_true_laundering:
-                actual_laundering += 1
-            if is_anomaly:
-                anomaly_count += 1
-                if is_true_laundering:
-                    laundering_intercepted += 1
-                alert_entry = {
-                    "event_id": tx_item.get("event_id"),
-                    "timestamp": str(tx_item.get("Timestamp")),
-                    "sender_account": tx_item.get("Sender_account"),
-                    "receiver_account": tx_item.get("Receiver_account"),
-                    "amount": tx_item.get("Amount"),
-                    "anomaly_probability": prob,
-                    "threshold": detector.threshold,
-                }
-                alert_file.write(json.dumps(alert_entry) + "\n")
+        batch_items = list(pending_batch)
         pending_batch.clear()
+        try:
+            scores = detector.score_batch(batch_items)
+            for tx_item, (prob, is_anomaly) in zip(batch_items, scores):
+                _record_scored_item(tx_item, prob, is_anomaly, alert_file)
+        except Exception:
+            for tx_item in batch_items:
+                try:
+                    prob, is_anomaly = detector.score_transaction(tx_item)
+                    _record_scored_item(tx_item, prob, is_anomaly, alert_file)
+                except Exception as item_err:
+                    ingestor.record_processing_failure(
+                        tx_item, [f"ERR_SCORING_FAILURE: {item_err}"]
+                    )
 
     try:
         with open(tmp_alerts_path, "w", encoding="utf-8") as alert_file:
             for raw_tx in transaction_stream_generator(
                 data_path, delay_seconds=delay_seconds
             ):
+                is_valid, clean_tx = ingestor.validate_and_route(raw_tx)
+                if not is_valid or clean_tx is None:
+                    continue
+
                 try:
-                    is_valid, clean_tx = ingestor.validate_and_route(raw_tx)
-                    if not is_valid or clean_tx is None:
-                        continue
-
                     enriched_tx = state_manager.update_and_enrich(clean_tx)
-
-                    if warmup_count < warmup_events:
-                        warmup_count += 1
-                        if warmup_count % 25000 == 0:
-                            state_manager._evict_dormant_accounts()
-                            _write_heartbeat(artifacts_dir, 0)
-                            print(
-                                f"   ⏳ Warmup progress: {warmup_count:,}/{warmup_events:,} events..."
-                            )
-                        continue
-
-                    pending_batch.append(enriched_tx)
-                    if len(pending_batch) >= batch_size:
-                        _flush_batch(alert_file)
-                        _write_heartbeat(artifacts_dir, processed_count)
-                        if processed_count % 25000 == 0:
-                            state_manager._evict_dormant_accounts()
-                            _write_report(
-                                report_path,
-                                ingestor.get_data_quality_report(),
-                                model_path,
-                                detector,
-                                warmup_count,
-                                processed_count,
-                                anomaly_count,
-                                actual_laundering,
-                                laundering_intercepted,
-                            )
-                            print(
-                                f"   ⚡ Scored progress: {processed_count:,}/{max_events:,} events..."
-                            )
-
-                    if (
-                        max_events > 0
-                        and (processed_count + len(pending_batch)) >= max_events
-                    ):
-                        _flush_batch(alert_file)
-                        break
-
-                except Exception as event_err:
-                    ingestor._route_to_dlq(
-                        raw_tx if isinstance(raw_tx, dict) else {"raw": str(raw_tx)},
-                        [f"ERR_PROCESSING_FAILURE: {event_err}"],
+                except Exception as enrich_err:
+                    ingestor.record_processing_failure(
+                        clean_tx, [f"ERR_ENRICHMENT_FAILURE: {enrich_err}"]
                     )
                     continue
+
+                if warmup_count < warmup_events:
+                    warmup_count += 1
+                    if warmup_count % 5000 == 0:
+                        _write_heartbeat(artifacts_dir, 0)
+                    if warmup_count % 25000 == 0:
+                        state_manager._evict_dormant_accounts()
+                        print(
+                            f"   ⏳ Warmup progress: {warmup_count:,}/{warmup_events:,} events..."
+                        )
+                    continue
+
+                pending_batch.append(enriched_tx)
+                if len(pending_batch) >= batch_size:
+                    _flush_batch(alert_file)
+                    _write_heartbeat(artifacts_dir, processed_count)
+                    if processed_count % 25000 == 0:
+                        state_manager._evict_dormant_accounts()
+                        _write_report(
+                            report_path,
+                            ingestor.get_data_quality_report(),
+                            model_path,
+                            detector,
+                            warmup_count,
+                            processed_count,
+                            anomaly_count,
+                            actual_laundering,
+                            laundering_intercepted,
+                        )
+                        print(
+                            f"   ⚡ Scored progress: {processed_count:,}/{max_events:,} events..."
+                        )
+
+                if (
+                    max_events > 0
+                    and (processed_count + len(pending_batch)) >= max_events
+                ):
+                    _flush_batch(alert_file)
+                    break
 
             _flush_batch(alert_file)
 

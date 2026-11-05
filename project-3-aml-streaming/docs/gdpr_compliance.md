@@ -27,7 +27,7 @@ This document outlines how the **Project 3 Real-Time AML Streaming Observability
 ## 🧹 2. Data Minimization & Event-Time Watermark Eviction
 
 * **Rolling Memory Bounds:** Transaction records stored in `StreamingStateManager` deques are pruned relative to the stream watermark ($T_{\text{watermark}} - 24\text{h}$).
-* **Dormant Key Garbage Collection:** `src/streaming/pipeline.py` invokes `_evict_dormant_accounts()` every 500 events, deleting empty account keys and expired deduplication entries from memory.
+* **Dormant Key Garbage Collection:** `src/streaming/pipeline.py` invokes `_evict_dormant_accounts()` every 25,000 events, deleting empty account keys and expired deduplication entries from memory.
 
 ---
 

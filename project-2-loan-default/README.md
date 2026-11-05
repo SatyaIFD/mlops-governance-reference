@@ -38,7 +38,7 @@ project-2-loan-default/
 
 
 2. **Sample Reweighting:** `src/training/train.py` computes pre-processing sample weights across age cohorts (`Age < 30` vs. `Age >= 30`) and default labels to mitigate historical demographic parity disparities.
-3. **Honest Telemetry Auditing:** `src/monitoring/drift_monitor.py` filters for valid `HTTP 200` observations and reports `INCONCLUSIVE (INSUFFICIENT_DATA)` whenever cohort sample sizes or baseline approval rates are zero—never defaulting to `1.0` (`COMPLIANT`).
+3. **Honest Telemetry Auditing:** `src/monitoring/drift_monitor.py` filters for valid `HTTP 200` observations and reports `INCONCLUSIVE (INSUFFICIENT_DATA)` whenever cohort sample sizes are below `min_cohort_size=30` or baseline approval rates are zero—never defaulting to `1.0` (`COMPLIANT`).
 
 ---
 

@@ -38,6 +38,7 @@ The `/compliance` package implements technical building blocks that support regu
 git clone https://github.com/SatyaIFD/mlops-governance-reference.git
 cd mlops-governance-reference
 [ -f .env.example ] && cp -n .env.example .env || true
+make bootstrap
 sudo docker compose up -d
 
 ```

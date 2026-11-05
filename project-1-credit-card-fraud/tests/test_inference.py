@@ -1,3 +1,5 @@
+from pathlib import Path
+
 """
 API Integration Tests - Project 1: Credit Card Fraud Detection
 """
@@ -95,3 +97,45 @@ def test_auth_invalid_or_missing_client_key_returns_401(monkeypatch):
             headers={"X-API-Key": "test-secret-key"},
         )
         assert res_ok.status_code == 200  # nosec B101
+
+
+def test_non_ascii_api_key_returns_401(monkeypatch):
+    """Verifies that non-ASCII X-API-Key values raise HTTP 401 instead of ValueError/HTTP 500."""
+    from fastapi import HTTPException
+
+    monkeypatch.setenv("EXPECTED_API_KEY", "test-secret-key")
+    with pytest.raises(HTTPException) as exc_info:
+        verify_api_key("키-non-ascii")
+    assert exc_info.value.status_code == 401  # nosec B101
+
+
+def test_portable_mlflow3_model_id_fallback(tmp_path, monkeypatch):
+    """Verifies _load_xgboost_model_portable resolves MLflow 3 models:/m-<id> sources under /app/mlruns."""
+    artifact_dir = tmp_path / "1" / "models" / "m-abc123" / "artifacts"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "MLmodel").write_text("model_uuid: test", encoding="utf-8")
+
+    mock_client = MagicMock()
+    mock_mv = MagicMock()
+    mock_mv.storage_location = "file:///host/mlruns/1/models/m-abc123/artifacts"
+    mock_mv.source = "models:/m-abc123"
+    mock_mv.run_id = "run_999"
+    mock_client.get_model_version.return_value = mock_mv
+
+    calls = []
+
+    def fake_load(uri):
+        calls.append(uri)
+        if uri.startswith("models:/"):
+            raise OSError("Host path missing inside container")
+        return "LOADED_FROM_CONTAINER_MLRUNS"
+
+    monkeypatch.setattr("src.inference.main.mlflow.xgboost.load_model", fake_load)
+    monkeypatch.setattr(
+        "src.inference.main.Path",
+        lambda p: tmp_path if p == "/app/mlruns" else Path(p),
+    )
+    res = main._load_xgboost_model_portable(
+        mock_client, "fraud_detection_xgb", "models:/fraud_detection_xgb/1", 1
+    )
+    assert res == "LOADED_FROM_CONTAINER_MLRUNS"  # nosec B101

@@ -19,7 +19,7 @@ The pipeline enforces automated checks across evaluation (`src/evaluation/evalua
 | Check Layer | Metric / Indicator | Implemented Threshold | Pipeline Behavior in Code |
 | --- | --- | --- | --- |
 | **Holdout Performance** | Test ROC-AUC (`evaluate.py`) | $\text{ROC-AUC} \ge 0.70$ | Sets `minimum_performance_passed = True`; exits non-zero if breached. |
-| **Holdout & Live Fairness** | Disparate Impact Ratio (`Age < 30` vs. `Age >= 30`) | $0.80 \le \text{DI} \le 1.25$ | Reports `COMPLIANT` within bounds, `NON-COMPLIANT (BREACH)` outside bounds, or `INCONCLUSIVE (INSUFFICIENT_DATA)` when cohort/baseline counts are zero. |
+| **Holdout & Live Fairness** | Disparate Impact Ratio (`Age < 30` vs. `Age >= 30`) | $0.80 \le \text{DI} \le 1.25$ | Reports `COMPLIANT` within bounds, `NON-COMPLIANT (BREACH)` outside bounds, or `INCONCLUSIVE (INSUFFICIENT_DATA)` when cohort counts are below `min_cohort_size = 30` or baseline approval rates are zero. |
 | **Population Drift** | Population Stability Index (`drift_check.py`) | $\text{PSI} < 0.10$ (`STABLE`), $0.10 \le \text{PSI} < 0.25$ (`MODERATE_SHIFT`), $\text{PSI} \ge 0.25$ (`SEVERE_DRIFT`) | Evaluates `CreditScore`, `Income`, `LoanAmount`, and `DTIRatio`; exits non-zero when `--fail-on-drift` or `--simulate-drift` detects severe drift. |
 | **Operational Resilience** | Consecutive Inference Exceptions (`dora_circuit_breaker.py`) | $\ge 3$ failures (`recovery_timeout_s = 30.0`) | Trips `MLSystemCircuitBreaker` to `OPEN`, returning `HTTP 503` with single-probe `HALF_OPEN` recovery locking. |
 
