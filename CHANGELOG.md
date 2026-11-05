@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.3...v0.5.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* **governance:** harden P3 batch fault isolation, SHA-256 verification, and MLflow 3 container resolution ([#139](https://github.com/SatyaIFD/mlops-governance-reference/issues/139)) ([2af1125](https://github.com/SatyaIFD/mlops-governance-reference/commit/2af112551119d43d0742f17b2b3b254946b116d9))
+
 ## [0.5.3](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.2...v0.5.3) (2026-11-04)
 
 
