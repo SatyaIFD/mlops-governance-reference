@@ -89,7 +89,9 @@ def run_traffic_simulation(
     mode: str = "representative",
 ) -> int:
     api_key = os.getenv("EXPECTED_API_KEY", "")
-    headers = {"X-API-Key": api_key} if api_key else {}
+    headers = {"X-Traffic-Source": f"synthetic_{mode}_simulation"}
+    if api_key:
+        headers["X-API-Key"] = api_key
 
     print(
         f"🚀 Booting {mode.upper()} traffic simulation stream ({count} requests) -> {url}"
