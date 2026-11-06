@@ -40,7 +40,7 @@ test:
 
 security:
 	@echo "Running Bandit SAST security scan..."
-	bandit -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
+	bandit -c pyproject.toml -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
 
 inspect-mlflow:
 	@python -c 'import sqlite3, os; db="mlflow.db"; \

@@ -135,7 +135,8 @@ def test_portable_mlflow3_model_id_fallback(tmp_path, monkeypatch):
         "src.inference.main.Path",
         lambda p: tmp_path if p == "/app/mlruns" else Path(p),
     )
-    res = main._load_xgboost_model_portable(
+    loaded_mod, resolved_src = main._load_xgboost_model_portable(
         mock_client, "fraud_detection_xgb", "models:/fraud_detection_xgb/1", 1
     )
-    assert res == "LOADED_FROM_CONTAINER_MLRUNS"  # nosec B101
+    assert loaded_mod == "LOADED_FROM_CONTAINER_MLRUNS"  # nosec B101
+    assert "m-abc123" in resolved_src  # nosec B101

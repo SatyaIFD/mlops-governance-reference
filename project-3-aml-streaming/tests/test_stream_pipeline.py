@@ -286,3 +286,60 @@ def test_end_to_end_pipeline_on_synthetic_csv(tmp_path, monkeypatch):
         else 0
     )
     assert alert_lines == summary["streaming_performance"]["anomalies_flagged"]  # nosec B101
+
+
+def test_batch_scoring_fallback_does_not_double_count(tmp_path, monkeypatch):
+    """Forces score_batch to raise and verifies per-item fallback scores each event exactly once."""
+    from src.streaming.generator import _write_synthetic_saml_fallback
+    from src.streaming.pipeline import run_production_stream_pipeline
+
+    csv_path = tmp_path / "SAML-D.csv"
+    _write_synthetic_saml_fallback(csv_path, num_rows=50)
+
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9250.0, 10.0, 9250.0, 120.0, 9250.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0, 0.05, 0.92],
+            "is_structuring": [0, 1, 0, 1, 0, 1],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0, 1.1, 9.5],
+            "fan_out_count_24h": [1, 8, 1, 14, 2, 6],
+            "receiver_inflow_count_1h": [1, 5, 1, 15, 1, 7],
+            "receiver_inflow_amount_1h": [
+                50.0,
+                45000.0,
+                10.0,
+                150000.0,
+                120.0,
+                62000.0,
+            ],
+            "Is_laundering": [0, 1, 0, 1, 0, 1],
+        }
+    )
+    model_path = tmp_path / "aml_streaming_model"
+    det = AMLAnomalyDetector(threshold=0.50)
+    det.train(df)
+    det.save(model_path, mlflow_run_id="test_fallback_run")
+
+    monkeypatch.setattr(
+        "src.streaming.pipeline.resolve_runtime_paths",
+        lambda: (
+            csv_path,
+            tmp_path / "dlq",
+            tmp_path / "pipeline_execution_report.json",
+            model_path,
+        ),
+    )
+    monkeypatch.setattr(
+        AMLAnomalyDetector,
+        "score_batch",
+        lambda self, batch: (_ for _ in ()).throw(
+            RuntimeError("Simulated batch failure")
+        ),
+    )
+
+    summary = run_production_stream_pipeline(
+        max_events=30, delay_seconds=0.0, warmup_events=10
+    )
+    assert summary["streaming_performance"]["total_processed"] == 30  # nosec B101
+    assert summary["data_governance"]["clean_events"] == 40  # nosec B101
+    assert summary["data_governance"]["dlq_events"] == 0  # nosec B101

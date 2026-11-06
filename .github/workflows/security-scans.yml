@@ -22,7 +22,7 @@ jobs:
         run: pip install bandit
 
       - name: Run Bandit Security Scan
-        run: bandit -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
+        run: bandit -c pyproject.toml -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
 
   container-scan:
     name: Container Vulnerability Scan (Trivy)
