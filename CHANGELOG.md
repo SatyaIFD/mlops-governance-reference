@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.5...v0.5.6) (2026-11-06)
+
+
+### Bug Fixes
+
+* **governance:** atomic p3 alert recording, mandatory meta verification, and separated p2 fairness blocks ([#143](https://github.com/SatyaIFD/mlops-governance-reference/issues/143)) ([9fe0fc9](https://github.com/SatyaIFD/mlops-governance-reference/commit/9fe0fc9760b7af774efedb1a34782030f4ef5c7f))
+
 ## [0.5.5](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.4...v0.5.5) (2026-11-06)
 
 
