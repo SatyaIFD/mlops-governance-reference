@@ -95,7 +95,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    restart: on-failure
+    restart: "no"
 
   airflow-standalone:
     image: apache/airflow:2.10.2
@@ -112,6 +112,8 @@ services:
       - ./project-2-loan-default/artifacts:/opt/airflow/project-2-loan-default/artifacts
       - ./project-2-loan-default/docs:/opt/airflow/project-2-loan-default/docs
     environment:
+      - HOME=/opt/airflow
+      - PYTHONUSERBASE=/opt/airflow/.local
       - UMASK=0002
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor

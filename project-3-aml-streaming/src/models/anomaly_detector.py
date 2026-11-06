@@ -53,21 +53,23 @@ class AMLAnomalyDetector:
     ) -> pd.DataFrame:
         active_cols = self._get_active_feature_cols()
         if isinstance(df_or_dict, dict):
-            row = {col: [float(df_or_dict.get(col, 0.0))] for col in active_cols}
+            missing = [col for col in active_cols if col not in df_or_dict]
+            if missing:
+                raise KeyError(f"Missing required AML features: {missing}")
+            row = {col: [float(df_or_dict[col])] for col in active_cols}
             return pd.DataFrame(row, columns=active_cols)
         if isinstance(df_or_dict, list):
-            return pd.DataFrame(
-                [
-                    [float(item.get(col, 0.0)) for col in active_cols]
-                    for item in df_or_dict
-                ],
-                columns=active_cols,
-            )
-        aligned = df_or_dict.copy()
-        for col in active_cols:
-            if col not in aligned.columns:
-                aligned[col] = 0.0
-        return aligned[active_cols]
+            rows = []
+            for item in df_or_dict:
+                missing = [col for col in active_cols if col not in item]
+                if missing:
+                    raise KeyError(f"Missing required AML features: {missing}")
+                rows.append([float(item[col]) for col in active_cols])
+            return pd.DataFrame(rows, columns=active_cols)
+        missing = [col for col in active_cols if col not in df_or_dict.columns]
+        if missing:
+            raise KeyError(f"Missing required AML features: {missing}")
+        return df_or_dict[active_cols].copy()
 
     def train(self, df: pd.DataFrame) -> None:
         X = self._align_features(df)
@@ -121,28 +123,33 @@ class AMLAnomalyDetector:
             if not isinstance(artifact_path, Path)
             else artifact_path
         )
+        meta_path = self._meta_path_for(target)
+        if not meta_path.is_file():
+            raise FileNotFoundError(
+                f"Required model metadata sidecar missing: {meta_path}"
+            )
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        if "threshold" not in meta:
+            raise ValueError(f"Missing 'threshold' key in {meta_path}")
+        expected_sha256 = meta.get("sha256")
+        if not expected_sha256:
+            raise ValueError(f"Missing 'sha256' integrity digest in {meta_path}")
+
         actual_sha256 = self._compute_sha256(target)
+        if expected_sha256 != actual_sha256:
+            raise ValueError(
+                f"Model SHA-256 mismatch for {target}: expected {expected_sha256}, got {actual_sha256}"
+            )
+
         self.model = sio.load(
             target,
             trusted=TRUSTED_SKOPS_TYPES,
         )
         if hasattr(self.model, "n_jobs"):
             self.model.n_jobs = 1
-        meta_path = self._meta_path_for(target)
-        if meta_path.is_file():
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-            if "threshold" not in meta:
-                raise ValueError(f"Missing 'threshold' key in {meta_path}")
-            expected_sha256 = meta.get("sha256")
-            if expected_sha256 and expected_sha256 != actual_sha256:
-                raise ValueError(
-                    f"Model SHA-256 mismatch for {target}: expected {expected_sha256}, got {actual_sha256}"
-                )
-            self.threshold = float(meta["threshold"])
-            if "feature_cols" in meta and isinstance(meta["feature_cols"], list):
-                self.feature_cols = [str(c) for c in meta["feature_cols"]]
-            self.model_sha256 = actual_sha256
-            self.mlflow_run_id = meta.get("mlflow_run_id")
-        else:
-            self.model_sha256 = actual_sha256
+        self.threshold = float(meta["threshold"])
+        if "feature_cols" in meta and isinstance(meta["feature_cols"], list):
+            self.feature_cols = [str(c) for c in meta["feature_cols"]]
+        self.model_sha256 = actual_sha256
+        self.mlflow_run_id = meta.get("mlflow_run_id")

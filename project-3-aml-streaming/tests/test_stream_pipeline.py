@@ -343,3 +343,98 @@ def test_batch_scoring_fallback_does_not_double_count(tmp_path, monkeypatch):
     assert summary["streaming_performance"]["total_processed"] == 30  # nosec B101
     assert summary["data_governance"]["clean_events"] == 40  # nosec B101
     assert summary["data_governance"]["dlq_events"] == 0  # nosec B101
+
+
+def test_anomaly_detector_requires_meta_file_and_all_features(tmp_path):
+    """Verifies load() fails if .meta.json is deleted and score_transaction() fails if a feature is missing."""
+    import pytest
+
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9500.0, 10.0, 25000.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0],
+            "is_structuring": [0, 1, 0, 0],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0],
+            "fan_out_count_24h": [1, 8, 1, 14],
+            "receiver_inflow_count_1h": [1, 5, 1, 15],
+            "receiver_inflow_amount_1h": [50.0, 45000.0, 10.0, 150000.0],
+            "Is_laundering": [0, 1, 0, 1],
+        }
+    )
+    artifact_file = tmp_path / "aml_streaming_model"
+    det = AMLAnomalyDetector(threshold=0.55)
+    det.train(df)
+    det.save(artifact_file)
+
+    with pytest.raises(KeyError, match="Missing required AML features"):
+        det.score_transaction({"Amount": 100.0})
+
+    (tmp_path / "aml_streaming_model.meta.json").unlink()
+    with pytest.raises(
+        FileNotFoundError, match="Required model metadata sidecar missing"
+    ):
+        AMLAnomalyDetector().load(artifact_file)
+
+
+def test_recording_failure_routes_to_dlq_without_incrementing_processed_count(
+    tmp_path, monkeypatch
+):
+    """Verifies that a bad label during _record_scored_item routes to DLQ and is not counted in total_processed."""
+    import csv
+    from src.streaming.generator import _write_synthetic_saml_fallback
+    from src.streaming.pipeline import run_production_stream_pipeline
+
+    csv_path = tmp_path / "SAML-D.csv"
+    _write_synthetic_saml_fallback(csv_path, num_rows=25)
+
+    # Corrupt Is_laundering on the very last row so _record_scored_item raises ValueError
+    with open(csv_path, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+        fieldnames = list(rows[0].keys())
+    rows[-1]["Is_laundering"] = "CORRUPT_LABEL"
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9250.0, 10.0, 9250.0, 120.0, 9250.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0, 0.05, 0.92],
+            "is_structuring": [0, 1, 0, 1, 0, 1],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0, 1.1, 9.5],
+            "fan_out_count_24h": [1, 8, 1, 14, 2, 6],
+            "receiver_inflow_count_1h": [1, 5, 1, 15, 1, 7],
+            "receiver_inflow_amount_1h": [
+                50.0,
+                45000.0,
+                10.0,
+                150000.0,
+                120.0,
+                62000.0,
+            ],
+            "Is_laundering": [0, 1, 0, 1, 0, 1],
+        }
+    )
+    model_path = tmp_path / "aml_streaming_model"
+    det = AMLAnomalyDetector(threshold=0.50)
+    det.train(df)
+    det.save(model_path, mlflow_run_id="test_rec_fail")
+
+    monkeypatch.setattr(
+        "src.streaming.pipeline.resolve_runtime_paths",
+        lambda: (
+            csv_path,
+            tmp_path / "dlq",
+            tmp_path / "pipeline_execution_report.json",
+            model_path,
+        ),
+    )
+
+    summary = run_production_stream_pipeline(
+        max_events=15, delay_seconds=0.0, warmup_events=10
+    )
+    assert summary["status"] == "COMPLETE"  # nosec B101
+    assert summary["streaming_performance"]["total_processed"] == 14  # nosec B101
+    assert summary["data_governance"]["dlq_events"] == 1  # nosec B101
+    assert summary["data_governance"]["clean_events"] == 24  # nosec B101

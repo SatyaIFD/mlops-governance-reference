@@ -50,7 +50,7 @@ sudo docker compose up -d
 * Project 2 (Loan) Swagger UI: `http://localhost/api/v1/loan/docs`
 
 
-* **Headless AML Streaming Worker:** Runs continuously in `mlops-aml-streaming`, writing execution reports and DLQ JSONL records to `project-3-aml-streaming/artifacts/`.
+* **Headless AML Streaming Worker:** Executes a bounded 200,000-event out-of-sample streaming pass (`AML_DAEMON_MODE=0`, or continuous passes when `AML_DAEMON_MODE=1`) in `mlops-aml-streaming`, writing execution reports, alerts, and DLQ JSONL records to `project-3-aml-streaming/artifacts/`.
 * **MLflow Tracking UI:** Accessible at `http://localhost:5000`.
 
 ### 3. Local Development & Verification

@@ -69,7 +69,7 @@ def _validate_loaded_model_schema(loaded_model) -> None:
     elif hasattr(loaded_model, "feature_names_in_"):
         model_features = list(loaded_model.feature_names_in_)
 
-    if model_features is not None and list(model_features) != EXPECTED_FEATURE_NAMES:
+    if not model_features or list(model_features) != EXPECTED_FEATURE_NAMES:
         raise ValueError(
             f"Loaded model feature schema mismatch. Expected {EXPECTED_FEATURE_NAMES}, got {model_features}"
         )

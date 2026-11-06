@@ -124,11 +124,14 @@ def test_portable_mlflow3_model_id_fallback(tmp_path, monkeypatch):
 
     calls = []
 
+    valid_mock = MagicMock()
+    valid_mock.get_booster.return_value.feature_names = main.EXPECTED_FEATURE_NAMES
+
     def fake_load(uri):
         calls.append(uri)
         if uri.startswith("models:/"):
             raise OSError("Host path missing inside container")
-        return "LOADED_FROM_CONTAINER_MLRUNS"
+        return valid_mock
 
     monkeypatch.setattr("src.inference.main.mlflow.xgboost.load_model", fake_load)
     monkeypatch.setattr(
@@ -138,5 +141,5 @@ def test_portable_mlflow3_model_id_fallback(tmp_path, monkeypatch):
     loaded_mod, resolved_src = main._load_xgboost_model_portable(
         mock_client, "fraud_detection_xgb", "models:/fraud_detection_xgb/1", 1
     )
-    assert loaded_mod == "LOADED_FROM_CONTAINER_MLRUNS"  # nosec B101
+    assert loaded_mod is valid_mock  # nosec B101
     assert "m-abc123" in resolved_src  # nosec B101
