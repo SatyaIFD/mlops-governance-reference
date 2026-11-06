@@ -40,12 +40,12 @@ with DAG(
 
     audit_fairness = BashOperator(
         task_id="audit_fairness_metrics",
-        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py",
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py --fail-on-breach",
     )
 
     check_data_drift = BashOperator(
         task_id="check_population_data_drift",
-        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/validation/drift_check.py",
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/validation/drift_check.py --fail-on-drift",
     )
 
     compile_model_card = BashOperator(

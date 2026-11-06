@@ -18,11 +18,11 @@ This document specifies the operational SLAs, Service Level Objectives (SLOs), a
 
 ## 📈 Telemetry & Health Monitoring
 
-The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) with `status: "IN_PROGRESS" | "COMPLETE"` tracking out-of-sample session statistics (at ~0.12% base laundering prevalence, `0.47%` alert precision corresponds to ~213 alerts per true positive across `6,172` flagged events):
+The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) with lifecycle `status` values (`"IN_PROGRESS"`, `"COMPLETE"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, or `"FAILED"`) and heartbeat states (`"WARMING_UP"`, `"HEALTHY"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, `"FAILED"`). At ~0.12% base laundering prevalence, `0.47%` alert precision corresponds to ~213 alerts per true positive across `6,172` flagged events:
 
 ```json
 {
-  "execution_timestamp_utc": "2026-11-05T08:51:02.651761+00:00",
+  "execution_timestamp_utc": "2026-11-06T06:33:40.216812+00:00",
   "status": "COMPLETE",
   "data_governance": {
     "total_ingested": 200000,

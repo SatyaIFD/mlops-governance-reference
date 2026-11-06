@@ -22,6 +22,7 @@ class ModelObservabilityLogger:
         response_data: dict[str, Any],
         latency_ms: float,
         status_code: int = 200,
+        traffic_source: str = "live_production_traffic",
     ):
         """Appends a structured transaction record to the production system telemetry log."""
         gov = response_data.get("governance", {})
@@ -43,6 +44,7 @@ class ModelObservabilityLogger:
 
         telemetry_entry = {
             "schema_version": TELEMETRY_SCHEMA_VERSION,
+            "traffic_source": traffic_source,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
             "status_code": status_code,
             "latency_ms": round(latency_ms, 2),

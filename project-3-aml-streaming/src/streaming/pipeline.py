@@ -296,9 +296,35 @@ def run_production_stream_pipeline(
         os.replace(tmp_alerts_path, alerts_path)
 
     except KeyboardInterrupt:
+        _write_heartbeat(artifacts_dir, processed_count, status="INTERRUPTED")
+        _write_report(
+            report_path,
+            ingestor.get_data_quality_report(),
+            model_path,
+            detector,
+            warmup_count,
+            processed_count,
+            anomaly_count,
+            actual_laundering,
+            laundering_intercepted,
+            status="INTERRUPTED",
+        )
         print("\n🛑 Pipeline gracefully terminated by user.")
-        sys.exit(0)
+        sys.exit(130)
     except Exception as fatal_err:
+        _write_heartbeat(artifacts_dir, processed_count, status="FAILED")
+        _write_report(
+            report_path,
+            ingestor.get_data_quality_report(),
+            model_path,
+            detector,
+            warmup_count,
+            processed_count,
+            anomaly_count,
+            actual_laundering,
+            laundering_intercepted,
+            status="FAILED",
+        )
         print(f"\n❌ Stream fatally interrupted: {fatal_err}")
         sys.exit(1)
 

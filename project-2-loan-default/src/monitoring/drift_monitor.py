@@ -1,12 +1,14 @@
 """
 Real-Time Fairness & Recommendation Disparity Monitor - Project 2: Loan Default Prediction
 Evaluates live telemetry logs across protected (<30) and baseline (>=30) age cohorts.
-Preserves holdout evaluation metrics under fairness_metrics / holdout_fairness_metrics
-while recording live telemetry fairness under live_telemetry_fairness with 95% CI.
+Preserves holdout evaluation metrics strictly under fairness_metrics / holdout_fairness_metrics
+while recording live telemetry fairness under live_telemetry_fairness with 95% CI gating.
 """
 
+import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -27,11 +29,22 @@ def _compute_di_95_ci(
     return [low, high]
 
 
+def _infer_telemetry_source(records: list[dict]) -> str:
+    sources = {
+        str(r.get("traffic_source")).strip() for r in records if r.get("traffic_source")
+    }
+    if not sources:
+        return "unlabeled_telemetry_logs"
+    if len(sources) == 1:
+        return next(iter(sources))
+    return "mixed_telemetry_sources"
+
+
 def run_production_audit(
     log_path: Path | None = None,
     report_path: Path | None = None,
     min_cohort_size: int = 30,
-    data_source: str = "synthetic_traffic_simulation",
+    fail_on_breach: bool = False,
 ) -> dict:
     print("🕵️‍♂️ Initializing real-time governance & recommendation parity scanner...")
 
@@ -50,7 +63,7 @@ def run_production_audit(
         except Exception:
             existing_report = {}
 
-    # Restore or preserve holdout fairness_metrics so live telemetry never overwrites holdout metrics
+    # Keep holdout fairness_metrics strictly separate from live telemetry fairness
     if "holdout_fairness_metrics" in existing_report:
         existing_report["fairness_metrics"] = existing_report[
             "holdout_fairness_metrics"
@@ -58,15 +71,16 @@ def run_production_audit(
     elif (
         "fairness_metrics" in existing_report
         and "protected_cohort_count" not in existing_report["fairness_metrics"]
+        and "data_source" not in existing_report["fairness_metrics"]
     ):
         existing_report["holdout_fairness_metrics"] = existing_report[
             "fairness_metrics"
         ].copy()
+    else:
+        existing_report.pop("fairness_metrics", None)
 
     def _save_with_live_block(block: dict) -> dict:
         existing_report["live_telemetry_fairness"] = block
-        if "fairness_metrics" not in existing_report:
-            existing_report["fairness_metrics"] = block
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(existing_report, f, indent=4)
@@ -76,7 +90,7 @@ def run_production_audit(
         print(f"⚠️ Telemetry log ledger not found at: {log_path}")
         return _save_with_live_block(
             {
-                "data_source": data_source,
+                "data_source": "none",
                 "demographic_parity_status": "UNKNOWN (NO_TELEMETRY)",
                 "disparate_impact_ratio": None,
                 "di_95_ci": None,
@@ -96,7 +110,7 @@ def run_production_audit(
         print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")
         return _save_with_live_block(
             {
-                "data_source": data_source,
+                "data_source": "none",
                 "demographic_parity_status": "INCONCLUSIVE (INSUFFICIENT_DATA)",
                 "disparate_impact_ratio": None,
                 "di_95_ci": None,
@@ -104,6 +118,7 @@ def run_production_audit(
             }
         )
 
+    detected_source = _infer_telemetry_source(records)
     df = pd.DataFrame(records)
     payloads = pd.json_normalize(df["payload_snapshot"])
     outputs = pd.json_normalize(df["inference_output"])
@@ -112,7 +127,7 @@ def run_production_audit(
     if "Age" not in audit_df.columns:
         return _save_with_live_block(
             {
-                "data_source": data_source,
+                "data_source": detected_source,
                 "demographic_parity_status": "INCONCLUSIVE (MISSING_COHORT_FIELD)",
                 "disparate_impact_ratio": None,
                 "di_95_ci": None,
@@ -128,7 +143,7 @@ def run_production_audit(
     if decision_col not in audit_df.columns:
         return _save_with_live_block(
             {
-                "data_source": data_source,
+                "data_source": detected_source,
                 "demographic_parity_status": "INCONCLUSIVE (MISSING_DECISION_FIELD)",
                 "disparate_impact_ratio": None,
                 "di_95_ci": None,
@@ -166,13 +181,17 @@ def run_production_audit(
         di_ratio = None
     else:
         di_ratio = round(approval_protected / approval_baseline, 4)
-        if 0.80 <= di_ratio <= 1.25:
+        if ci_bounds is None:
+            fairness_status = "INCONCLUSIVE (INSUFFICIENT_DATA)"
+        elif ci_bounds[0] >= 0.80 and ci_bounds[1] <= 1.25:
             fairness_status = "COMPLIANT"
-        else:
+        elif ci_bounds[1] < 0.80 or ci_bounds[0] > 1.25:
             fairness_status = "NON-COMPLIANT (BREACH)"
+        else:
+            fairness_status = "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)"
 
     live_block = {
-        "data_source": data_source,
+        "data_source": detected_source,
         "demographic_parity_status": fairness_status,
         "disparate_impact_ratio": di_ratio,
         "di_95_ci": ci_bounds,
@@ -188,10 +207,21 @@ def run_production_audit(
     }
 
     print(
-        f"⚖️ Live Fairness ({data_source}): {fairness_status} | DI: {di_ratio} | 95% CI: {ci_bounds}"
+        f"⚖️ Live Fairness ({detected_source}): {fairness_status} | DI: {di_ratio} | 95% CI: {ci_bounds}"
     )
-    return _save_with_live_block(live_block)
+    saved = _save_with_live_block(live_block)
+    if fail_on_breach and fairness_status == "NON-COMPLIANT (BREACH)":
+        print("🚨 Live demographic parity breach confirmed outside 95% CI bounds.")
+        sys.exit(1)
+    return saved
 
 
 if __name__ == "__main__":
-    run_production_audit()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--fail-on-breach",
+        action="store_true",
+        help="Exit non-zero if the 95% CI confirms a demographic parity breach.",
+    )
+    args = parser.parse_args()
+    run_production_audit(fail_on_breach=args.fail_on_breach)

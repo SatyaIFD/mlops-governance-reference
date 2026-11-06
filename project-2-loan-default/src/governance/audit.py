@@ -39,7 +39,9 @@ def compile_compliance_audit():
     )
     perf_block = eval_data.get("performance_metrics", eval_data.get("metrics", {}))
 
-    fairness_status = holdout_fairness.get("demographic_parity_status", "UNKNOWN")
+    fairness_status = holdout_fairness.get(
+        "demographic_parity_status", "UNKNOWN (NO_HOLDOUT_EVALUATION)"
+    )
     disparate_impact_ratio = holdout_fairness.get("disparate_impact_ratio", "N/A")
 
     test_auc = perf_block.get("test_roc_auc", perf_block.get("roc_auc", "N/A"))

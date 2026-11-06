@@ -316,7 +316,7 @@ def health_check():
 
 
 @app.post("/predict", tags=["Inference"], dependencies=[Depends(verify_api_key)])
-def predict_loan_risk(payload: LoanApplicationPayload):
+def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
     if model is None:
         raise HTTPException(status_code=503, detail="Model is uninitialized.")
 
@@ -369,11 +369,15 @@ def predict_loan_risk(payload: LoanApplicationPayload):
             )
         )
         obs_logger = ModelObservabilityLogger(telemetry_log_path=log_path)
+        raw_src = request.headers.get(
+            "X-Traffic-Source", "live_production_traffic"
+        ).strip()
         obs_logger.log_inference_transaction(
             request_payload=payload_dict,
             response_data=response_body,
             latency_ms=latency_ms,
             status_code=200,
+            traffic_source=raw_src or "live_production_traffic",
         )
     except Exception as log_err:
         print(f"⚠️ Telemetry logging warning: {log_err}", flush=True)
