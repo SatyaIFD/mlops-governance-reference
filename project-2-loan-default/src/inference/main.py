@@ -28,6 +28,34 @@ from compliance.eu_ai_act_hitl_router import enforce_human_in_the_loop
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+EXPECTED_LOAN_FEATURES = [
+    "Age",
+    "Income",
+    "LoanAmount",
+    "CreditScore",
+    "MonthsEmployed",
+    "NumCreditLines",
+    "InterestRate",
+    "LoanTerm",
+    "DTIRatio",
+    "is_young",
+    "Education_High School",
+    "Education_Master's",
+    "Education_PhD",
+    "EmploymentType_Part-time",
+    "EmploymentType_Self-employed",
+    "EmploymentType_Unemployed",
+    "MaritalStatus_Married",
+    "MaritalStatus_Single",
+    "HasMortgage_Yes",
+    "HasDependents_Yes",
+    "LoanPurpose_Business",
+    "LoanPurpose_Education",
+    "LoanPurpose_Home",
+    "LoanPurpose_Other",
+    "HasCoSigner_Yes",
+]
+
 model = None
 feature_columns = None
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
@@ -68,12 +96,25 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
+def _validate_loaded_model_schema(loaded_model) -> list[str]:
+    """Verifies that the loaded model's feature set matches the 25 canonical loan features."""
+    cols = _extract_feature_columns(loaded_model)
+    if cols is not None and (
+        set(cols) != set(EXPECTED_LOAN_FEATURES)
+        or len(cols) != len(EXPECTED_LOAN_FEATURES)
+    ):
+        raise ValueError(
+            f"Loaded model feature schema mismatch. Expected {EXPECTED_LOAN_FEATURES}, got {cols}"
+        )
+    return cols or list(EXPECTED_LOAN_FEATURES)
+
+
 def _load_xgboost_model_portable(
     client: MlflowClient, model_name: str, model_uri: str, version_num: int
-):
-    """Loads XGBoost model from MLflow URI with recursive MLmodel discovery across container mounts."""
+) -> tuple[Any, str]:
+    """Loads XGBoost model from MLflow URI, falling back strictly to token-matched container paths."""
     try:
-        return mlflow.xgboost.load_model(model_uri)
+        return mlflow.xgboost.load_model(model_uri), model_uri
     except Exception:
         mv = client.get_model_version(model_name, str(version_num))
         tokens = []
@@ -91,29 +132,32 @@ def _load_xgboost_model_portable(
             tokens.append(mv.run_id)
 
         mlruns_root = Path("/app/mlruns")
-        if mlruns_root.exists():
-            all_mlmodels = list(mlruns_root.rglob("MLmodel"))
-            prioritized = [
-                p.parent
-                for p in all_mlmodels
-                if any(tok and tok in str(p) for tok in tokens)
-            ]
+        if mlruns_root.exists() and tokens:
+            matched_dirs = []
+            for p in mlruns_root.rglob("MLmodel"):
+                meta_txt = p.read_text(encoding="utf-8", errors="ignore")
+                if any(tok and (tok in str(p) or tok in meta_txt) for tok in tokens):
+                    matched_dirs.append(p.parent)
             last_err = None
-            for cand_dir in prioritized + [p.parent for p in all_mlmodels]:
+            for cand_dir in matched_dirs:
                 try:
-                    return mlflow.xgboost.load_model(str(cand_dir))
+                    cand_model = mlflow.xgboost.load_model(str(cand_dir))
+                    _validate_loaded_model_schema(cand_model)
+                    return cand_model, str(cand_dir)
                 except Exception as err:
                     last_err = err
             if last_err is not None:
                 raise last_err
-        raise
+        raise FileNotFoundError(
+            f"No token-matched MLmodel artifact found under {mlruns_root} for {model_name} v{version_num} (tokens={tokens})"
+        )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles microservice startup and teardown routines."""
     global model, feature_columns
-    print("🚀 Initializing inference context...")
+    print("🚀 Initializing inference context...", flush=True)
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
@@ -138,17 +182,22 @@ async def lifespan(app: FastAPI):
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
         target_ver = latest_version if (prod_versions or versions) else 1
-        loaded = _load_xgboost_model_portable(client, model_name, model_uri, target_ver)
-        feature_columns = _extract_feature_columns(loaded)
+        loaded, resolved_src = _load_xgboost_model_portable(
+            client, model_name, model_uri, target_ver
+        )
+        feature_columns = _validate_loaded_model_schema(loaded)
         model = loaded
-        print(f"🟢 Production model loaded successfully via URI: {model_uri}")
+        print(
+            f"🟢 Production model loaded and verified via URI: {model_uri} (source={resolved_src})",
+            flush=True,
+        )
     except Exception as reg_err:
-        print(f"⚠️ Registry URI load failed ({reg_err}).")
+        print(f"⚠️ Registry URI load failed ({reg_err}).", flush=True)
         model = None
         feature_columns = None
 
     yield
-    print("🛑 Microservice context tearing down...")
+    print("🛑 Microservice context tearing down...", flush=True)
 
 
 app = FastAPI(
@@ -317,6 +366,6 @@ def predict_loan_risk(payload: LoanApplicationPayload):
             status_code=200,
         )
     except Exception as log_err:
-        print(f"⚠️ Telemetry logging warning: {log_err}")
+        print(f"⚠️ Telemetry logging warning: {log_err}", flush=True)
 
     return response_body

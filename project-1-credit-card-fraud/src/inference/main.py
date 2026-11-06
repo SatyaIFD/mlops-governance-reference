@@ -77,10 +77,10 @@ def _validate_loaded_model_schema(loaded_model) -> None:
 
 def _load_xgboost_model_portable(
     client: MlflowClient, model_name: str, model_uri: str, version_num: int
-):
-    """Loads XGBoost model from MLflow URI with recursive MLmodel discovery across container mounts."""
+) -> tuple[Any, str]:
+    """Loads XGBoost model from MLflow URI, falling back strictly to token-matched container paths."""
     try:
-        return mlflow.xgboost.load_model(model_uri)
+        return mlflow.xgboost.load_model(model_uri), model_uri
     except Exception:
         mv = client.get_model_version(model_name, str(version_num))
         tokens = []
@@ -98,22 +98,25 @@ def _load_xgboost_model_portable(
             tokens.append(mv.run_id)
 
         mlruns_root = Path("/app/mlruns")
-        if mlruns_root.exists():
-            all_mlmodels = list(mlruns_root.rglob("MLmodel"))
-            prioritized = [
-                p.parent
-                for p in all_mlmodels
-                if any(tok and tok in str(p) for tok in tokens)
-            ]
+        if mlruns_root.exists() and tokens:
+            matched_dirs = []
+            for p in mlruns_root.rglob("MLmodel"):
+                meta_txt = p.read_text(encoding="utf-8", errors="ignore")
+                if any(tok and (tok in str(p) or tok in meta_txt) for tok in tokens):
+                    matched_dirs.append(p.parent)
             last_err = None
-            for cand_dir in prioritized + [p.parent for p in all_mlmodels]:
+            for cand_dir in matched_dirs:
                 try:
-                    return mlflow.xgboost.load_model(str(cand_dir))
+                    cand_model = mlflow.xgboost.load_model(str(cand_dir))
+                    _validate_loaded_model_schema(cand_model)
+                    return cand_model, str(cand_dir)
                 except Exception as err:
                     last_err = err
             if last_err is not None:
                 raise last_err
-        raise
+        raise FileNotFoundError(
+            f"No token-matched MLmodel artifact found under {mlruns_root} for {model_name} v{version_num} (tokens={tokens})"
+        )
 
 
 @asynccontextmanager
@@ -145,16 +148,24 @@ async def lifespan(app: FastAPI):
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
         target_ver = latest_version if (prod_versions or versions) else 1
-        loaded = _load_xgboost_model_portable(client, model_name, model_uri, target_ver)
+        loaded, resolved_src = _load_xgboost_model_portable(
+            client, model_name, model_uri, target_ver
+        )
         _validate_loaded_model_schema(loaded)
         model = loaded
-        print(f"🟢 Production model loaded and verified via URI: {model_uri}")
+        print(
+            f"🟢 Production model loaded and verified via URI: {model_uri} (source={resolved_src})",
+            flush=True,
+        )
     except Exception as reg_err:
-        print(f"⚠️ Model registry load or schema verification failed ({reg_err}).")
+        print(
+            f"⚠️ Model registry load or schema verification failed ({reg_err}).",
+            flush=True,
+        )
         model = None
 
     yield
-    print("🛑 Microservice context tearing down...")
+    print("🛑 Microservice context tearing down...", flush=True)
 
 
 app = FastAPI(

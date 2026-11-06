@@ -138,9 +138,7 @@ def run_production_stream_pipeline(
     pseudonymize = os.getenv("AML_PSEUDONYMIZE_ACCOUNTS", "1") == "1"
 
     print("🚀 Initializing AML Streaming Pipeline Components...")
-    dlq_file = dlq_dir / "dead_letter_queue.jsonl"
-    if dlq_file.exists():
-        dlq_file.unlink()
+    dlq_dir.mkdir(parents=True, exist_ok=True)
 
     ingestor = StreamingIngestionEngine(
         dlq_output_dir=dlq_dir, pseudonymize_accounts=pseudonymize
@@ -208,19 +206,26 @@ def run_production_stream_pipeline(
             return
         batch_items = list(pending_batch)
         pending_batch.clear()
+        scored_pairs: list[tuple[dict, tuple[float, int]]] = []
         try:
-            scores = detector.score_batch(batch_items)
-            for tx_item, (prob, is_anomaly) in zip(batch_items, scores):
-                _record_scored_item(tx_item, prob, is_anomaly, alert_file)
+            batch_scores = detector.score_batch(batch_items)
+            scored_pairs = list(zip(batch_items, batch_scores))
         except Exception:
             for tx_item in batch_items:
                 try:
-                    prob, is_anomaly = detector.score_transaction(tx_item)
-                    _record_scored_item(tx_item, prob, is_anomaly, alert_file)
+                    res = detector.score_transaction(tx_item)
+                    scored_pairs.append((tx_item, res))
                 except Exception as item_err:
                     ingestor.record_processing_failure(
                         tx_item, [f"ERR_SCORING_FAILURE: {item_err}"]
                     )
+        for tx_item, (prob, is_anomaly) in scored_pairs:
+            try:
+                _record_scored_item(tx_item, prob, is_anomaly, alert_file)
+            except Exception as rec_err:
+                ingestor.record_processing_failure(
+                    tx_item, [f"ERR_RECORDING_FAILURE: {rec_err}"]
+                )
 
     try:
         with open(tmp_alerts_path, "w", encoding="utf-8") as alert_file:
@@ -289,7 +294,8 @@ def run_production_stream_pipeline(
         print(f"\n❌ Stream fatally interrupted: {fatal_err}")
         sys.exit(1)
 
-    _write_heartbeat(artifacts_dir, processed_count)
+    if processed_count > 0:
+        _write_heartbeat(artifacts_dir, processed_count)
     execution_summary = _write_report(
         report_path,
         ingestor.get_data_quality_report(),

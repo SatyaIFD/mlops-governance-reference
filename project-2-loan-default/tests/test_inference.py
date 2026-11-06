@@ -194,3 +194,41 @@ def test_auth_invalid_or_missing_client_key_returns_401(
         "/predict", json=valid_payload, headers={"X-API-Key": "loan-secret-key"}
     )
     assert res_ok.status_code == 200  # nosec B101
+
+
+def test_p2_rejects_wrong_model_schema_and_unmatched_tokens(tmp_path, monkeypatch):
+    """Verifies that P2 rejects a fraud model schema and never loads unmatched MLmodel directories."""
+    wrong_model = MagicMock()
+    wrong_model.get_booster.return_value.feature_names = [
+        f"V{i}" for i in range(1, 29)
+    ] + ["scaled_amount", "scaled_time"]
+    with pytest.raises(ValueError, match="schema mismatch"):
+        p2_main._validate_loaded_model_schema(wrong_model)
+
+    # Create an unrelated MLmodel directory under /app/mlruns that does NOT match m-loan999
+    unrelated_dir = tmp_path / "1" / "models" / "m-fraud000" / "artifacts"
+    unrelated_dir.mkdir(parents=True)
+    (unrelated_dir / "MLmodel").write_text("model_uuid: fraud", encoding="utf-8")
+
+    mock_client = MagicMock()
+    mock_mv = MagicMock()
+    mock_mv.storage_location = "file:///host/mlruns/2/models/m-loan999/artifacts"
+    mock_mv.source = "models:/m-loan999"
+    mock_mv.run_id = "run_loan_999"
+    mock_client.get_model_version.return_value = mock_mv
+
+    monkeypatch.setattr(
+        "src.inference.main.mlflow.xgboost.load_model",
+        lambda uri: (_ for _ in ()).throw(OSError("Host URI missing")),
+    )
+    monkeypatch.setattr(
+        "src.inference.main.Path",
+        lambda p: tmp_path if p == "/app/mlruns" else Path(p),
+    )
+    with pytest.raises(FileNotFoundError, match="No token-matched MLmodel"):
+        p2_main._load_xgboost_model_portable(
+            mock_client,
+            "loan_default_production_model",
+            "models:/loan_default_production_model/1",
+            1,
+        )
