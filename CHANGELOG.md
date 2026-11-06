@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.7](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.6...v0.5.7) (2026-11-06)
+
+
+### Bug Fixes
+
+* **governance:** enforce ci-aware p2 fairness status, dynamic telemetry source tagging, and p3 crash states ([#145](https://github.com/SatyaIFD/mlops-governance-reference/issues/145)) ([3a62b91](https://github.com/SatyaIFD/mlops-governance-reference/commit/3a62b91527bbf92406ead7626849b97c8958478d))
+
 ## [0.5.6](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.5...v0.5.6) (2026-11-06)
 
 
