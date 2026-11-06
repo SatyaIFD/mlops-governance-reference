@@ -56,7 +56,9 @@ def resolve_runtime_paths() -> tuple[Path, Path, Path, Path]:
     return data_path, dlq_dir, report_path, model_path
 
 
-def _write_heartbeat(artifacts_dir: Path, processed_count: int) -> None:
+def _write_heartbeat(
+    artifacts_dir: Path, processed_count: int, status: str = "HEALTHY"
+) -> None:
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     hb_path = artifacts_dir / "heartbeat.json"
     with open(hb_path, "w", encoding="utf-8") as f:
@@ -64,7 +66,7 @@ def _write_heartbeat(artifacts_dir: Path, processed_count: int) -> None:
             {
                 "updated_at_utc": datetime.now(timezone.utc).isoformat(),
                 "processed_count": processed_count,
-                "status": "HEALTHY",
+                "status": status,
             },
             f,
         )
@@ -80,6 +82,7 @@ def _write_report(
     anomaly_count: int,
     actual_laundering: int,
     laundering_intercepted: int,
+    status: str = "COMPLETE",
 ) -> dict:
     recall_pct = (
         round((laundering_intercepted / actual_laundering) * 100.0, 2)
@@ -93,6 +96,7 @@ def _write_report(
     )
     execution_summary = {
         "execution_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "status": status,
         "data_governance": quality_report,
         "model_metadata": {
             "artifact_path": str(model_path.name),
@@ -155,7 +159,7 @@ def run_production_stream_pipeline(
         print(f"❌ FATAL: Failed to load AML model artifact at {model_path}: {e}")
         sys.exit(1)
 
-    _write_heartbeat(artifacts_dir, 0)
+    _write_heartbeat(artifacts_dir, 0, status="WARMING_UP")
     tmp_alerts_path = alerts_path.with_name(f"{alerts_path.name}.{os.getpid()}.tmp")
     if tmp_alerts_path.exists():
         tmp_alerts_path.unlink()
@@ -179,17 +183,11 @@ def run_production_stream_pipeline(
             anomaly_count, \
             actual_laundering, \
             laundering_intercepted
-        processed_count += 1
         raw_label = tx_item.get("Is_laundering", tx_item.get("Is_Laundering", 0))
         is_true_laundering = (
             int(float(raw_label)) == 1 if raw_label not in (None, "") else False
         )
-        if is_true_laundering:
-            actual_laundering += 1
         if is_anomaly:
-            anomaly_count += 1
-            if is_true_laundering:
-                laundering_intercepted += 1
             alert_entry = {
                 "event_id": tx_item.get("event_id"),
                 "timestamp": str(tx_item.get("Timestamp")),
@@ -200,6 +198,15 @@ def run_production_stream_pipeline(
                 "threshold": detector.threshold,
             }
             alert_file.write(json.dumps(alert_entry) + "\n")
+
+        # Update counters strictly after label parsing and alert write succeed
+        processed_count += 1
+        if is_true_laundering:
+            actual_laundering += 1
+        if is_anomaly:
+            anomaly_count += 1
+            if is_true_laundering:
+                laundering_intercepted += 1
 
     def _flush_batch(alert_file) -> None:
         if not pending_batch:
@@ -247,7 +254,7 @@ def run_production_stream_pipeline(
                 if warmup_count < warmup_events:
                     warmup_count += 1
                     if warmup_count % 5000 == 0:
-                        _write_heartbeat(artifacts_dir, 0)
+                        _write_heartbeat(artifacts_dir, 0, status="WARMING_UP")
                     if warmup_count % 25000 == 0:
                         state_manager._evict_dormant_accounts()
                         print(
@@ -258,7 +265,7 @@ def run_production_stream_pipeline(
                 pending_batch.append(enriched_tx)
                 if len(pending_batch) >= batch_size:
                     _flush_batch(alert_file)
-                    _write_heartbeat(artifacts_dir, processed_count)
+                    _write_heartbeat(artifacts_dir, processed_count, status="HEALTHY")
                     if processed_count % 25000 == 0:
                         state_manager._evict_dormant_accounts()
                         _write_report(
@@ -271,6 +278,7 @@ def run_production_stream_pipeline(
                             anomaly_count,
                             actual_laundering,
                             laundering_intercepted,
+                            status="IN_PROGRESS",
                         )
                         print(
                             f"   ⚡ Scored progress: {processed_count:,}/{max_events:,} events..."
@@ -294,8 +302,24 @@ def run_production_stream_pipeline(
         print(f"\n❌ Stream fatally interrupted: {fatal_err}")
         sys.exit(1)
 
-    if processed_count > 0:
-        _write_heartbeat(artifacts_dir, processed_count)
+    if processed_count == 0:
+        _write_heartbeat(artifacts_dir, 0, status="FAILED_ZERO_SCORED")
+        _write_report(
+            report_path,
+            ingestor.get_data_quality_report(),
+            model_path,
+            detector,
+            warmup_count,
+            0,
+            0,
+            0,
+            0,
+            status="FAILED_ZERO_SCORED",
+        )
+        print("❌ FATAL: Stream finished with 0 out-of-sample events scored.")
+        sys.exit(1)
+
+    _write_heartbeat(artifacts_dir, processed_count, status="HEALTHY")
     execution_summary = _write_report(
         report_path,
         ingestor.get_data_quality_report(),
@@ -306,6 +330,7 @@ def run_production_stream_pipeline(
         anomaly_count,
         actual_laundering,
         laundering_intercepted,
+        status="COMPLETE",
     )
 
     print(

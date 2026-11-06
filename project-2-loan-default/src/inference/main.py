@@ -96,17 +96,27 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
+def _load_expected_loan_features() -> list[str]:
+    feat_file = PROJECT_ROOT / "artifacts" / "feature_columns.json"
+    if feat_file.is_file():
+        import json
+
+        with open(feat_file, "r", encoding="utf-8") as f:
+            loaded_cols = json.load(f)
+        if isinstance(loaded_cols, list) and loaded_cols:
+            return [str(c) for c in loaded_cols]
+    return list(EXPECTED_LOAN_FEATURES)
+
+
 def _validate_loaded_model_schema(loaded_model) -> list[str]:
-    """Verifies that the loaded model's feature set matches the 25 canonical loan features."""
+    """Verifies that the loaded model's feature set matches the canonical loan features."""
     cols = _extract_feature_columns(loaded_model)
-    if cols is not None and (
-        set(cols) != set(EXPECTED_LOAN_FEATURES)
-        or len(cols) != len(EXPECTED_LOAN_FEATURES)
-    ):
+    expected = _load_expected_loan_features()
+    if not cols or set(cols) != set(expected) or len(cols) != len(expected):
         raise ValueError(
-            f"Loaded model feature schema mismatch. Expected {EXPECTED_LOAN_FEATURES}, got {cols}"
+            f"Loaded model feature schema mismatch. Expected {expected}, got {cols}"
         )
-    return cols or list(EXPECTED_LOAN_FEATURES)
+    return cols
 
 
 def _load_xgboost_model_portable(
