@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.4...v0.5.5) (2026-11-06)
+
+
+### Bug Fixes
+
+* **governance:** enforce strict token-matched model loading, p2 schema validation, and idempotent batch scoring ([#141](https://github.com/SatyaIFD/mlops-governance-reference/issues/141)) ([6eeaa84](https://github.com/SatyaIFD/mlops-governance-reference/commit/6eeaa841a38be15c23b543d2a6abdc15cf40fd98))
+
 ## [0.5.4](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.3...v0.5.4) (2026-11-05)
 
 
