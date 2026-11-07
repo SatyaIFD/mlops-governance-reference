@@ -140,3 +140,51 @@ def test_katz_ci_straddling_and_holdout_preservation(tmp_path):
         == "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)"
     )  # nosec B101
     assert res["live_telemetry_fairness"]["data_source"] == "live_production_traffic"  # nosec B101
+
+
+def test_zero_protected_approvals_flags_breach_and_mixed_sources_are_filtered(
+    tmp_path,
+):
+    """Verifies that 0/40 protected approvals vs 35/40 baseline approvals triggers NON-COMPLIANT (BREACH) and mixed sources are not pooled."""
+    log_file = tmp_path / "telemetry_logs.jsonl"
+    report_file = tmp_path / "compliance_audit_report.json"
+
+    rows = [
+        {
+            "schema_version": 2,
+            "traffic_source": "synthetic_stress_simulation",
+            "status_code": 200,
+            "payload_snapshot": {"Age": 22},
+            "inference_output": {"model_recommendation": "APPROVE"},
+        }
+    ]
+    for i in range(40):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"Age": 24},
+                "inference_output": {"model_recommendation": "DECLINE"},
+            }
+        )
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"Age": 45},
+                "inference_output": {
+                    "model_recommendation": "APPROVE" if i < 35 else "DECLINE"
+                },
+            }
+        )
+    log_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    res = run_production_audit(log_path=log_file, report_path=report_file)
+    live = res["live_telemetry_fairness"]
+    assert live["data_source"] == "live_production_traffic"  # nosec B101
+    assert live["protected_cohort_count"] == 40  # nosec B101
+    assert live["disparate_impact_ratio"] == 0.0  # nosec B101
+    assert live["demographic_parity_status"] == "NON-COMPLIANT (BREACH)"  # nosec B101
+    assert live["di_95_ci"][1] < 0.80  # nosec B101

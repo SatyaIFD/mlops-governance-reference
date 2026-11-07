@@ -1,5 +1,6 @@
 import json
 import os
+import signal
 import sys
 import time
 from datetime import datetime, timezone
@@ -150,12 +151,33 @@ def run_production_stream_pipeline(
     state_manager = StreamingStateManager()
     detector = AMLAnomalyDetector()
 
+    def _handle_sigterm(signum, frame):
+        raise KeyboardInterrupt("SIGTERM received")
+
+    try:
+        signal.signal(signal.SIGTERM, _handle_sigterm)
+    except ValueError:
+        pass
+
     try:
         detector.load(model_path)
         print(
             f"✅ Loaded verified skops AML model from {model_path} (threshold={detector.threshold})."
         )
     except Exception as e:
+        _write_heartbeat(artifacts_dir, 0, status="FAILED_MODEL_LOAD")
+        _write_report(
+            report_path,
+            ingestor.get_data_quality_report(),
+            model_path,
+            detector,
+            0,
+            0,
+            0,
+            0,
+            0,
+            status="FAILED_MODEL_LOAD",
+        )
         print(f"❌ FATAL: Failed to load AML model artifact at {model_path}: {e}")
         sys.exit(1)
 
@@ -199,7 +221,6 @@ def run_production_stream_pipeline(
             }
             alert_file.write(json.dumps(alert_entry) + "\n")
 
-        # Update counters strictly after label parsing and alert write succeed
         processed_count += 1
         if is_true_laundering:
             actual_laundering += 1

@@ -1,7 +1,8 @@
 """
 Production Data Drift Monitoring Engine - Project 2: Loan Default Prediction
 Calculates Population Stability Index (PSI) to track feature distribution shifts.
-Separates live telemetry monitoring from synthetic drift stress-testing (--simulate-drift).
+Separates live telemetry monitoring (requiring >= 500 single-source rows for 10-bin PSI stability)
+from holdout evaluation splits and synthetic drift stress-testing (--simulate-drift).
 """
 
 import argparse
@@ -113,11 +114,18 @@ class DataDriftMonitor:
 
 
 def load_live_telemetry_dataframe(
-    telemetry_log_path: Path, min_rows: int = 10
-) -> pd.DataFrame | None:
+    telemetry_log_path: Path,
+    min_rows: int = 500,
+    traffic_source: str | None = None,
+) -> tuple[pd.DataFrame | None, str]:
+    """
+    Loads v2 telemetry records filtered to a single consistent traffic_source
+    (defaulting to the latest record's source so synthetic and live streams are never pooled).
+    Requires at least min_rows (default 500) so 10-bin PSI is not distorted by small sample noise.
+    """
     if not telemetry_log_path.exists():
-        return None
-    snapshots = []
+        return None, "none"
+    records = []
     with open(telemetry_log_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
@@ -127,10 +135,21 @@ def load_live_telemetry_dataframe(
                     and rec.get("schema_version") == 2
                     and "payload_snapshot" in rec
                 ):
-                    snapshots.append(rec["payload_snapshot"])
-    if len(snapshots) < min_rows:
-        return None
-    return pd.DataFrame(snapshots)
+                    records.append(rec)
+    if not records:
+        return None, "none"
+
+    active_source = traffic_source or str(
+        records[-1].get("traffic_source") or "live_production_traffic"
+    )
+    filtered_snapshots = [
+        r["payload_snapshot"]
+        for r in records
+        if str(r.get("traffic_source") or "live_production_traffic") == active_source
+    ]
+    if len(filtered_snapshots) < min_rows:
+        return None, active_source
+    return pd.DataFrame(filtered_snapshots), active_source
 
 
 if __name__ == "__main__":
@@ -144,6 +163,18 @@ if __name__ == "__main__":
         "--fail-on-drift",
         action="store_true",
         help="Exit with non-zero status code when severe drift (PSI >= 0.25) is detected.",
+    )
+    parser.add_argument(
+        "--min-telemetry-rows",
+        type=int,
+        default=500,
+        help="Minimum single-source telemetry rows required before computing live PSI.",
+    )
+    parser.add_argument(
+        "--traffic-source",
+        type=str,
+        default=None,
+        help="Optional traffic_source filter for telemetry evaluation.",
     )
     args = parser.parse_args()
 
@@ -173,10 +204,14 @@ if __name__ == "__main__":
                 )
                 sys.exit(1)
         else:
-            live_df = load_live_telemetry_dataframe(TELEMETRY_FILE)
+            live_df, src_name = load_live_telemetry_dataframe(
+                TELEMETRY_FILE,
+                min_rows=args.min_telemetry_rows,
+                traffic_source=args.traffic_source,
+            )
             if live_df is not None:
                 is_drifting = monitor.run_drift_audit(
-                    live_df, source_label="live_telemetry_logs"
+                    live_df, source_label=f"telemetry:{src_name}"
                 )
             elif TEST_FILE.exists():
                 eval_df = pd.read_parquet(TEST_FILE)
@@ -185,7 +220,7 @@ if __name__ == "__main__":
                 )
             else:
                 print(
-                    "⚠️ Neither live telemetry nor holdout test split found; skipping drift run."
+                    "⚠️ Neither sufficient live telemetry nor holdout test split found; skipping drift run."
                 )
                 sys.exit(0)
 

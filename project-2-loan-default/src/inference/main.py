@@ -28,6 +28,12 @@ from compliance.eu_ai_act_hitl_router import enforce_human_in_the_loop
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+ALLOWED_TRAFFIC_SOURCES = {
+    "live_production_traffic",
+    "synthetic_representative_simulation",
+    "synthetic_stress_simulation",
+}
+
 EXPECTED_LOAN_FEATURES = [
     "Age",
     "Income",
@@ -372,12 +378,17 @@ def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
         raw_src = request.headers.get(
             "X-Traffic-Source", "live_production_traffic"
         ).strip()
+        validated_src = (
+            raw_src
+            if raw_src in ALLOWED_TRAFFIC_SOURCES
+            else "unverified_client_traffic"
+        )
         obs_logger.log_inference_transaction(
             request_payload=payload_dict,
             response_data=response_body,
             latency_ms=latency_ms,
             status_code=200,
-            traffic_source=raw_src or "live_production_traffic",
+            traffic_source=validated_src,
         )
     except Exception as log_err:
         print(f"⚠️ Telemetry logging warning: {log_err}", flush=True)

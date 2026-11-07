@@ -1,33 +1,91 @@
 """
 Traffic Simulation Utility - Project 2: Loan Default Prediction
-Supports both representative population traffic (--mode representative) and
-extreme stress-test traffic (--mode stress) against the authenticated API gateway.
+Samples representative population traffic directly from the holdout test split
+(stratified by age cohort) when available, and supports extreme stress-test traffic.
 """
 
 import argparse
 import os
 import random
 import time
+from pathlib import Path
 
 import httpx
+import pandas as pd
 
 DEFAULT_URL = os.getenv("LOAN_API_URL", "http://localhost/api/v1/loan/predict")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+TEST_PARQUET_PATH = PROJECT_ROOT / "data" / "processed" / "test.parquet"
+
+PAYLOAD_COLUMNS = [
+    "Age",
+    "Income",
+    "CreditScore",
+    "LoanAmount",
+    "DTIRatio",
+    "MonthsEmployed",
+    "InterestRate",
+    "NumCreditLines",
+    "LoanTerm",
+    "Education",
+    "EmploymentType",
+    "MaritalStatus",
+    "HasMortgage",
+    "HasDependents",
+    "LoanPurpose",
+    "HasCoSigner",
+]
+
+
+def _load_holdout_cohorts(seed: int = 42) -> tuple[list[dict], list[dict]] | None:
+    """Loads real holdout records partitioned into young (<30) and mature (>=30) cohorts."""
+    if not TEST_PARQUET_PATH.is_file():
+        return None
+    df = pd.read_parquet(TEST_PARQUET_PATH)
+    if not set(PAYLOAD_COLUMNS).issubset(df.columns):
+        return None
+    young_df = df[df["Age"] < 30][PAYLOAD_COLUMNS].sample(frac=1.0, random_state=seed)
+    mature_df = df[df["Age"] >= 30][PAYLOAD_COLUMNS].sample(frac=1.0, random_state=seed)
+    if young_df.empty or mature_df.empty:
+        return None
+    return young_df.to_dict(orient="records"), mature_df.to_dict(orient="records")
+
+
+def _normalize_payload_types(row: dict) -> dict:
+    return {
+        "Age": int(row["Age"]),
+        "Income": int(row["Income"]),
+        "CreditScore": int(row["CreditScore"]),
+        "LoanAmount": int(row["LoanAmount"]),
+        "DTIRatio": round(float(row["DTIRatio"]), 4),
+        "MonthsEmployed": int(row["MonthsEmployed"]),
+        "InterestRate": round(float(row["InterestRate"]), 4),
+        "NumCreditLines": int(row["NumCreditLines"]),
+        "LoanTerm": int(row["LoanTerm"]),
+        "Education": str(row["Education"]),
+        "EmploymentType": str(row["EmploymentType"]),
+        "MaritalStatus": str(row["MaritalStatus"]),
+        "HasMortgage": str(row["HasMortgage"]),
+        "HasDependents": str(row["HasDependents"]),
+        "LoanPurpose": str(row["LoanPurpose"]),
+        "HasCoSigner": str(row["HasCoSigner"]),
+    }
 
 
 def generate_representative_applicant(is_young: bool, high_risk: bool = False) -> dict:
-    """Generates applicant profiles matching the training distribution (including both approvals and declines)."""
-    age = random.randint(21, 29) if is_young else random.randint(30, 68)  # nosec B311
+    """Fallback synthetic generator matching empirical training bounds when test.parquet is absent."""
+    age = random.randint(18, 29) if is_young else random.randint(30, 69)  # nosec B311
     if high_risk:
         return {
             "Age": age,
-            "Income": random.randint(15000, 32000),  # nosec B311
-            "CreditScore": random.randint(320, 520),  # nosec B311
-            "LoanAmount": random.randint(95000, 220000),  # nosec B311
-            "DTIRatio": round(random.uniform(0.65, 0.89), 2),  # nosec B311
-            "MonthsEmployed": random.randint(0, 6),  # nosec B311
-            "InterestRate": round(random.uniform(19.0, 24.9), 2),  # nosec B311
+            "Income": random.randint(15000, 45000),  # nosec B311
+            "CreditScore": random.randint(300, 580),  # nosec B311
+            "LoanAmount": random.randint(120000, 249999),  # nosec B311
+            "DTIRatio": round(random.uniform(0.60, 0.90), 2),  # nosec B311
+            "MonthsEmployed": random.randint(0, 24),  # nosec B311
+            "InterestRate": round(random.uniform(16.0, 25.0), 2),  # nosec B311
             "NumCreditLines": random.randint(1, 4),  # nosec B311
-            "LoanTerm": random.choice([48, 60]),  # nosec B311
+            "LoanTerm": random.choice([36, 48, 60]),  # nosec B311
             "Education": random.choice(["High School", "Bachelor's"]),  # nosec B311
             "EmploymentType": random.choice(["Unemployed", "Part-time"]),  # nosec B311
             "MaritalStatus": random.choice(["Single", "Divorced"]),  # nosec B311
@@ -38,12 +96,12 @@ def generate_representative_applicant(is_young: bool, high_risk: bool = False) -
         }
     return {
         "Age": age,
-        "Income": random.randint(35000, 145000),  # nosec B311
-        "CreditScore": random.randint(560, 840),  # nosec B311
-        "LoanAmount": random.randint(10000, 180000),  # nosec B311
-        "DTIRatio": round(random.uniform(0.12, 0.65), 2),  # nosec B311
-        "MonthsEmployed": random.randint(12, 118),  # nosec B311
-        "InterestRate": round(random.uniform(4.0, 18.5), 2),  # nosec B311
+        "Income": random.randint(15000, 149999),  # nosec B311
+        "CreditScore": random.randint(300, 849),  # nosec B311
+        "LoanAmount": random.randint(5000, 249999),  # nosec B311
+        "DTIRatio": round(random.uniform(0.10, 0.90), 2),  # nosec B311
+        "MonthsEmployed": random.randint(0, 119),  # nosec B311
+        "InterestRate": round(random.uniform(2.0, 25.0), 2),  # nosec B311
         "NumCreditLines": random.randint(1, 4),  # nosec B311
         "LoanTerm": random.choice([12, 24, 36, 48, 60]),  # nosec B311
         "Education": random.choice(["Bachelor's", "High School", "Master's", "PhD"]),  # nosec B311
@@ -93,6 +151,8 @@ def run_traffic_simulation(
     if api_key:
         headers["X-API-Key"] = api_key
 
+    holdout_cohorts = _load_holdout_cohorts() if mode == "representative" else None
+
     print(
         f"🚀 Booting {mode.upper()} traffic simulation stream ({count} requests) -> {url}"
     )
@@ -101,12 +161,17 @@ def run_traffic_simulation(
     with httpx.Client(timeout=10.0) as client:
         for i in range(count):
             is_young = i % 2 == 0
-            high_risk = (i // 2) % 4 == 0
-            payload = (
-                generate_stress_applicant(is_young)
-                if mode == "stress"
-                else generate_representative_applicant(is_young, high_risk=high_risk)
-            )
+            if mode == "stress":
+                payload = generate_stress_applicant(is_young)
+            elif holdout_cohorts is not None:
+                young_pool, mature_pool = holdout_cohorts
+                pool = young_pool if is_young else mature_pool
+                payload = _normalize_payload_types(pool[(i // 2) % len(pool)])
+            else:
+                high_risk = (i // 2) % 4 == 0
+                payload = generate_representative_applicant(
+                    is_young, high_risk=high_risk
+                )
 
             try:
                 response = client.post(url, json=payload, headers=headers)
