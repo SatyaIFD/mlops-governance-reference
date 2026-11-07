@@ -26,15 +26,36 @@ jobs:
         python-version: '3.13'
         cache: 'pip'
 
-    - name: Install Core Pipeline Dependencies
+    - name: Install Core Pipeline & Gate Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r project-1-credit-card-fraud/requirements.txt pytest
+        pip install -r project-1-credit-card-fraud/requirements.txt pytest hypothesis faker bandit ruff==0.11.2
 
-    - name: Execute Model Lifecycle & Tests
+    - name: Run Ruff, Bandit SAST, Unit & Compliance Gates
       run: |
+        ruff check project-1-credit-card-fraud/ compliance/
+        ruff format --check project-1-credit-card-fraud/ compliance/
+        bandit -c pyproject.toml -r compliance/ project-1-credit-card-fraud/src/ -ll
         export MODEL_URI="sqlite:///mlflow.db"
         PYTHONPATH=project-1-credit-card-fraud pytest project-1-credit-card-fraud/tests/ -v
+        python -m pytest compliance/test_compliance.py -v
+
+    - name: Build Docker Container
+      run: |
+        REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_ID="ghcr.io/$REPO/fraud-detection-job"
+        docker build -t $IMAGE_ID:latest -f project-1-credit-card-fraud/Dockerfile .
+
+    - name: Run Trivy Container Vulnerability Gate
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: 'ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest'
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+        trivyignores: '.trivyignore'
 
     - name: Log in to GitHub Container Registry (GHCR)
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -44,15 +65,11 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and Push Docker Container
+    - name: Push Verified Image to GHCR
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         IMAGE_ID="ghcr.io/$REPO/fraud-detection-job"
-
-        docker build -t $IMAGE_ID:latest -f project-1-credit-card-fraud/Dockerfile .
-
-        if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
-          docker push $IMAGE_ID:latest
-          docker tag $IMAGE_ID:latest $IMAGE_ID:${{ github.sha }}
-          docker push $IMAGE_ID:${{ github.sha }}
-        fi
+        docker push $IMAGE_ID:latest
+        docker tag $IMAGE_ID:latest $IMAGE_ID:${{ github.sha }}
+        docker push $IMAGE_ID:${{ github.sha }}

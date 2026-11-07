@@ -1,7 +1,9 @@
+import csv
 import json
 from datetime import datetime, timedelta
 
 import pandas as pd
+import pytest
 from scripts.replay_dlq import replay_dlq_events
 from src.features.velocity import CANONICAL_AML_FEATURES, StreamingStateManager
 from src.ingestion.stream_ingestor import (
@@ -181,6 +183,12 @@ def test_anomaly_detector_real_skops_roundtrip_and_threshold_persistence(tmp_pat
     detector.train(df)
     detector.save(artifact_file)
 
+    meta = json.loads(
+        (tmp_path / "aml_streaming_model.meta.json").read_text(encoding="utf-8")
+    )
+    assert "sklearn_version" in meta  # nosec B101
+    assert "skops_version" in meta  # nosec B101
+
     reloaded = AMLAnomalyDetector(threshold=0.40)
     reloaded.load(artifact_file)
     assert reloaded.threshold == 0.65  # nosec B101
@@ -202,8 +210,6 @@ def test_anomaly_detector_real_skops_roundtrip_and_threshold_persistence(tmp_pat
 
 def test_anomaly_detector_rejects_tampered_sha256(tmp_path):
     """Verifies that load() recomputes SHA-256 and raises ValueError if .meta.json hash mismatches."""
-    import pytest
-
     df = pd.DataFrame(
         {
             "Amount": [50.0, 9500.0, 10.0, 25000.0],
@@ -347,8 +353,6 @@ def test_batch_scoring_fallback_does_not_double_count(tmp_path, monkeypatch):
 
 def test_anomaly_detector_requires_meta_file_and_all_features(tmp_path):
     """Verifies load() fails if .meta.json is deleted and score_transaction() fails if a feature is missing."""
-    import pytest
-
     df = pd.DataFrame(
         {
             "Amount": [50.0, 9500.0, 10.0, 25000.0],
@@ -380,14 +384,12 @@ def test_recording_failure_routes_to_dlq_without_incrementing_processed_count(
     tmp_path, monkeypatch
 ):
     """Verifies that a bad label during _record_scored_item routes to DLQ and is not counted in total_processed."""
-    import csv
     from src.streaming.generator import _write_synthetic_saml_fallback
     from src.streaming.pipeline import run_production_stream_pipeline
 
     csv_path = tmp_path / "SAML-D.csv"
     _write_synthetic_saml_fallback(csv_path, num_rows=25)
 
-    # Corrupt Is_laundering on the very last row so _record_scored_item raises ValueError
     with open(csv_path, "r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
         fieldnames = list(rows[0].keys())
@@ -438,3 +440,60 @@ def test_recording_failure_routes_to_dlq_without_incrementing_processed_count(
     assert summary["streaming_performance"]["total_processed"] == 14  # nosec B101
     assert summary["data_governance"]["dlq_events"] == 1  # nosec B101
     assert summary["data_governance"]["clean_events"] == 24  # nosec B101
+
+
+def test_pipeline_writes_failed_model_load_and_interrupted_states(
+    tmp_path, monkeypatch
+):
+    """Verifies that a missing model writes FAILED_MODEL_LOAD and KeyboardInterrupt writes INTERRUPTED."""
+    from src.streaming.generator import _write_synthetic_saml_fallback
+    from src.streaming.pipeline import run_production_stream_pipeline
+
+    csv_path = tmp_path / "SAML-D.csv"
+    _write_synthetic_saml_fallback(csv_path, num_rows=20)
+    report_path = tmp_path / "pipeline_execution_report.json"
+    missing_model = tmp_path / "aml_streaming_model"
+
+    report_path.write_text(json.dumps({"status": "COMPLETE"}), encoding="utf-8")
+    monkeypatch.setattr(
+        "src.streaming.pipeline.resolve_runtime_paths",
+        lambda: (csv_path, tmp_path / "dlq", report_path, missing_model),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_production_stream_pipeline(
+            max_events=10, delay_seconds=0.0, warmup_events=5
+        )
+    assert exc_info.value.code == 1  # nosec B101
+    failed_rep = json.loads(report_path.read_text(encoding="utf-8"))
+    assert failed_rep["status"] == "FAILED_MODEL_LOAD"  # nosec B101
+
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9250.0, 10.0, 9250.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0],
+            "is_structuring": [0, 1, 0, 1],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0],
+            "fan_out_count_24h": [1, 8, 1, 14],
+            "receiver_inflow_count_1h": [1, 5, 1, 15],
+            "receiver_inflow_amount_1h": [50.0, 45000.0, 10.0, 150000.0],
+            "Is_laundering": [0, 1, 0, 1],
+        }
+    )
+    det = AMLAnomalyDetector(threshold=0.50)
+    det.train(df)
+    det.save(missing_model, mlflow_run_id="interrupt_test")
+
+    monkeypatch.setattr(
+        "src.streaming.pipeline.transaction_stream_generator",
+        lambda *a, **kw: (_ for _ in ()).throw(
+            KeyboardInterrupt("simulated interrupt")
+        ),
+    )
+    with pytest.raises(SystemExit) as int_exc:
+        run_production_stream_pipeline(
+            max_events=10, delay_seconds=0.0, warmup_events=5
+        )
+    assert int_exc.value.code == 130  # nosec B101
+    int_rep = json.loads(report_path.read_text(encoding="utf-8"))
+    assert int_rep["status"] == "INTERRUPTED"  # nosec B101

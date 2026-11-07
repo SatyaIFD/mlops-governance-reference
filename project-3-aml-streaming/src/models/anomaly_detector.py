@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import sklearn
+import skops
 import skops.io as sio
 from sklearn.ensemble import RandomForestClassifier
 
@@ -112,6 +114,8 @@ class AMLAnomalyDetector:
                     "feature_cols": active_cols,
                     "sha256": self.model_sha256,
                     "mlflow_run_id": self.mlflow_run_id,
+                    "sklearn_version": sklearn.__version__,
+                    "skops_version": skops.__version__,
                 },
                 f,
                 indent=2,

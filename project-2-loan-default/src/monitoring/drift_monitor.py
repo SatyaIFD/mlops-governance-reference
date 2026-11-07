@@ -1,8 +1,8 @@
 """
 Real-Time Fairness & Recommendation Disparity Monitor - Project 2: Loan Default Prediction
 Evaluates live telemetry logs across protected (<30) and baseline (>=30) age cohorts.
-Preserves holdout evaluation metrics strictly under fairness_metrics / holdout_fairness_metrics
-while recording live telemetry fairness under live_telemetry_fairness with 95% CI gating.
+Filters to a single consistent traffic_source, applies Haldane-Anscombe continuity
+correction for zero-approval cohorts, and classifies fairness using the 95% Katz CI.
 """
 
 import argparse
@@ -17,27 +17,49 @@ import pandas as pd
 def _compute_di_95_ci(
     k_prot: int, n_prot: int, k_base: int, n_base: int
 ) -> list[float] | None:
-    """Computes the Katz logarithmic 95% confidence interval for the Disparate Impact ratio."""
-    if n_prot <= 0 or n_base <= 0 or k_prot <= 0 or k_base <= 0:
+    """
+    Computes the Katz logarithmic 95% confidence interval for the Disparate Impact ratio.
+    Applies a Haldane-Anscombe (+0.5) continuity correction when k_prot == 0 (with k_base > 0)
+    so zero-approval protected cohorts produce a valid upper bound and trigger NON-COMPLIANT.
+    """
+    if n_prot <= 0 or n_base <= 0 or k_base <= 0:
         return None
-    p1 = k_prot / n_prot
-    p0 = k_base / n_base
+    if k_prot == 0:
+        kp = 0.5
+        np_adj = n_prot + 1.0
+        kb = float(k_base) + 0.5
+        nb_adj = n_base + 1.0
+    else:
+        kp = float(k_prot)
+        np_adj = float(n_prot)
+        kb = float(k_base)
+        nb_adj = float(n_base)
+
+    p1 = kp / np_adj
+    p0 = kb / nb_adj
     di = p1 / p0
-    se_log = math.sqrt(max(0.0, (1.0 - p1) / k_prot + (1.0 - p0) / k_base))
-    low = round(di * math.exp(-1.96 * se_log), 4)
+    se_log = math.sqrt(max(0.0, (1.0 - p1) / kp + (1.0 - p0) / kb))
+    low = 0.0 if k_prot == 0 else round(di * math.exp(-1.96 * se_log), 4)
     high = round(di * math.exp(1.96 * se_log), 4)
     return [low, high]
 
 
-def _infer_telemetry_source(records: list[dict]) -> str:
-    sources = {
-        str(r.get("traffic_source")).strip() for r in records if r.get("traffic_source")
-    }
-    if not sources:
-        return "unlabeled_telemetry_logs"
-    if len(sources) == 1:
-        return next(iter(sources))
-    return "mixed_telemetry_sources"
+def _select_single_source_records(
+    records: list[dict], target_source: str | None = None
+) -> tuple[list[dict], str]:
+    """Filters records to a single traffic_source (never pooling mixed sources)."""
+    if not records:
+        return [], "none"
+    chosen = (
+        target_source
+        or str(records[-1].get("traffic_source") or "unlabeled_telemetry_logs").strip()
+    )
+    filtered = [
+        r
+        for r in records
+        if str(r.get("traffic_source") or "unlabeled_telemetry_logs").strip() == chosen
+    ]
+    return filtered, chosen
 
 
 def run_production_audit(
@@ -45,6 +67,7 @@ def run_production_audit(
     report_path: Path | None = None,
     min_cohort_size: int = 30,
     fail_on_breach: bool = False,
+    traffic_source: str | None = None,
 ) -> dict:
     print("🕵️‍♂️ Initializing real-time governance & recommendation parity scanner...")
 
@@ -63,7 +86,6 @@ def run_production_audit(
         except Exception:
             existing_report = {}
 
-    # Keep holdout fairness_metrics strictly separate from live telemetry fairness
     if "holdout_fairness_metrics" in existing_report:
         existing_report["fairness_metrics"] = existing_report[
             "holdout_fairness_metrics"
@@ -98,19 +120,23 @@ def run_production_audit(
             }
         )
 
-    records = []
+    all_records = []
     with open(log_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 rec = json.loads(line.strip())
                 if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
-                    records.append(rec)
+                    all_records.append(rec)
+
+    records, detected_source = _select_single_source_records(
+        all_records, target_source=traffic_source
+    )
 
     if not records:
         print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")
         return _save_with_live_block(
             {
-                "data_source": "none",
+                "data_source": detected_source,
                 "demographic_parity_status": "INCONCLUSIVE (INSUFFICIENT_DATA)",
                 "disparate_impact_ratio": None,
                 "di_95_ci": None,
@@ -118,7 +144,6 @@ def run_production_audit(
             }
         )
 
-    detected_source = _infer_telemetry_source(records)
     df = pd.DataFrame(records)
     payloads = pd.json_normalize(df["payload_snapshot"])
     outputs = pd.json_normalize(df["inference_output"])
@@ -223,5 +248,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Exit non-zero if the 95% CI confirms a demographic parity breach.",
     )
+    parser.add_argument(
+        "--traffic-source",
+        type=str,
+        default=None,
+        help="Filter telemetry records to a specific traffic_source.",
+    )
     args = parser.parse_args()
-    run_production_audit(fail_on_breach=args.fail_on_breach)
+    run_production_audit(
+        fail_on_breach=args.fail_on_breach, traffic_source=args.traffic_source
+    )
