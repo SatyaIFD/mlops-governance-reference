@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.9](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.8...v0.5.9) (2026-11-08)
+
+
+### Bug Fixes
+
+* **governance:** sample p2 traffic without replacement, isolate multi-source telemetry, and retrain p3 under pinned versions ([#149](https://github.com/SatyaIFD/mlops-governance-reference/issues/149)) ([10c53c3](https://github.com/SatyaIFD/mlops-governance-reference/commit/10c53c30f27a8a46cf4e655d6514be7aa325525f))
+
 ## [0.5.8](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.7...v0.5.8) (2026-11-07)
 
 
