@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   security-audit:
     runs-on: ubuntu-latest
@@ -19,7 +22,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install Security & Lint Tools
-        run: pip install bandit ruff==0.11.2
+        run: pip install bandit==1.9.4 ruff==0.11.2
 
       - name: Run Ruff Linter & Format Check
         run: |

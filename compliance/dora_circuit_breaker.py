@@ -46,7 +46,10 @@ class MLSystemCircuitBreaker:
 
         try:
             result = model_function(*args, **kwargs)
-        except Exception:
+        except Exception as exc:
+            logging.warning(
+                "Inference execution raised %s: %s", type(exc).__name__, exc
+            )
             with self._lock:
                 self.consecutive_failures += 1
                 self._half_open_probe_in_flight = False

@@ -188,3 +188,56 @@ def test_zero_protected_approvals_flags_breach_and_mixed_sources_are_filtered(
     assert live["disparate_impact_ratio"] == 0.0  # nosec B101
     assert live["demographic_parity_status"] == "NON-COMPLIANT (BREACH)"  # nosec B101
     assert live["di_95_ci"][1] < 0.80  # nosec B101
+
+
+def test_boundary_100_percent_baseline_applies_continuity_correction_and_prioritizes_live_source(
+    tmp_path,
+):
+    """Verifies 39/40 vs 40/40 applies +0.5 correction and live_production_traffic is prioritized over trailing synthetic rows."""
+    ci_boundary = _compute_di_95_ci(39, 40, 40, 40)
+    # Without +0.5 on 40/40, CI would be [0.9278, 1.0246]; with +0.5 on all 4 cells, upper bound is wider (~1.0446)
+    assert ci_boundary[0] == pytest.approx(0.9102, abs=1e-3)  # nosec B101
+    assert ci_boundary[1] == pytest.approx(1.0446, abs=1e-3)  # nosec B101
+
+    log_file = tmp_path / "telemetry_logs.jsonl"
+    report_file = tmp_path / "compliance_audit_report.json"
+
+    rows = []
+    for i in range(35):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"Age": 25},
+                "inference_output": {"model_recommendation": "APPROVE"},
+            }
+        )
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"Age": 45},
+                "inference_output": {"model_recommendation": "APPROVE"},
+            }
+        )
+    # Append a trailing synthetic row at the end of the file
+    rows.append(
+        {
+            "schema_version": 2,
+            "traffic_source": "synthetic_representative_simulation",
+            "status_code": 200,
+            "payload_snapshot": {"Age": 25},
+            "inference_output": {"model_recommendation": "DECLINE"},
+        }
+    )
+    log_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    res = run_production_audit(log_path=log_file, report_path=report_file)
+    assert res["live_telemetry_fairness"]["data_source"] == "live_production_traffic"  # nosec B101
+    assert "live_production_traffic" in res["live_telemetry_fairness_by_source"]  # nosec B101
+    assert (
+        "synthetic_representative_simulation"
+        in res["live_telemetry_fairness_by_source"]
+    )  # nosec B101

@@ -139,6 +139,16 @@ class AMLAnomalyDetector:
         expected_sha256 = meta.get("sha256")
         if not expected_sha256:
             raise ValueError(f"Missing 'sha256' integrity digest in {meta_path}")
+        meta_sklearn = meta.get("sklearn_version")
+        if meta_sklearn and meta_sklearn != sklearn.__version__:
+            raise ValueError(
+                f"scikit-learn version mismatch for {target}: artifact trained with {meta_sklearn}, runtime is {sklearn.__version__}"
+            )
+        meta_skops = meta.get("skops_version")
+        if meta_skops and meta_skops != skops.__version__:
+            raise ValueError(
+                f"skops version mismatch for {target}: artifact saved with {meta_skops}, runtime is {skops.__version__}"
+            )
 
         actual_sha256 = self._compute_sha256(target)
         if expected_sha256 != actual_sha256:

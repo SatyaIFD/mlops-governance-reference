@@ -29,7 +29,7 @@ jobs:
     - name: Install Core Pipeline & Gate Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r project-1-credit-card-fraud/requirements.txt pytest hypothesis faker bandit ruff==0.11.2
+        pip install -r project-1-credit-card-fraud/requirements.txt pytest hypothesis faker bandit==1.9.4 ruff==0.11.2
 
     - name: Run Ruff, Bandit SAST, Unit & Compliance Gates
       run: |
@@ -41,15 +41,17 @@ jobs:
         python -m pytest compliance/test_compliance.py -v
 
     - name: Build Docker Container
+      id: image_meta
       run: |
         REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         IMAGE_ID="ghcr.io/$REPO/fraud-detection-job"
+        echo "image_ref=$IMAGE_ID:latest" >> "$GITHUB_OUTPUT"
         docker build -t $IMAGE_ID:latest -f project-1-credit-card-fraud/Dockerfile .
 
     - name: Run Trivy Container Vulnerability Gate
       uses: aquasecurity/trivy-action@v0.36.0
       with:
-        image-ref: 'ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest'
+        image-ref: '${{ steps.image_meta.outputs.image_ref }}'
         format: 'table'
         exit-code: '1'
         ignore-unfixed: true

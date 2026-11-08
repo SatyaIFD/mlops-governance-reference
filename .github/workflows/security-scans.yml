@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   python-sast:
     name: Python Static Analysis (Bandit)
@@ -19,7 +22,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install Bandit
-        run: pip install bandit
+        run: pip install bandit==1.9.4
 
       - name: Run Bandit Security Scan
         run: bandit -c pyproject.toml -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
