@@ -19,7 +19,7 @@ bootstrap:
 	PYTHONPATH=project-1-credit-card-fraud python project-1-credit-card-fraud/src/validation/drift_check.py
 	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/training/train.py
 	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/evaluation/evaluate.py
-	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/validation/drift_check.py
+	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/validation/drift_check.py --evaluate-holdout
 	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/governance/audit.py
 	PYTHONPATH=project-3-aml-streaming python project-3-aml-streaming/src/models/train.py
 	PYTHONPATH=project-3-aml-streaming AML_DAEMON_MODE=0 AML_WARMUP_EVENTS=100000 AML_MAX_EVENTS=100000 AML_STREAM_DELAY_SECONDS=0.0 python project-3-aml-streaming/src/streaming/pipeline.py

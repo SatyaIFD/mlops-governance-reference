@@ -497,3 +497,66 @@ def test_pipeline_writes_failed_model_load_and_interrupted_states(
     assert int_exc.value.code == 130  # nosec B101
     int_rep = json.loads(report_path.read_text(encoding="utf-8"))
     assert int_rep["status"] == "INTERRUPTED"  # nosec B101
+
+
+def test_pipeline_sigterm_signal_and_version_mismatch_rejection(tmp_path, monkeypatch):
+    """Verifies real SIGTERM signal handling, .tmp alert file cleanup, and sklearn_version mismatch rejection."""
+    import os
+    import signal
+    from src.streaming.generator import _write_synthetic_saml_fallback
+    from src.streaming.pipeline import run_production_stream_pipeline
+
+    csv_path = tmp_path / "SAML-D.csv"
+    _write_synthetic_saml_fallback(csv_path, num_rows=20)
+    report_path = tmp_path / "pipeline_execution_report.json"
+    model_path = tmp_path / "aml_streaming_model"
+
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9250.0, 10.0, 9250.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0],
+            "is_structuring": [0, 1, 0, 1],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0],
+            "fan_out_count_24h": [1, 8, 1, 14],
+            "receiver_inflow_count_1h": [1, 5, 1, 15],
+            "receiver_inflow_amount_1h": [50.0, 45000.0, 10.0, 150000.0],
+            "Is_laundering": [0, 1, 0, 1],
+        }
+    )
+    det = AMLAnomalyDetector(threshold=0.50)
+    det.train(df)
+    det.save(model_path, mlflow_run_id="sigterm_test")
+
+    def _sigterm_stream(*args, **kwargs):
+        yield {
+            "Timestamp": "2025-01-01 08:00:00",
+            "Sender_account": "ACC_1",
+            "Receiver_account": "ACC_2",
+            "Amount": 500.0,
+            "Is_laundering": 0,
+        }
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    monkeypatch.setattr(
+        "src.streaming.pipeline.resolve_runtime_paths",
+        lambda: (csv_path, tmp_path / "dlq", report_path, model_path),
+    )
+    monkeypatch.setattr(
+        "src.streaming.pipeline.transaction_stream_generator", _sigterm_stream
+    )
+    with pytest.raises(SystemExit) as sig_exc:
+        run_production_stream_pipeline(
+            max_events=10, delay_seconds=0.0, warmup_events=0
+        )
+    assert sig_exc.value.code == 130  # nosec B101
+    rep = json.loads(report_path.read_text(encoding="utf-8"))
+    assert rep["status"] == "INTERRUPTED"  # nosec B101
+    assert list(tmp_path.glob("*.tmp")) == []  # nosec B101
+
+    # Verify version mismatch in .meta.json raises ValueError on load()
+    meta_path = tmp_path / "aml_streaming_model.meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["sklearn_version"] = "0.0.0-mismatch"
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    with pytest.raises(ValueError, match="scikit-learn version mismatch"):
+        AMLAnomalyDetector().load(model_path)

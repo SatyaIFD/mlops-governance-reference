@@ -1,6 +1,7 @@
 """
 Production Evaluation & Governance Engine - Project 2: Loan Default Prediction
-Evaluates registered models against data contracts and exports compliance audit signatures.
+Evaluates registered models against data contracts and exports compliance audit signatures,
+including per-cohort True Positive Rate (TPR), False Positive Rate (FPR), and approval rates.
 """
 
 import json
@@ -11,6 +12,26 @@ import mlflow
 import mlflow.xgboost
 import pandas as pd
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
+
+
+def _cohort_confusion_rates(y_true: pd.Series, y_pred: pd.Series) -> dict:
+    """Computes default-detection TPR, FPR, approval rate, and decline rate for a cohort."""
+    pos_mask = y_true == 1
+    neg_mask = y_true == 0
+    n_pos = int(pos_mask.sum())
+    n_neg = int(neg_mask.sum())
+    tp = int(((y_true == 1) & (y_pred == 1)).sum())
+    fp = int(((y_true == 0) & (y_pred == 1)).sum())
+    tpr = round(float(tp / n_pos), 4) if n_pos > 0 else 0.0
+    fpr = round(float(fp / n_neg), 4) if n_neg > 0 else 0.0
+    approval_rate = round(float((y_pred == 0).mean()), 4) if len(y_pred) > 0 else 0.0
+    return {
+        "count": int(len(y_true)),
+        "approval_rate": approval_rate,
+        "decline_rate": round(1.0 - approval_rate, 4),
+        "default_tpr": tpr,
+        "default_fpr": fpr,
+    }
 
 
 class LoanModelEvaluator:
@@ -72,28 +93,37 @@ class LoanModelEvaluator:
             )
 
         preds_proba = model.predict_proba(X_test)[:, 1]
-        preds_labels = model.predict(X_test)
+        preds_labels = pd.Series(model.predict(X_test), index=X_test.index)
 
         auc = float(roc_auc_score(y_test, preds_proba))
         acc = float(accuracy_score(y_test, preds_labels))
         bce_loss = float(log_loss(y_test, preds_proba))
 
-        df_audit = pd.DataFrame(
-            {
-                "is_young": X_test["is_young"],
-                "approved": (preds_labels == 0).astype(int),
-            }
+        young_mask = X_test["is_young"] == 1
+        base_mask = X_test["is_young"] == 0
+        prot_stats = _cohort_confusion_rates(
+            y_test[young_mask], preds_labels[young_mask]
         )
-        approval_rates = df_audit.groupby("is_young")["approved"].mean()
+        base_stats = _cohort_confusion_rates(y_test[base_mask], preds_labels[base_mask])
+
         di_ratio = (
-            float(approval_rates[1] / approval_rates[0])
-            if approval_rates.get(0, 0) > 0
+            float(prot_stats["approval_rate"] / base_stats["approval_rate"])
+            if base_stats["approval_rate"] > 0
             else 0.0
         )
 
         fairness_passed = bool(0.80 <= di_ratio <= 1.25)
         performance_passed = bool(auc >= 0.70)
         governance_signoff = bool(fairness_passed and performance_passed)
+
+        holdout_fairness_block = {
+            "demographic_parity_status": "COMPLIANT (FAIR)"
+            if fairness_passed
+            else "NON-COMPLIANT (BREACH)",
+            "disparate_impact_ratio": round(di_ratio, 4),
+            "protected_cohort_under_30": prot_stats,
+            "baseline_cohort_30_and_over": base_stats,
+        }
 
         audit_report = {
             "mlflow_run_id": latest_run_id,
@@ -102,12 +132,8 @@ class LoanModelEvaluator:
                 "test_accuracy": round(acc, 4),
                 "log_loss": round(bce_loss, 4),
             },
-            "fairness_metrics": {
-                "demographic_parity_status": "COMPLIANT (FAIR)"
-                if fairness_passed
-                else "NON-COMPLIANT (BREACH)",
-                "disparate_impact_ratio": round(di_ratio, 4),
-            },
+            "fairness_metrics": holdout_fairness_block,
+            "holdout_fairness_metrics": holdout_fairness_block.copy(),
             "compliance": {
                 "four_fifths_rule_passed": fairness_passed,
                 "minimum_performance_passed": performance_passed,

@@ -150,6 +150,36 @@ def run_production_stream_pipeline(
     )
     state_manager = StreamingStateManager()
     detector = AMLAnomalyDetector()
+    tmp_alerts_path = alerts_path.with_name(f"{alerts_path.name}.{os.getpid()}.tmp")
+
+    warmup_count = 0
+    processed_count = 0
+    anomaly_count = 0
+    actual_laundering = 0
+    laundering_intercepted = 0
+
+    def _safe_record_terminal_state(status_label: str) -> None:
+        try:
+            if tmp_alerts_path.exists():
+                tmp_alerts_path.unlink()
+        except Exception as cleanup_err:
+            print(f"⚠️ Failed to clean up temporary alerts file: {cleanup_err}")
+        try:
+            _write_heartbeat(artifacts_dir, processed_count, status=status_label)
+            _write_report(
+                report_path,
+                ingestor.get_data_quality_report(),
+                model_path,
+                detector,
+                warmup_count,
+                processed_count,
+                anomaly_count,
+                actual_laundering,
+                laundering_intercepted,
+                status=status_label,
+            )
+        except Exception as rep_err:
+            print(f"⚠️ Failed to write {status_label} report state: {rep_err}")
 
     def _handle_sigterm(signum, frame):
         raise KeyboardInterrupt("SIGTERM received")
@@ -165,35 +195,17 @@ def run_production_stream_pipeline(
             f"✅ Loaded verified skops AML model from {model_path} (threshold={detector.threshold})."
         )
     except Exception as e:
-        _write_heartbeat(artifacts_dir, 0, status="FAILED_MODEL_LOAD")
-        _write_report(
-            report_path,
-            ingestor.get_data_quality_report(),
-            model_path,
-            detector,
-            0,
-            0,
-            0,
-            0,
-            0,
-            status="FAILED_MODEL_LOAD",
-        )
+        _safe_record_terminal_state("FAILED_MODEL_LOAD")
         print(f"❌ FATAL: Failed to load AML model artifact at {model_path}: {e}")
         sys.exit(1)
 
     _write_heartbeat(artifacts_dir, 0, status="WARMING_UP")
-    tmp_alerts_path = alerts_path.with_name(f"{alerts_path.name}.{os.getpid()}.tmp")
     if tmp_alerts_path.exists():
         tmp_alerts_path.unlink()
 
     print(
         f"📡 Streaming from {data_path} (warmup={warmup_events}, out-of-sample window={max_events})..."
     )
-    warmup_count = 0
-    processed_count = 0
-    anomaly_count = 0
-    actual_laundering = 0
-    laundering_intercepted = 0
     pending_batch: list[dict] = []
     batch_size = 5000
 
@@ -317,52 +329,16 @@ def run_production_stream_pipeline(
         os.replace(tmp_alerts_path, alerts_path)
 
     except KeyboardInterrupt:
-        _write_heartbeat(artifacts_dir, processed_count, status="INTERRUPTED")
-        _write_report(
-            report_path,
-            ingestor.get_data_quality_report(),
-            model_path,
-            detector,
-            warmup_count,
-            processed_count,
-            anomaly_count,
-            actual_laundering,
-            laundering_intercepted,
-            status="INTERRUPTED",
-        )
+        _safe_record_terminal_state("INTERRUPTED")
         print("\n🛑 Pipeline gracefully terminated by user.")
         sys.exit(130)
     except Exception as fatal_err:
-        _write_heartbeat(artifacts_dir, processed_count, status="FAILED")
-        _write_report(
-            report_path,
-            ingestor.get_data_quality_report(),
-            model_path,
-            detector,
-            warmup_count,
-            processed_count,
-            anomaly_count,
-            actual_laundering,
-            laundering_intercepted,
-            status="FAILED",
-        )
+        _safe_record_terminal_state("FAILED")
         print(f"\n❌ Stream fatally interrupted: {fatal_err}")
         sys.exit(1)
 
     if processed_count == 0:
-        _write_heartbeat(artifacts_dir, 0, status="FAILED_ZERO_SCORED")
-        _write_report(
-            report_path,
-            ingestor.get_data_quality_report(),
-            model_path,
-            detector,
-            warmup_count,
-            0,
-            0,
-            0,
-            0,
-            status="FAILED_ZERO_SCORED",
-        )
+        _safe_record_terminal_state("FAILED_ZERO_SCORED")
         print("❌ FATAL: Stream finished with 0 out-of-sample events scored.")
         sys.exit(1)
 

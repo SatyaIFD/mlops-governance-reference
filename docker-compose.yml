@@ -1,7 +1,7 @@
 name: mlops-governance-reference
 services:
   api-gateway:
-    image: nginx:1.25-alpine
+    image: nginx:1.27-alpine
     container_name: mlops-api-gateway
     ports:
       - "80:80"
@@ -27,8 +27,8 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
       - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
     volumes:
-      - ./mlflow.db:/mlflow.db
-      - ./mlruns:/app/mlruns
+      - ./mlflow.db:/mlflow.db:ro
+      - ./mlruns:/app/mlruns:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
       interval: 10s
@@ -51,8 +51,8 @@ services:
       - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
       - LOAN_TELEMETRY_LOG_PATH=/app/artifacts/telemetry_logs.jsonl
     volumes:
-      - ./mlflow.db:/mlflow.db
-      - ./mlruns:/app/mlruns
+      - ./mlflow.db:/mlflow.db:ro
+      - ./mlruns:/app/mlruns:ro
       - ./project-2-loan-default/artifacts:/app/artifacts
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
@@ -81,10 +81,10 @@ services:
       - AML_MAX_EVENTS=100000
       - AML_STREAM_DELAY_SECONDS=0.0
     volumes:
-      - ./mlflow.db:/mlflow.db
-      - ./project-3-aml-streaming/data:/app/data
+      - ./mlflow.db:/mlflow.db:ro
+      - ./project-3-aml-streaming/data:/app/data:ro
       - ./project-3-aml-streaming/artifacts:/app/artifacts
-      - ./mlruns:/app/mlruns
+      - ./mlruns:/app/mlruns:ro
     healthcheck:
       test:
         [
@@ -120,7 +120,7 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
       - _PIP_ADDITIONAL_REQUIREMENTS=pyarrow>=15.0.0 httpx>=0.27.0
       - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
-      - LOAN_API_URL=http://mlops-api-gateway/api/v1/loan/predict
+      - LOAN_API_URL=http://mlops-api-gateway/api/v1/loan-sim/predict
     command: standalone
     restart: unless-stopped
 

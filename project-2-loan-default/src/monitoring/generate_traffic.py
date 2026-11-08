@@ -1,10 +1,11 @@
 """
 Traffic Simulation Utility - Project 2: Loan Default Prediction
-Samples representative population traffic directly from the holdout test split
-(stratified by age cohort) when available, and supports extreme stress-test traffic.
+Samples representative population traffic without replacement across runs from the
+holdout test split (stratified by age cohort), excluding already-logged applicants.
 """
 
 import argparse
+import json
 import os
 import random
 import time
@@ -13,9 +14,10 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
-DEFAULT_URL = os.getenv("LOAN_API_URL", "http://localhost/api/v1/loan/predict")
+DEFAULT_URL = os.getenv("LOAN_API_URL", "http://localhost/api/v1/loan-sim/predict")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEST_PARQUET_PATH = PROJECT_ROOT / "data" / "processed" / "test.parquet"
+TELEMETRY_LOG_PATH = PROJECT_ROOT / "artifacts" / "telemetry_logs.jsonl"
 
 PAYLOAD_COLUMNS = [
     "Age",
@@ -37,18 +39,73 @@ PAYLOAD_COLUMNS = [
 ]
 
 
-def _load_holdout_cohorts(seed: int = 42) -> tuple[list[dict], list[dict]] | None:
-    """Loads real holdout records partitioned into young (<30) and mature (>=30) cohorts."""
+def _snapshot_key(row: dict) -> tuple:
+    return (
+        int(row["Age"]),
+        int(row["Income"]),
+        int(row["CreditScore"]),
+        int(row["LoanAmount"]),
+        round(float(row["DTIRatio"]), 4),
+    )
+
+
+def _load_seen_snapshot_keys(log_path: Path = TELEMETRY_LOG_PATH) -> set[tuple]:
+    seen: set[tuple] = set()
+    if not log_path.is_file():
+        return seen
+    with open(log_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+                snap = rec.get("payload_snapshot")
+                if isinstance(snap, dict) and {
+                    "Age",
+                    "Income",
+                    "CreditScore",
+                    "LoanAmount",
+                    "DTIRatio",
+                }.issubset(snap):
+                    seen.add(_snapshot_key(snap))
+            except (ValueError, KeyError, TypeError) as err:
+                _ = err
+    return seen
+
+
+def _load_holdout_cohorts(
+    seed: int | None = None, seen_keys: set[tuple] | None = None
+) -> tuple[list[dict], list[dict]] | None:
+    """Loads holdout records partitioned into (<30) and (>=30) cohorts, excluding already-logged snapshots."""
     if not TEST_PARQUET_PATH.is_file():
         return None
     df = pd.read_parquet(TEST_PARQUET_PATH)
     if not set(PAYLOAD_COLUMNS).issubset(df.columns):
         return None
-    young_df = df[df["Age"] < 30][PAYLOAD_COLUMNS].sample(frac=1.0, random_state=seed)
-    mature_df = df[df["Age"] >= 30][PAYLOAD_COLUMNS].sample(frac=1.0, random_state=seed)
-    if young_df.empty or mature_df.empty:
+
+    active_seed = int(time.time_ns() % (2**31 - 1)) if seed is None else int(seed)
+    young_records = (
+        df[df["Age"] < 30][PAYLOAD_COLUMNS]
+        .sample(frac=1.0, random_state=active_seed)
+        .to_dict(orient="records")
+    )
+    mature_records = (
+        df[df["Age"] >= 30][PAYLOAD_COLUMNS]
+        .sample(frac=1.0, random_state=active_seed)
+        .to_dict(orient="records")
+    )
+
+    if seen_keys:
+        unseen_young = [r for r in young_records if _snapshot_key(r) not in seen_keys]
+        unseen_mature = [r for r in mature_records if _snapshot_key(r) not in seen_keys]
+        if unseen_young:
+            young_records = unseen_young
+        if unseen_mature:
+            mature_records = unseen_mature
+
+    if not young_records or not mature_records:
         return None
-    return young_df.to_dict(orient="records"), mature_df.to_dict(orient="records")
+    return young_records, mature_records
 
 
 def _normalize_payload_types(row: dict) -> dict:
@@ -145,13 +202,19 @@ def run_traffic_simulation(
     url: str = DEFAULT_URL,
     count: int = 80,
     mode: str = "representative",
+    seed: int | None = None,
 ) -> int:
     api_key = os.getenv("EXPECTED_API_KEY", "")
     headers = {"X-Traffic-Source": f"synthetic_{mode}_simulation"}
     if api_key:
         headers["X-API-Key"] = api_key
 
-    holdout_cohorts = _load_holdout_cohorts() if mode == "representative" else None
+    seen_keys = _load_seen_snapshot_keys() if mode == "representative" else set()
+    holdout_cohorts = (
+        _load_holdout_cohorts(seed=seed, seen_keys=seen_keys)
+        if mode == "representative"
+        else None
+    )
 
     print(
         f"🚀 Booting {mode.upper()} traffic simulation stream ({count} requests) -> {url}"
@@ -205,5 +268,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mode", choices=["representative", "stress"], default="representative"
     )
+    parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
-    run_traffic_simulation(url=args.url, count=args.count, mode=args.mode)
+    run_traffic_simulation(
+        url=args.url, count=args.count, mode=args.mode, seed=args.seed
+    )
