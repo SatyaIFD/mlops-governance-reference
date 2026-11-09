@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.10](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.9...v0.5.10) (2026-11-09)
+
+
+### Bug Fixes
+
+* **governance:** calibrate p2 equal-opportunity thresholds, lock down loan-sim header mapping, and enforce p3 meta version stamps ([#151](https://github.com/SatyaIFD/mlops-governance-reference/issues/151)) ([937a0db](https://github.com/SatyaIFD/mlops-governance-reference/commit/937a0db409f709606c5aef07955fd397cebe7f88))
+
 ## [0.5.9](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.8...v0.5.9) (2026-11-08)
 
 
