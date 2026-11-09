@@ -75,3 +75,10 @@ updates:
     ignore:
       - dependency-name: "python"
         versions: [">= 3.14.a0"]
+
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 1

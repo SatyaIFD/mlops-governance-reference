@@ -64,15 +64,16 @@ def test_drift_monitor_reports_inconclusive_on_zero_baseline_and_preserves_holdo
         "\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8"
     )
 
-    # 1. Default min_cohort_size=30 triggers insufficient cohort size and does NOT create fairness_metrics
+    # 1. Default min_cohort_size=30 triggers insufficient cohort size and leaves live_telemetry_fairness as None when only synthetic rows exist
     result_small = run_production_audit(log_path=log_file, report_path=report_file)
     assert "fairness_metrics" not in result_small  # nosec B101
+    assert result_small["live_telemetry_fairness"] is None  # nosec B101
     assert (
-        result_small["live_telemetry_fairness"]["demographic_parity_status"]
+        result_small["synthetic_telemetry_fairness"]["demographic_parity_status"]
         == "INCONCLUSIVE (INSUFFICIENT_DATA)"
     )  # nosec B101
     assert (
-        result_small["live_telemetry_fairness"]["data_source"]
+        result_small["synthetic_telemetry_fairness"]["data_source"]
         == "synthetic_representative_simulation"
     )  # nosec B101
 
@@ -81,10 +82,10 @@ def test_drift_monitor_reports_inconclusive_on_zero_baseline_and_preserves_holdo
         log_path=log_file, report_path=report_file, min_cohort_size=1
     )
     assert (
-        result_zero["live_telemetry_fairness"]["demographic_parity_status"]
+        result_zero["synthetic_telemetry_fairness"]["demographic_parity_status"]
         == "INCONCLUSIVE (INSUFFICIENT_DATA)"
     )  # nosec B101
-    assert result_zero["live_telemetry_fairness"]["disparate_impact_ratio"] is None  # nosec B101
+    assert result_zero["synthetic_telemetry_fairness"]["disparate_impact_ratio"] is None  # nosec B101
     assert result_zero["performance_metrics"]["test_roc_auc"] == 0.7227  # nosec B101
 
 
