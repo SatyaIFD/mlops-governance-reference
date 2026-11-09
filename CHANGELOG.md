@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.11](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.10...v0.5.11) (2026-11-09)
+
+
+### Bug Fixes
+
+* **governance:** calibrate unified cohort-blind P2 threshold on validation split and lock dependency pins ([#157](https://github.com/SatyaIFD/mlops-governance-reference/issues/157)) ([dfb2965](https://github.com/SatyaIFD/mlops-governance-reference/commit/dfb2965a11d9b8b12c7cd54e29d8ecfa205a5ef2))
+
 ## [0.5.10](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.9...v0.5.10) (2026-11-09)
 
 
