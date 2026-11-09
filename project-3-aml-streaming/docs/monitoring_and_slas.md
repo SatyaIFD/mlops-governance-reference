@@ -22,7 +22,7 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
 
 ```json
 {
-  "execution_timestamp_utc": "2026-11-08T05:19:28.424713+00:00",
+  "execution_timestamp_utc": "2026-11-09T04:51:22.988662+00:00",
   "status": "COMPLETE",
   "data_governance": {
     "total_ingested": 200000,

@@ -184,10 +184,12 @@ def run_production_stream_pipeline(
     def _handle_sigterm(signum, frame):
         raise KeyboardInterrupt("SIGTERM received")
 
+    prev_sigterm = None
     try:
+        prev_sigterm = signal.getsignal(signal.SIGTERM)
         signal.signal(signal.SIGTERM, _handle_sigterm)
     except ValueError:
-        pass
+        prev_sigterm = None
 
     try:
         detector.load(model_path)
@@ -336,6 +338,12 @@ def run_production_stream_pipeline(
         _safe_record_terminal_state("FAILED")
         print(f"\n❌ Stream fatally interrupted: {fatal_err}")
         sys.exit(1)
+    finally:
+        if prev_sigterm is not None:
+            try:
+                signal.signal(signal.SIGTERM, prev_sigterm)
+            except ValueError:
+                pass
 
     if processed_count == 0:
         _safe_record_terminal_state("FAILED_ZERO_SCORED")

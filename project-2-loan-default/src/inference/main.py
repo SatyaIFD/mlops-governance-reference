@@ -102,6 +102,21 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
+def _get_cohort_threshold(age: int) -> float:
+    thresh_file = PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
+    if thresh_file.is_file():
+        import json
+
+        try:
+            data = json.loads(thresh_file.read_text(encoding="utf-8"))
+            key = "UNDER_30" if age < 30 else "30_AND_OVER"
+            if key in data:
+                return float(data[key])
+        except (OSError, ValueError, KeyError, TypeError) as err:
+            print(f"⚠️ Cohort threshold load warning: {err}", flush=True)
+    return 0.50
+
+
 def _load_expected_loan_features() -> list[str]:
     feat_file = PROJECT_ROOT / "artifacts" / "feature_columns.json"
     if feat_file.is_file():
@@ -343,12 +358,13 @@ def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
         )
 
     prob_default = breaker_response["prediction"]
-    decision_type = "CREDIT_DENY" if prob_default >= 0.50 else "CREDIT_APPROVE"
+    active_cutoff = _get_cohort_threshold(payload.Age)
+    decision_type = "CREDIT_DENY" if prob_default >= active_cutoff else "CREDIT_APPROVE"
     routed_decision = enforce_human_in_the_loop(
         prob_default, decision_type=decision_type
     )
 
-    model_recommendation = "DECLINE" if prob_default >= 0.50 else "APPROVE"
+    model_recommendation = "DECLINE" if prob_default >= active_cutoff else "APPROVE"
     age_group = "UNDER_30" if payload.Age < 30 else "30_AND_OVER"
 
     governance_block = {

@@ -99,7 +99,7 @@ def test_health_endpoint(client):
 
 def test_predict_success_low_risk_and_decision_semantics(client, valid_payload):
     """Verifies low-risk prediction, EU AI Act routing, and explicit decision semantics."""
-    p2_main.model.predict_proba.return_value = [[0.8, 0.2]]
+    p2_main.model.predict_proba.return_value = [[0.95, 0.05]]
 
     response = client.post("/predict", json=valid_payload)
     assert response.status_code == 200  # nosec B101

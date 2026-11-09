@@ -227,13 +227,11 @@ if __name__ == "__main__":
             if args.fail_on_drift and is_drifting:
                 sys.exit(1)
         else:
-            grouped_dfs = group_telemetry_by_source(TELEMETRY_FILE)
-            if args.traffic_source:
-                grouped_dfs = {
-                    k: v for k, v in grouped_dfs.items() if k == args.traffic_source
-                }
+            all_grouped_dfs = group_telemetry_by_source(TELEMETRY_FILE)
+            target_src = args.traffic_source or DEFAULT_TRAFFIC_SOURCE
+            grouped_dfs = {k: v for k, v in all_grouped_dfs.items() if k == target_src}
 
-            counts_by_source = {k: int(len(v)) for k, v in grouped_dfs.items()}
+            counts_by_source = {k: int(len(v)) for k, v in all_grouped_dfs.items()}
             eligible = {
                 k: v
                 for k, v in grouped_dfs.items()

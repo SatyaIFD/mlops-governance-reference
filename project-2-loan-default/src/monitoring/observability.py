@@ -1,14 +1,22 @@
 """
 Production Observability & Telemetry Engine - Project 2: Loan Default Prediction
-Logs runtime inference request summaries, latencies, model recommendations, review states, and age cohorts.
+Logs runtime inference request summaries, deterministic 16-field payload hashes,
+latencies, model recommendations, review states, and age cohorts.
 """
 
+import hashlib
 import json
 import time
 from pathlib import Path
 from typing import Any
 
 TELEMETRY_SCHEMA_VERSION = 2
+
+
+def compute_payload_hash(payload: dict[str, Any]) -> str:
+    """Computes a deterministic SHA-256 digest across all payload attributes without storing raw categorical PII."""
+    canonical = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
 class ModelObservabilityLogger:
@@ -48,6 +56,7 @@ class ModelObservabilityLogger:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
             "status_code": status_code,
             "latency_ms": round(latency_ms, 2),
+            "payload_hash": compute_payload_hash(request_payload),
             "payload_snapshot": {
                 "Age": age_val,
                 "Income": request_payload.get("Income"),

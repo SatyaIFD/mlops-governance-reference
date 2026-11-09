@@ -1,11 +1,13 @@
 """
 Traffic Simulation Utility - Project 2: Loan Default Prediction
 Samples representative population traffic without replacement across runs from the
-holdout test split (stratified by age cohort), excluding already-logged applicants.
+holdout test split (stratified by age cohort), excluding already-logged applicants
+using full 16-field payload hashes and raising if the unseen pool is exhausted.
 """
 
 import argparse
 import json
+import logging
 import os
 import random
 import time
@@ -13,6 +15,7 @@ from pathlib import Path
 
 import httpx
 import pandas as pd
+from src.monitoring.observability import compute_payload_hash
 
 DEFAULT_URL = os.getenv("LOAN_API_URL", "http://localhost/api/v1/loan-sim/predict")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -39,75 +42,6 @@ PAYLOAD_COLUMNS = [
 ]
 
 
-def _snapshot_key(row: dict) -> tuple:
-    return (
-        int(row["Age"]),
-        int(row["Income"]),
-        int(row["CreditScore"]),
-        int(row["LoanAmount"]),
-        round(float(row["DTIRatio"]), 4),
-    )
-
-
-def _load_seen_snapshot_keys(log_path: Path = TELEMETRY_LOG_PATH) -> set[tuple]:
-    seen: set[tuple] = set()
-    if not log_path.is_file():
-        return seen
-    with open(log_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                rec = json.loads(line)
-                snap = rec.get("payload_snapshot")
-                if isinstance(snap, dict) and {
-                    "Age",
-                    "Income",
-                    "CreditScore",
-                    "LoanAmount",
-                    "DTIRatio",
-                }.issubset(snap):
-                    seen.add(_snapshot_key(snap))
-            except (ValueError, KeyError, TypeError) as err:
-                _ = err
-    return seen
-
-
-def _load_holdout_cohorts(
-    seed: int | None = None, seen_keys: set[tuple] | None = None
-) -> tuple[list[dict], list[dict]] | None:
-    """Loads holdout records partitioned into (<30) and (>=30) cohorts, excluding already-logged snapshots."""
-    if not TEST_PARQUET_PATH.is_file():
-        return None
-    df = pd.read_parquet(TEST_PARQUET_PATH)
-    if not set(PAYLOAD_COLUMNS).issubset(df.columns):
-        return None
-
-    active_seed = int(time.time_ns() % (2**31 - 1)) if seed is None else int(seed)
-    young_records = (
-        df[df["Age"] < 30][PAYLOAD_COLUMNS]
-        .sample(frac=1.0, random_state=active_seed)
-        .to_dict(orient="records")
-    )
-    mature_records = (
-        df[df["Age"] >= 30][PAYLOAD_COLUMNS]
-        .sample(frac=1.0, random_state=active_seed)
-        .to_dict(orient="records")
-    )
-
-    if seen_keys:
-        unseen_young = [r for r in young_records if _snapshot_key(r) not in seen_keys]
-        unseen_mature = [r for r in mature_records if _snapshot_key(r) not in seen_keys]
-        if unseen_young:
-            young_records = unseen_young
-        if unseen_mature:
-            mature_records = unseen_mature
-
-    if not young_records or not mature_records:
-        return None
-    return young_records, mature_records
-
-
 def _normalize_payload_types(row: dict) -> dict:
     return {
         "Age": int(row["Age"]),
@@ -127,6 +61,104 @@ def _normalize_payload_types(row: dict) -> dict:
         "LoanPurpose": str(row["LoanPurpose"]),
         "HasCoSigner": str(row["HasCoSigner"]),
     }
+
+
+def _snapshot_key(row: dict) -> tuple:
+    return (
+        int(row["Age"]),
+        int(row["Income"]),
+        int(row["CreditScore"]),
+        int(row["LoanAmount"]),
+        round(float(row["DTIRatio"]), 4),
+    )
+
+
+def _load_seen_identifiers(
+    log_path: Path = TELEMETRY_LOG_PATH,
+) -> tuple[set[str], set[tuple]]:
+    seen_hashes: set[str] = set()
+    seen_snapshots: set[tuple] = set()
+    if not log_path.is_file():
+        return seen_hashes, seen_snapshots
+    with open(log_path, "r", encoding="utf-8") as f:
+        for line_num, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+                if rec.get("payload_hash"):
+                    seen_hashes.add(str(rec["payload_hash"]))
+                snap = rec.get("payload_snapshot")
+                if isinstance(snap, dict) and {
+                    "Age",
+                    "Income",
+                    "CreditScore",
+                    "LoanAmount",
+                    "DTIRatio",
+                }.issubset(snap):
+                    seen_snapshots.add(_snapshot_key(snap))
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                logging.warning(
+                    "Skipping malformed telemetry line %d in %s: %s",
+                    line_num,
+                    log_path.name,
+                    exc,
+                )
+    return seen_hashes, seen_snapshots
+
+
+def _load_holdout_cohorts(
+    required_per_cohort: int,
+    seed: int | None = None,
+    seen_hashes: set[str] | None = None,
+    seen_snapshots: set[tuple] | None = None,
+) -> tuple[list[dict], list[dict]] | None:
+    """Loads holdout records partitioned into (<30) and (>=30) cohorts, excluding already-logged applicants."""
+    if not TEST_PARQUET_PATH.is_file():
+        return None
+    df = pd.read_parquet(TEST_PARQUET_PATH)
+    if not set(PAYLOAD_COLUMNS).issubset(df.columns):
+        return None
+
+    active_seed = int(time.time_ns() % (2**31 - 1)) if seed is None else int(seed)
+    young_raw = (
+        df[df["Age"] < 30][PAYLOAD_COLUMNS]
+        .sample(frac=1.0, random_state=active_seed)
+        .to_dict(orient="records")
+    )
+    mature_raw = (
+        df[df["Age"] >= 30][PAYLOAD_COLUMNS]
+        .sample(frac=1.0, random_state=active_seed)
+        .to_dict(orient="records")
+    )
+
+    seen_hashes = seen_hashes or set()
+    seen_snapshots = seen_snapshots or set()
+
+    def _filter_unseen(records: list[dict]) -> list[dict]:
+        unseen = []
+        used_snaps = set(seen_snapshots)
+        for r in records:
+            norm = _normalize_payload_types(r)
+            h = compute_payload_hash(norm)
+            s_key = _snapshot_key(norm)
+            if h not in seen_hashes and s_key not in used_snaps:
+                unseen.append(norm)
+                used_snaps.add(s_key)
+        return unseen
+
+    young_records = _filter_unseen(young_raw)
+    mature_records = _filter_unseen(mature_raw)
+
+    if (
+        len(young_records) < required_per_cohort
+        or len(mature_records) < required_per_cohort
+    ):
+        raise RuntimeError(
+            f"Unseen holdout applicant pool exhausted (needed {required_per_cohort} per cohort; "
+            f"available young={len(young_records)}, mature={len(mature_records)})."
+        )
+    return young_records, mature_records
 
 
 def generate_representative_applicant(is_young: bool, high_risk: bool = False) -> dict:
@@ -209,9 +241,17 @@ def run_traffic_simulation(
     if api_key:
         headers["X-API-Key"] = api_key
 
-    seen_keys = _load_seen_snapshot_keys() if mode == "representative" else set()
+    required_per_cohort = (count + 1) // 2
+    seen_hashes, seen_snapshots = (
+        _load_seen_identifiers() if mode == "representative" else (set(), set())
+    )
     holdout_cohorts = (
-        _load_holdout_cohorts(seed=seed, seen_keys=seen_keys)
+        _load_holdout_cohorts(
+            required_per_cohort=required_per_cohort,
+            seed=seed,
+            seen_hashes=seen_hashes,
+            seen_snapshots=seen_snapshots,
+        )
         if mode == "representative"
         else None
     )
@@ -229,7 +269,7 @@ def run_traffic_simulation(
             elif holdout_cohorts is not None:
                 young_pool, mature_pool = holdout_cohorts
                 pool = young_pool if is_young else mature_pool
-                payload = _normalize_payload_types(pool[(i // 2) % len(pool)])
+                payload = pool[i // 2]
             else:
                 high_risk = (i // 2) % 4 == 0
                 payload = generate_representative_applicant(

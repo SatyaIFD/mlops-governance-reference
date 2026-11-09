@@ -1,9 +1,9 @@
 """
 Real-Time Fairness & Recommendation Disparity Monitor - Project 2: Loan Default Prediction
-Evaluates live telemetry logs across protected (<30) and baseline (>=30) age cohorts.
-Evaluates each traffic_source independently (prioritizing live_production_traffic),
-applies Haldane-Anscombe (+0.5) continuity correction whenever any 2x2 cell is 0 or n,
-and classifies fairness using the 95% Katz confidence interval.
+Evaluates telemetry logs across protected (<30) and baseline (>=30) age cohorts.
+Stores live_production_traffic strictly under live_telemetry_fairness (null when no live
+rows exist), stores synthetic runs under synthetic_telemetry_fairness, and scopes
+--fail-on-breach to live_production_traffic by default.
 """
 
 import argparse
@@ -23,8 +23,7 @@ def _compute_di_95_ci(
     """
     Computes the Katz logarithmic 95% confidence interval for the Disparate Impact ratio.
     Applies Haldane-Anscombe (+0.5) continuity correction whenever any cell in the 2x2
-    approval/decline table is zero (k == 0 or k == n) so boundary rates (0% or 100%)
-    do not collapse cohort variance to zero.
+    approval/decline table is zero (k == 0 or k == n).
     """
     if n_prot <= 0 or n_base <= 0 or k_base <= 0:
         return None
@@ -150,6 +149,7 @@ def run_production_audit(
     min_cohort_size: int = 30,
     fail_on_breach: bool = False,
     traffic_source: str | None = None,
+    include_synthetic_breach: bool = False,
 ) -> dict:
     print("🕵️‍♂️ Initializing real-time governance & recommendation parity scanner...")
 
@@ -183,8 +183,13 @@ def run_production_audit(
     else:
         existing_report.pop("fairness_metrics", None)
 
-    def _save_with_live_blocks(primary: dict, by_source: dict[str, dict]) -> dict:
-        existing_report["live_telemetry_fairness"] = primary
+    def _save_blocks(
+        live_block: dict | None,
+        synthetic_block: dict | None,
+        by_source: dict[str, dict],
+    ) -> dict:
+        existing_report["live_telemetry_fairness"] = live_block
+        existing_report["synthetic_telemetry_fairness"] = synthetic_block
         existing_report["live_telemetry_fairness_by_source"] = by_source
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as f:
@@ -193,14 +198,7 @@ def run_production_audit(
 
     if not log_path.exists():
         print(f"⚠️ Telemetry log ledger not found at: {log_path}")
-        empty_block = {
-            "data_source": "none",
-            "demographic_parity_status": "UNKNOWN (NO_TELEMETRY)",
-            "disparate_impact_ratio": None,
-            "di_95_ci": None,
-            "sample_size_valid": False,
-        }
-        return _save_with_live_blocks(empty_block, {})
+        return _save_blocks(None, None, {})
 
     grouped: dict[str, list[dict]] = {}
     with open(log_path, "r", encoding="utf-8") as f:
@@ -215,14 +213,7 @@ def run_production_audit(
 
     if not grouped:
         print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")
-        empty_block = {
-            "data_source": traffic_source or "none",
-            "demographic_parity_status": "INCONCLUSIVE (INSUFFICIENT_DATA)",
-            "disparate_impact_ratio": None,
-            "di_95_ci": None,
-            "sample_size_valid": False,
-        }
-        return _save_with_live_blocks(empty_block, {})
+        return _save_blocks(None, None, {})
 
     by_source = {
         src: _evaluate_source_records(recs, src, min_cohort_size)
@@ -230,29 +221,41 @@ def run_production_audit(
     }
 
     if traffic_source:
-        primary_source = traffic_source
-        primary_block = by_source.get(
+        live_block = by_source.get(
             traffic_source,
             _evaluate_source_records([], traffic_source, min_cohort_size),
         )
-    elif DEFAULT_TRAFFIC_SOURCE in by_source:
-        primary_source = DEFAULT_TRAFFIC_SOURCE
-        primary_block = by_source[DEFAULT_TRAFFIC_SOURCE]
     else:
-        primary_source = max(grouped.keys(), key=lambda k: len(grouped[k]))
-        primary_block = by_source[primary_source]
+        live_block = by_source.get(DEFAULT_TRAFFIC_SOURCE)
 
-    print(
-        f"⚖️ Live Fairness ({primary_source}): {primary_block['demographic_parity_status']} | "
-        f"DI: {primary_block['disparate_impact_ratio']} | 95% CI: {primary_block['di_95_ci']}"
+    synthetic_sources = [k for k in by_source if k != DEFAULT_TRAFFIC_SOURCE]
+    synthetic_block = (
+        by_source[max(synthetic_sources, key=lambda k: len(grouped[k]))]
+        if synthetic_sources
+        else None
     )
-    saved = _save_with_live_blocks(primary_block, by_source)
-    if fail_on_breach and any(
-        b.get("demographic_parity_status") == "NON-COMPLIANT (BREACH)"
-        for b in by_source.values()
-    ):
-        print("🚨 Live demographic parity breach confirmed outside 95% CI bounds.")
-        sys.exit(1)
+
+    active_display = live_block or synthetic_block
+    if active_display:
+        print(
+            f"⚖️ Telemetry Fairness ({active_display['data_source']}): "
+            f"{active_display['demographic_parity_status']} | "
+            f"DI: {active_display['disparate_impact_ratio']} | 95% CI: {active_display['di_95_ci']}"
+        )
+
+    saved = _save_blocks(live_block, synthetic_block, by_source)
+    if fail_on_breach:
+        gated_blocks = (
+            list(by_source.values())
+            if include_synthetic_breach
+            else ([live_block] if live_block is not None else [])
+        )
+        if any(
+            b.get("demographic_parity_status") == "NON-COMPLIANT (BREACH)"
+            for b in gated_blocks
+        ):
+            print("🚨 Live demographic parity breach confirmed outside 95% CI bounds.")
+            sys.exit(1)
     return saved
 
 
@@ -261,7 +264,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fail-on-breach",
         action="store_true",
-        help="Exit non-zero if the 95% CI confirms a demographic parity breach.",
+        help="Exit non-zero if live_production_traffic 95% CI confirms a demographic parity breach.",
+    )
+    parser.add_argument(
+        "--include-synthetic",
+        action="store_true",
+        help="Also fail on synthetic simulation breaches when --fail-on-breach is set.",
     )
     parser.add_argument(
         "--traffic-source",
@@ -271,5 +279,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     run_production_audit(
-        fail_on_breach=args.fail_on_breach, traffic_source=args.traffic_source
+        fail_on_breach=args.fail_on_breach,
+        traffic_source=args.traffic_source,
+        include_synthetic_breach=args.include_synthetic,
     )

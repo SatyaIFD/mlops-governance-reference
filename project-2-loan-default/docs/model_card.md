@@ -5,12 +5,12 @@
 
 ## ⚖️ Model Governance & Fairness Summary
 * **Demographic Parity Status:** `COMPLIANT (FAIR)`
-* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `1.0001`
+* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `0.9281`
 * **Mitigation Mechanism:** `Sample Reweighting (Pre-processing Demographic Parity)`
 
 ## 📊 Core Holdout Evaluation Metrics
 * **Test ROC-AUC:** `0.7227`
-* **Test Classification Accuracy:** `0.885`
+* **Test Classification Accuracy:** `0.7927`
 * **Test Log-Loss:** `0.3253`
 
 ## 📡 Population Stability & Distribution Drift
