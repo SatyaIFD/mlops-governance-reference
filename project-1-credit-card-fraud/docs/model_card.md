@@ -3,7 +3,7 @@
 ## 1. Model Details
 * **Developer:** Enterprise Risk MLOps Team
 * **Model Architecture:** XGBoost Classifier (`XGBClassifier`)
-* **Engine Dependencies:** `xgboost==3.4.1`, `mlflow==3.17.2`, `python 3.13.14`
+* **Engine Dependencies:** `xgboost==3.4.1`, `mlflow==3.18.0`, `python 3.13.14`
 * **Registered Model URI:** `models:/fraud_detection_xgb/3` (SQLite Backend Tracking Registry)
 * **License:** Internal Financial Operations Use Only
 

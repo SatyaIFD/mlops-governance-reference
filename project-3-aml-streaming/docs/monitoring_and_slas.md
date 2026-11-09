@@ -22,7 +22,7 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
 
 ```json
 {
-  "execution_timestamp_utc": "2026-11-09T04:51:22.988662+00:00",
+  "execution_timestamp_utc": "2026-11-09T06:28:12.357976+00:00",
   "status": "COMPLETE",
   "data_governance": {
     "total_ingested": 200000,
@@ -33,8 +33,8 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   "model_metadata": {
     "artifact_path": "aml_streaming_model",
     "calibrated_threshold": 0.65,
-    "model_sha256": "428d294b2b1eda4397a33c883ce452ed777a80e3a0eff71471a2e966b3832324",
-    "mlflow_run_id": "e565ff5ce09142ad9fec2cedf336c5cb",
+    "model_sha256": "a8601868d8bba20ca4f4b7a1f6668b79132fe42b4ff4d0b3768b09c998cfed44",
+    "mlflow_run_id": "c7f8d8d5464b4bc7aac61b4829b06dcc",
     "features_used": [
       "Amount",
       "pass_through_ratio_1h",

@@ -235,12 +235,21 @@ def run_production_audit(
         else None
     )
 
-    active_display = live_block or synthetic_block
-    if active_display:
+    if live_block is None:
         print(
-            f"⚖️ Telemetry Fairness ({active_display['data_source']}): "
-            f"{active_display['demographic_parity_status']} | "
-            f"DI: {active_display['disparate_impact_ratio']} | 95% CI: {active_display['di_95_ci']}"
+            "⏭️ Live Fairness Gate: NOT_EVALUATED (NO_LIVE_TRAFFIC) — live_telemetry_fairness is null."
+        )
+    if live_block:
+        print(
+            f"⚖️ Live Telemetry Fairness ({live_block['data_source']}): "
+            f"{live_block['demographic_parity_status']} | "
+            f"DI: {live_block['disparate_impact_ratio']} | 95% CI: {live_block['di_95_ci']}"
+        )
+    if synthetic_block:
+        print(
+            f"🧪 Synthetic Telemetry Fairness ({synthetic_block['data_source']}): "
+            f"{synthetic_block['demographic_parity_status']} | "
+            f"DI: {synthetic_block['disparate_impact_ratio']} | 95% CI: {synthetic_block['di_95_ci']}"
         )
 
     saved = _save_blocks(live_block, synthetic_block, by_source)

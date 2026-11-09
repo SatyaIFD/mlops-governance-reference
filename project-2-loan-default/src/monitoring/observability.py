@@ -67,6 +67,8 @@ class ModelObservabilityLogger:
             "inference_output": {
                 "default_probability": risk.get("default_probability"),
                 "model_recommendation": model_rec,
+                "decision_threshold": gov.get("decision_threshold"),
+                "model_version": gov.get("model_version"),
                 "review_status": gov.get("review_status", "PENDING_HUMAN_REVIEW"),
                 "final_decision": gov.get("final_decision"),
                 "age_group": age_group,

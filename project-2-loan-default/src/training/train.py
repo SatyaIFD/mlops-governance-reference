@@ -1,6 +1,8 @@
 """
 Production Training Engine - Project 2: Loan Default Prediction
-Trains the mitigated fair model using sample re-weighting and registers metrics via MLflow.
+Splits train.parquet into fit (80%) and validation (20%) partitions, fits the
+sample-reweighted XGBoost model on the fit split, calibrates a single unified
+cohort-blind decision threshold on the validation split, and logs to MLflow.
 """
 
 import json
@@ -12,7 +14,57 @@ import numpy as np
 import pandas as pd
 from mlflow.models import infer_signature
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
+from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
+
+
+def calibrate_unified_validation_threshold(
+    y_val: pd.Series,
+    val_probs: np.ndarray,
+    is_young_val: pd.Series,
+    min_recall: float = 0.40,
+    max_recall: float = 0.55,
+) -> float:
+    """
+    Selects a single cohort-blind probability threshold on the validation split
+    that achieves target default recall in [min_recall, max_recall] while minimizing
+    the relative TPR gap between (<30) and (>=30) cohorts.
+    """
+    pos_probs = val_probs[y_val == 1]
+    if len(pos_probs) == 0:
+        return 0.20
+
+    best_cutoff = float(np.quantile(pos_probs, 0.55))
+    best_loss = float("inf")
+
+    y_arr = y_val.to_numpy()
+    young_mask = (is_young_val == 1).to_numpy()
+    base_mask = ~young_mask
+
+    for q in np.linspace(1.0 - max_recall, 1.0 - min_recall, 31):
+        cand = float(np.quantile(pos_probs, q))
+        preds = (val_probs >= cand).astype(int)
+
+        prot_pos = (y_arr == 1) & young_mask
+        base_pos = (y_arr == 1) & base_mask
+        prot_neg = (y_arr == 0) & young_mask
+        base_neg = (y_arr == 0) & base_mask
+
+        tpr_prot = float(preds[prot_pos].mean()) if prot_pos.any() else 0.0
+        tpr_base = float(preds[base_pos].mean()) if base_pos.any() else 0.0
+        fpr_prot = float(preds[prot_neg].mean()) if prot_neg.any() else 0.0
+        fpr_base = float(preds[base_neg].mean()) if base_neg.any() else 0.0
+
+        if tpr_base <= 0.0:
+            continue
+        tpr_ratio = tpr_prot / tpr_base
+        fpr_gap = abs(fpr_prot - fpr_base)
+        loss = abs(tpr_ratio - 1.0) + 0.5 * fpr_gap
+        if loss < best_loss:
+            best_loss = loss
+            best_cutoff = cand
+
+    return round(max(0.05, min(0.50, best_cutoff)), 4)
 
 
 class LoanModelTrainer:
@@ -52,59 +104,85 @@ class LoanModelTrainer:
         return weights
 
     def run_pipeline(self):
-        """Processes matrices, executes training, persists feature vocabulary, and logs to MLflow."""
+        """Fits on 80% of train.parquet, calibrates unified cutoff on 20% validation, and logs to MLflow."""
         print("📥 Ingesting validated Parquet frames...")
-        train_df = pd.read_parquet(self.train_path)
+        full_train_df = pd.read_parquet(self.train_path)
         test_df = pd.read_parquet(self.test_path)
 
-        for df in [train_df, test_df]:
+        for df in [full_train_df, test_df]:
             if "LoanID" in df.columns:
                 df.drop(columns=["LoanID"], inplace=True)
 
-        X_train = train_df.drop(columns=["Default"])
-        y_train = train_df["Default"]
-        X_test = test_df.drop(columns=["Default"])
-        y_test = test_df["Default"]
-
-        X_train["is_young"] = (X_train["Age"] < 30).astype(int)
-        X_test["is_young"] = (X_test["Age"] < 30).astype(int)
-
-        cat_cols = X_train.select_dtypes(
-            include=["object", "category"]
-        ).columns.tolist()
-        if cat_cols:
-            X_train = pd.get_dummies(X_train, columns=cat_cols, drop_first=True)
-            X_test = pd.get_dummies(X_test, columns=cat_cols, drop_first=True)
-            X_train, X_test = X_train.align(X_test, join="left", axis=1, fill_value=0)
-
-        X_train = X_train.astype(
-            {col: "int8" for col in X_train.select_dtypes(include=["bool"]).columns}
+        strat_key = (
+            full_train_df["Default"].astype(str)
+            + "_"
+            + (full_train_df["Age"] < 30).astype(int).astype(str)
         )
-        X_test = X_test.astype(
-            {col: "int8" for col in X_test.select_dtypes(include=["bool"]).columns}
+        fit_df, val_df = train_test_split(
+            full_train_df,
+            test_size=0.20,
+            random_state=42,
+            stratify=strat_key,
         )
+        fit_df = fit_df.reset_index(drop=True)
+        val_df = val_df.reset_index(drop=True)
 
-        sample_weights = self.calculate_mitigation_weights(train_df)
+        def _encode_features(df_in: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+            X = df_in.drop(columns=["Default"]).copy()
+            y = df_in["Default"].copy()
+            X["is_young"] = (X["Age"] < 30).astype(int)
+            cat_cols = X.select_dtypes(
+                include=["object", "category", "string"]
+            ).columns.tolist()
+            if cat_cols:
+                X = pd.get_dummies(X, columns=cat_cols, drop_first=True)
+            X = X.astype(
+                {col: "int8" for col in X.select_dtypes(include=["bool"]).columns}
+            )
+            return X, y
+
+        X_fit, y_fit = _encode_features(fit_df)
+        X_val, y_val = _encode_features(val_df)
+        X_test, y_test = _encode_features(test_df)
+
+        X_fit, X_val = X_fit.align(X_val, join="left", axis=1, fill_value=0)
+        X_fit, X_test = X_fit.align(X_test, join="left", axis=1, fill_value=0)
+
+        sample_weights = self.calculate_mitigation_weights(fit_df)
         artifacts_dir = self.data_dir.parent.parent / "artifacts"
         artifacts_dir.mkdir(parents=True, exist_ok=True)
 
         feature_cols_path = artifacts_dir / "feature_columns.json"
         with open(feature_cols_path, "w", encoding="utf-8") as f:
-            json.dump(list(X_train.columns), f, indent=2)
+            json.dump(list(X_fit.columns), f, indent=2)
 
         mlflow.set_experiment("loan_default_risk_governance")
-        with mlflow.start_run(run_name="mitigated_sample_reweighting"):
-            print("🌲 Fitting Fair XGBoost pipeline...")
+        with mlflow.start_run(run_name="mitigated_sample_reweighting") as run:
+            print("🌲 Fitting Fair XGBoost pipeline on 80% fit partition...")
             model = XGBClassifier(
                 random_state=42, eval_metric="logloss", n_estimators=100
             )
-            model.fit(X_train, y_train, sample_weight=sample_weights)
+            model.fit(X_fit, y_fit, sample_weight=sample_weights)
 
-            train_probs = model.predict_proba(X_train)[:, 1]
+            fit_probs = model.predict_proba(X_fit)[:, 1]
+            val_probs = model.predict_proba(X_val)[:, 1]
             test_probs = model.predict_proba(X_test)[:, 1]
-            preds = model.predict(X_test)
 
-            train_auc = float(roc_auc_score(y_train, train_probs))
+            unified_cutoff = calibrate_unified_validation_threshold(
+                y_val, val_probs, X_val["is_young"]
+            )
+            thresholds_payload = {
+                "decision_threshold": unified_cutoff,
+                "calibration_split": "validation_holdout_20pct",
+                "mlflow_run_id": run.info.run_id,
+            }
+            thresholds_path = artifacts_dir / "decision_thresholds.json"
+            with open(thresholds_path, "w", encoding="utf-8") as f:
+                json.dump(thresholds_payload, f, indent=2)
+
+            preds = (test_probs >= unified_cutoff).astype(int)
+            train_auc = float(roc_auc_score(y_fit, fit_probs))
+            val_auc = float(roc_auc_score(y_val, val_probs))
             test_auc = float(roc_auc_score(y_test, test_probs))
             test_acc = float(accuracy_score(y_test, preds))
             test_logloss = float(log_loss(y_test, test_probs))
@@ -120,38 +198,23 @@ class LoanModelTrainer:
             )
 
             print(
-                f"📊 Run Completed: Test ROC-AUC = {test_auc:.4f} | Test Acc = {test_acc:.4f} | Disparate Impact = {di_ratio:.4f}"
+                f"📊 Run Completed: Val AUC = {val_auc:.4f} | Test AUC = {test_auc:.4f} | "
+                f"Unified Cutoff = {unified_cutoff:.4f} | Test DI = {di_ratio:.4f}"
             )
-
-            eval_report_path = artifacts_dir / "compliance_audit_report.json"
-            with open(eval_report_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "performance_metrics": {
-                            "test_roc_auc": round(test_auc, 4),
-                            "test_accuracy": round(test_acc, 4),
-                            "log_loss": round(test_logloss, 4),
-                        },
-                        "fairness_metrics": {
-                            "demographic_parity_status": "COMPLIANT (FAIR)"
-                            if 0.80 <= di_ratio <= 1.25
-                            else "NON-COMPLIANT (BREACH)",
-                            "disparate_impact_ratio": round(di_ratio, 4),
-                        },
-                    },
-                    f,
-                    indent=4,
-                )
 
             mlflow.log_param("model_type", "XGBClassifier")
             mlflow.log_param("mitigation_technique", "sample_reweighting")
+            mlflow.log_param("decision_threshold", unified_cutoff)
             mlflow.log_metric("train_roc_auc", train_auc)
+            mlflow.log_metric("val_roc_auc", val_auc)
             mlflow.log_metric("test_roc_auc", test_auc)
             mlflow.log_metric("test_accuracy", test_acc)
+            mlflow.log_metric("test_log_loss", test_logloss)
             mlflow.log_metric("disparate_impact_ratio", di_ratio)
             mlflow.log_artifact(str(feature_cols_path), artifact_path="preprocessing")
+            mlflow.log_artifact(str(thresholds_path), artifact_path="preprocessing")
 
-            signature = infer_signature(X_train, train_probs)
+            signature = infer_signature(X_fit, fit_probs)
 
             try:
                 mlflow.xgboost.log_model(

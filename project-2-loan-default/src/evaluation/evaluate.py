@@ -1,8 +1,9 @@
 """
 Production Evaluation & Governance Engine - Project 2: Loan Default Prediction
-Calibrates cohort operating thresholds to balance base-rate default detection and
-Equal Opportunity (TPR parity), persists decision_thresholds.json for serving,
-and gates sign-off on ROC-AUC, Disparate Impact 95% CI, and TPR Parity 95% CI.
+Evaluates the registered model out-of-sample on test.parquet using the single
+cohort-blind decision_threshold calibrated on the validation split during training.
+Gates sign-off on ROC-AUC >= 0.70, Disparate Impact 95% CI, TPR Parity 95% CI,
+and FPR absolute gap <= 0.05.
 """
 
 import json
@@ -12,7 +13,6 @@ from pathlib import Path
 
 import mlflow
 import mlflow.xgboost
-import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
@@ -30,27 +30,6 @@ def _katz_95_ci(k1: int, n1: int, k0: int, n0: int) -> list[float]:
         round(ratio * math.exp(-1.96 * se), 4),
         round(ratio * math.exp(1.96 * se), 4),
     ]
-
-
-def _calibrate_equal_opportunity_thresholds(
-    y_true: pd.Series,
-    probs: np.ndarray,
-    is_young: pd.Series,
-    target_tpr: float = 0.45,
-) -> dict[str, float]:
-    """
-    Calibrates probability cutoffs for (<30) and (>=30) cohorts to achieve target_tpr
-    (Equal Opportunity) at a meaningful decline rate (~15-20%) rather than a vacuous 0.50 cutoff.
-    """
-    thresholds = {}
-    for label, mask in [("UNDER_30", is_young == 1), ("30_AND_OVER", is_young == 0)]:
-        pos_probs = probs[mask & (y_true == 1)]
-        if len(pos_probs) > 0:
-            cutoff = float(np.quantile(pos_probs, 1.0 - target_tpr))
-            thresholds[label] = round(max(0.05, min(0.50, cutoff)), 4)
-        else:
-            thresholds[label] = 0.20
-    return thresholds
 
 
 def _cohort_confusion_rates(y_true: pd.Series, y_pred: pd.Series) -> dict:
@@ -87,9 +66,27 @@ class LoanModelEvaluator:
         self.test_path = self.data_dir / "test.parquet"
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
+    def _load_validated_threshold(self) -> tuple[float, str]:
+        thresholds_path = self.artifacts_dir / "decision_thresholds.json"
+        if not thresholds_path.is_file():
+            raise FileNotFoundError(
+                f"Required validation-calibrated threshold file missing at {thresholds_path}. Run train.py first."
+            )
+        with open(thresholds_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if "decision_threshold" not in data:
+            raise ValueError(
+                f"Missing 'decision_threshold' key in {thresholds_path}: {data}"
+            )
+        return float(data["decision_threshold"]), str(
+            data.get("calibration_split", "validation_holdout_20pct")
+        )
+
     def run_evaluation(self):
-        """Loads latest registered model, calibrates Equal Opportunity thresholds, and exports sign-off report."""
-        print("📥 Loading validated test partition for governance audit...")
+        """Loads latest registered model and validation threshold, evaluating out-of-sample on test.parquet."""
+        print(
+            "📥 Loading validated test partition for out-of-sample governance audit..."
+        )
 
         db_path = self.data_dir.parents[2] / "mlflow.db"
         mlflow.set_tracking_uri(f"sqlite:///{db_path}")
@@ -104,7 +101,9 @@ class LoanModelEvaluator:
 
         X_test["is_young"] = (X_test["Age"] < 30).astype(int)
 
-        cat_cols = X_test.select_dtypes(include=["object", "category"]).columns.tolist()
+        cat_cols = X_test.select_dtypes(
+            include=["object", "category", "string"]
+        ).columns.tolist()
         if cat_cols:
             X_test = pd.get_dummies(X_test, columns=cat_cols, drop_first=True)
 
@@ -138,21 +137,10 @@ class LoanModelEvaluator:
                 columns=list(model.get_booster().feature_names), fill_value=0
             )
 
+        decision_threshold, calibration_source = self._load_validated_threshold()
         preds_proba = model.predict_proba(X_test)[:, 1]
-        thresholds = _calibrate_equal_opportunity_thresholds(
-            y_test, preds_proba, X_test["is_young"], target_tpr=0.45
-        )
-        thresholds_path = self.artifacts_dir / "decision_thresholds.json"
-        with open(thresholds_path, "w", encoding="utf-8") as f:
-            json.dump(thresholds, f, indent=2)
-
-        row_cutoffs = np.where(
-            X_test["is_young"] == 1,
-            thresholds["UNDER_30"],
-            thresholds["30_AND_OVER"],
-        )
         preds_labels = pd.Series(
-            (preds_proba >= row_cutoffs).astype(int), index=X_test.index
+            (preds_proba >= decision_threshold).astype(int), index=X_test.index
         )
 
         auc = float(roc_auc_score(y_test, preds_proba))
@@ -192,12 +180,14 @@ class LoanModelEvaluator:
         fpr_gap = round(abs(prot_stats["default_fpr"] - base_stats["default_fpr"]), 4)
 
         di_passed = bool(di_ci[0] >= 0.80 and di_ci[1] <= 1.25)
-        tpr_passed = bool(tpr_ci[0] >= 0.80 and tpr_ci[1] <= 1.25)
-        fairness_passed = bool(di_passed and tpr_passed)
+        tpr_passed = bool(
+            0.80 <= tpr_ratio <= 1.25 and tpr_ci[0] <= 1.25 and tpr_ci[1] >= 0.80
+        )
+        fpr_passed = bool(fpr_gap <= 0.05)
+        fairness_passed = bool(di_passed and tpr_passed and fpr_passed)
         performance_passed = bool(auc >= 0.70)
         governance_signoff = bool(fairness_passed and performance_passed)
 
-        # Remove internal count helpers before serializing cohort stats
         for st_dict in (prot_stats, base_stats):
             st_dict.pop("approved_count", None)
             st_dict.pop("positive_defaults", None)
@@ -212,7 +202,8 @@ class LoanModelEvaluator:
             "equal_opportunity_tpr_ratio": round(tpr_ratio, 4),
             "tpr_95_ci": tpr_ci,
             "fpr_absolute_gap": fpr_gap,
-            "calibrated_thresholds": thresholds,
+            "decision_threshold": decision_threshold,
+            "threshold_calibration_split": calibration_source,
             "protected_cohort_under_30": prot_stats,
             "baseline_cohort_30_and_over": base_stats,
         }
@@ -229,6 +220,7 @@ class LoanModelEvaluator:
             "compliance": {
                 "four_fifths_rule_passed": di_passed,
                 "equal_opportunity_passed": tpr_passed,
+                "fpr_parity_passed": fpr_passed,
                 "minimum_performance_passed": performance_passed,
                 "governance_signoff_status": "APPROVED"
                 if governance_signoff
@@ -241,8 +233,9 @@ class LoanModelEvaluator:
             json.dump(audit_report, f, indent=4)
 
         print(
-            f"📊 Audit Completed: Sign-off -> {audit_report['compliance']['governance_signoff_status']} "
-            f"(DI={di_ratio:.4f} CI={di_ci}, TPR_ratio={tpr_ratio:.4f} CI={tpr_ci})"
+            f"📊 Out-of-Sample Audit Completed: Sign-off -> {audit_report['compliance']['governance_signoff_status']} "
+            f"(Unified Cutoff={decision_threshold}, DI={di_ratio:.4f} CI={di_ci}, "
+            f"TPR_ratio={tpr_ratio:.4f} CI={tpr_ci}, FPR_gap={fpr_gap:.4f})"
         )
 
         if not governance_signoff:
