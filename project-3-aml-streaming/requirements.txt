@@ -1,9 +1,9 @@
-pandas>=2.0.0,<3.0.0
-numpy>=1.26.0
-scikit-learn==1.9.0
+pandas>=3.1.1,<4.0.0
+numpy>=2.5.4
+scikit-learn==1.9.1
 kagglehub
-msgpack>=1.2.3
-setuptools>=78.1.1
-mlflow==3.17.2
+msgpack>=1.2.4
+setuptools>=84.2.1
+mlflow==3.18.0
 skops==0.16.0
 urllib3>=2.8.0
