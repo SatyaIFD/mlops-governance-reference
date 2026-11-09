@@ -1,7 +1,7 @@
 pandas==2.3.3
-numpy==2.4.6
+numpy==2.5.4
 scikit-learn==1.9.1
-pyarrow==25.0.1
+pyarrow==26.0.1
 kagglehub
 msgpack>=1.2.4
 setuptools>=84.2.1
