@@ -8,7 +8,6 @@ import zipfile
 from pathlib import Path
 
 import pandas as pd
-from kaggle.api.kaggle_api_extended import KaggleApi
 from sklearn.model_selection import train_test_split
 
 
@@ -23,6 +22,8 @@ class LoanDataIngestionEngine:
 
     def fetch_and_extract(self):
         """Authenticates with Kaggle, streams the raw zip payload, and handles system extraction."""
+        from kaggle.api.kaggle_api_extended import KaggleApi
+
         print("🔌 Authenticating via native Kaggle API context...")
         api = KaggleApi()
         api.authenticate()

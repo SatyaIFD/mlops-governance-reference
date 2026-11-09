@@ -12,3 +12,4 @@ kagglehub
 hypothesis
 pre-commit
 pyarrow>=15.0.0
+six>=1.16.0

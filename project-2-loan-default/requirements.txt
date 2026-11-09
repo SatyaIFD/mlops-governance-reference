@@ -13,3 +13,4 @@ kaggle>=1.6.0
 msgpack>=1.2.4
 setuptools>=84.2.1
 urllib3>=2.8.0
+six>=1.16.0
