@@ -1,8 +1,10 @@
 """
 Inference API Service - Project 2: Loan Default Prediction
-Exposes the fair, sample-reweighted XGBoost model as a production-grade FastAPI endpoint.
+Exposes the fair, sample-reweighted XGBoost model with a single validation-calibrated,
+cohort-blind decision threshold loaded once at startup and surfaced in /health and telemetry.
 """
 
+import json
 import math
 import os
 import secrets
@@ -64,6 +66,8 @@ EXPECTED_LOAN_FEATURES = [
 
 model = None
 feature_columns = None
+decision_threshold: float | None = None
+loaded_model_version: str | None = None
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -102,26 +106,32 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
-def _get_cohort_threshold(age: int) -> float:
-    thresh_file = PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
-    if thresh_file.is_file():
-        import json
+def _load_startup_decision_threshold() -> float:
+    """Loads the single validation-calibrated decision threshold once at startup."""
+    env_thresh = os.getenv("LOAN_DECISION_THRESHOLD", "").strip()
+    if env_thresh:
+        cutoff = float(env_thresh)
+        if not (0.0 < cutoff < 1.0):
+            raise ValueError(f"Invalid LOAN_DECISION_THRESHOLD: {cutoff}")
+        return cutoff
 
-        try:
-            data = json.loads(thresh_file.read_text(encoding="utf-8"))
-            key = "UNDER_30" if age < 30 else "30_AND_OVER"
-            if key in data:
-                return float(data[key])
-        except (OSError, ValueError, KeyError, TypeError) as err:
-            print(f"⚠️ Cohort threshold load warning: {err}", flush=True)
-    return 0.50
+    thresh_file = PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
+    if not thresh_file.is_file():
+        raise FileNotFoundError(
+            f"Required threshold configuration missing at {thresh_file}"
+        )
+    data = json.loads(thresh_file.read_text(encoding="utf-8"))
+    if "decision_threshold" not in data:
+        raise ValueError(f"Missing 'decision_threshold' key in {thresh_file}: {data}")
+    cutoff = float(data["decision_threshold"])
+    if not (0.0 < cutoff < 1.0):
+        raise ValueError(f"Out-of-range decision_threshold in {thresh_file}: {cutoff}")
+    return cutoff
 
 
 def _load_expected_loan_features() -> list[str]:
     feat_file = PROJECT_ROOT / "artifacts" / "feature_columns.json"
     if feat_file.is_file():
-        import json
-
         with open(feat_file, "r", encoding="utf-8") as f:
             loaded_cols = json.load(f)
         if isinstance(loaded_cols, list) and loaded_cols:
@@ -187,7 +197,7 @@ def _load_xgboost_model_portable(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles microservice startup and teardown routines."""
-    global model, feature_columns
+    global model, feature_columns, decision_threshold, loaded_model_version
     print("🚀 Initializing inference context...", flush=True)
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
@@ -217,15 +227,20 @@ async def lifespan(app: FastAPI):
             client, model_name, model_uri, target_ver
         )
         feature_columns = _validate_loaded_model_schema(loaded)
+        decision_threshold = _load_startup_decision_threshold()
+        loaded_model_version = f"v{target_ver}"
         model = loaded
         print(
-            f"🟢 Production model loaded and verified via URI: {model_uri} (source={resolved_src})",
+            f"🟢 Production model loaded and verified via URI: {model_uri} "
+            f"(source={resolved_src}, version={loaded_model_version}, threshold={decision_threshold})",
             flush=True,
         )
     except Exception as reg_err:
-        print(f"⚠️ Registry URI load failed ({reg_err}).", flush=True)
+        print(f"⚠️ Registry URI or threshold load failed ({reg_err}).", flush=True)
         model = None
         feature_columns = None
+        decision_threshold = None
+        loaded_model_version = None
 
     yield
     print("🛑 Microservice context tearing down...", flush=True)
@@ -331,15 +346,26 @@ def prepare_single_row_features(
 
 @app.get("/health", tags=["Monitoring"])
 def health_check():
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model is uninitialized")
-    return {"status": "HEALTHY", "model_loaded": True}
+    if model is None or decision_threshold is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model or decision threshold policy is uninitialized",
+        )
+    return {
+        "status": "HEALTHY",
+        "model_loaded": True,
+        "model_version": loaded_model_version,
+        "decision_threshold": decision_threshold,
+    }
 
 
 @app.post("/predict", tags=["Inference"], dependencies=[Depends(verify_api_key)])
 def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model is uninitialized.")
+    if model is None or decision_threshold is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model or decision threshold policy is uninitialized.",
+        )
 
     start_time = time.perf_counter()
     payload_dict = payload.model_dump()
@@ -358,7 +384,7 @@ def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
         )
 
     prob_default = breaker_response["prediction"]
-    active_cutoff = _get_cohort_threshold(payload.Age)
+    active_cutoff = float(decision_threshold)
     decision_type = "CREDIT_DENY" if prob_default >= active_cutoff else "CREDIT_APPROVE"
     routed_decision = enforce_human_in_the_loop(
         prob_default, decision_type=decision_type
@@ -370,6 +396,8 @@ def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
     governance_block = {
         **routed_decision,
         "model_recommendation": model_recommendation,
+        "decision_threshold": active_cutoff,
+        "model_version": loaded_model_version or "unknown",
         "review_status": "PENDING_HUMAN_REVIEW"
         if routed_decision.get("action") == "MANUAL_REVIEW_REQUIRED"
         else "NOT_REQUIRED",

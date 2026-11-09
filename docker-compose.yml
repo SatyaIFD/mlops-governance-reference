@@ -132,5 +132,5 @@ services:
     volumes:
       - ./mlflow.db:/mlflow.db
       - ./mlruns:/app/mlruns
-    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.17.2 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --host 0.0.0.0 --port 5000"
+    command: /bin/bash -c "pip install --no-cache-dir mlflow==3.18.0 && mlflow server --backend-store-uri sqlite:////mlflow.db --default-artifact-root /app/mlruns --host 0.0.0.0 --port 5000"
     restart: unless-stopped

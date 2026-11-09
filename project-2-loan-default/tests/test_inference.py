@@ -54,12 +54,17 @@ def mock_mlflow_model(tmp_path, monkeypatch):
         mock_model.get_booster.return_value.feature_names = EXPECTED_MOCK_FEATURES
         mock_load.return_value = mock_model
 
+        monkeypatch.setenv("LOAN_DECISION_THRESHOLD", "0.50")
         p2_main.model = mock_model
         p2_main.feature_columns = EXPECTED_MOCK_FEATURES
+        p2_main.decision_threshold = 0.50
+        p2_main.loaded_model_version = "v_test"
         yield mock_model
 
         p2_main.model = None
         p2_main.feature_columns = None
+        p2_main.decision_threshold = None
+        p2_main.loaded_model_version = None
         app.dependency_overrides.clear()
 
 
@@ -99,7 +104,7 @@ def test_health_endpoint(client):
 
 def test_predict_success_low_risk_and_decision_semantics(client, valid_payload):
     """Verifies low-risk prediction, EU AI Act routing, and explicit decision semantics."""
-    p2_main.model.predict_proba.return_value = [[0.95, 0.05]]
+    p2_main.model.predict_proba.return_value = [[0.8, 0.2]]
 
     response = client.post("/predict", json=valid_payload)
     assert response.status_code == 200  # nosec B101
