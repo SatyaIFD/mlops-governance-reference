@@ -3,8 +3,8 @@ numpy==2.4.6
 scikit-learn==1.9.1
 pyarrow==25.0.1
 kagglehub
-msgpack>=1.2.4
-setuptools>=84.2.1
+msgpack==1.2.4
+setuptools==84.2.1
 mlflow==3.18.0
 skops==0.16.0
-urllib3>=2.8.0
+urllib3==2.8.0

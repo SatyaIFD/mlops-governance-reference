@@ -64,8 +64,13 @@ def _normalize_payload_types(row: dict) -> dict:
 
 
 def _snapshot_key(row: dict) -> tuple:
+    bucket = (
+        str(row["age_bucket"])
+        if "age_bucket" in row
+        else ("UNDER_30" if int(row["Age"]) < 30 else "30_AND_OVER")
+    )
     return (
-        int(row["Age"]),
+        bucket,
         int(row["Income"]),
         int(row["CreditScore"]),
         int(row["LoanAmount"]),
@@ -89,13 +94,10 @@ def _load_seen_identifiers(
                 if rec.get("payload_hash"):
                     seen_hashes.add(str(rec["payload_hash"]))
                 snap = rec.get("payload_snapshot")
-                if isinstance(snap, dict) and {
-                    "Age",
-                    "Income",
-                    "CreditScore",
-                    "LoanAmount",
-                    "DTIRatio",
-                }.issubset(snap):
+                if isinstance(snap, dict) and (
+                    {"Income", "CreditScore", "LoanAmount", "DTIRatio"}.issubset(snap)
+                    and ("age_bucket" in snap or "Age" in snap)
+                ):
                     seen_snapshots.add(_snapshot_key(snap))
             except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                 logging.warning(

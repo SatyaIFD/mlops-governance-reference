@@ -1,6 +1,7 @@
 """
 Automated Regulatory Governance & Auditing Engine - Project 2
-Compiles statistical evaluation and drift metrics into a formal Markdown Model Card.
+Compiles statistical evaluation, Equal Opportunity TPR/FPR trade-offs, and drift metrics
+into a formal Markdown Model Card.
 """
 
 import json
@@ -43,6 +44,14 @@ def compile_compliance_audit():
         "demographic_parity_status", "UNKNOWN (NO_HOLDOUT_EVALUATION)"
     )
     disparate_impact_ratio = holdout_fairness.get("disparate_impact_ratio", "N/A")
+    di_ci = holdout_fairness.get("di_95_ci", "N/A")
+    tpr_ratio = holdout_fairness.get("equal_opportunity_tpr_ratio", "N/A")
+    tpr_ci = holdout_fairness.get("tpr_95_ci", "N/A")
+    fpr_gap = holdout_fairness.get("fpr_absolute_gap", "N/A")
+    cutoff = holdout_fairness.get("decision_threshold", "N/A")
+    residual_note = holdout_fairness.get(
+        "residual_risk_note", "No residual risk note recorded."
+    )
 
     test_auc = perf_block.get("test_roc_auc", perf_block.get("roc_auc", "N/A"))
     test_acc = perf_block.get("test_accuracy", perf_block.get("accuracy", "N/A"))
@@ -63,8 +72,12 @@ def compile_compliance_audit():
 
 ## ⚖️ Model Governance & Fairness Summary
 * **Demographic Parity Status:** `{fairness_status}`
-* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `{disparate_impact_ratio}`
-* **Mitigation Mechanism:** `Sample Reweighting (Pre-processing Demographic Parity)`
+* **Unified Validation-Calibrated Cutoff:** `{cutoff}`
+* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `{disparate_impact_ratio}` (95% CI: `{di_ci}`)
+* **Equal Opportunity TPR Ratio:** `{tpr_ratio}` (95% CI: `{tpr_ci}`)
+* **FPR Absolute Cohort Gap:** `{fpr_gap}` (Guardrail Cap: `<= 0.05`)
+* **Mitigation Mechanism:** `Sample Reweighting + Validation-Split Unified Cutoff`
+* **Residual Risk Disclosure:** {residual_note}
 
 ## 📊 Core Holdout Evaluation Metrics
 * **Test ROC-AUC:** `{test_auc}`

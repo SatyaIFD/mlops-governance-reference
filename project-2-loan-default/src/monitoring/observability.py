@@ -1,7 +1,7 @@
 """
 Production Observability & Telemetry Engine - Project 2: Loan Default Prediction
 Logs runtime inference request summaries, deterministic 16-field payload hashes,
-latencies, model recommendations, review states, and age cohorts.
+latencies, model recommendations, review states, and age buckets (minimizing raw Age PII).
 """
 
 import hashlib
@@ -32,7 +32,7 @@ class ModelObservabilityLogger:
         status_code: int = 200,
         traffic_source: str = "live_production_traffic",
     ):
-        """Appends a structured transaction record to the production system telemetry log."""
+        """Appends a structured transaction record with bucketed age cohort to the telemetry log."""
         gov = response_data.get("governance", {})
         risk = response_data.get("risk_metrics", {})
 
@@ -58,7 +58,7 @@ class ModelObservabilityLogger:
             "latency_ms": round(latency_ms, 2),
             "payload_hash": compute_payload_hash(request_payload),
             "payload_snapshot": {
-                "Age": age_val,
+                "age_bucket": derived_age_group,
                 "Income": request_payload.get("Income"),
                 "CreditScore": request_payload.get("CreditScore"),
                 "LoanAmount": request_payload.get("LoanAmount"),
@@ -73,9 +73,6 @@ class ModelObservabilityLogger:
                 "final_decision": gov.get("final_decision"),
                 "age_group": age_group,
                 "underwriting_decision": gov.get("underwriting_decision", model_rec),
-                "demographic_cohort": gov.get(
-                    "fairness_demographic_proxy_flag", age_group
-                ),
             },
         }
 

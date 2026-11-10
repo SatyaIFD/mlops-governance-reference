@@ -106,8 +106,8 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
-def _load_startup_decision_threshold() -> float:
-    """Loads the single validation-calibrated decision threshold once at startup."""
+def _load_startup_decision_threshold(expected_run_id: str | None = None) -> float:
+    """Loads the single validation-calibrated decision threshold once at startup and verifies its mlflow_run_id."""
     env_thresh = os.getenv("LOAN_DECISION_THRESHOLD", "").strip()
     if env_thresh:
         cutoff = float(env_thresh)
@@ -123,6 +123,12 @@ def _load_startup_decision_threshold() -> float:
     data = json.loads(thresh_file.read_text(encoding="utf-8"))
     if "decision_threshold" not in data:
         raise ValueError(f"Missing 'decision_threshold' key in {thresh_file}: {data}")
+    file_run_id = data.get("mlflow_run_id")
+    if expected_run_id and file_run_id and str(file_run_id) != str(expected_run_id):
+        raise ValueError(
+            f"Threshold artifact run_id mismatch: decision_thresholds.json has {file_run_id}, "
+            f"but loaded model version belongs to run {expected_run_id}"
+        )
     cutoff = float(data["decision_threshold"])
     if not (0.0 < cutoff < 1.0):
         raise ValueError(f"Out-of-range decision_threshold in {thresh_file}: {cutoff}")
@@ -223,11 +229,15 @@ async def lifespan(app: FastAPI):
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
         target_ver = latest_version if (prod_versions or versions) else 1
+        mv_meta = client.get_model_version(model_name, str(target_ver))
+        expected_run_id = getattr(mv_meta, "run_id", None)
         loaded, resolved_src = _load_xgboost_model_portable(
             client, model_name, model_uri, target_ver
         )
         feature_columns = _validate_loaded_model_schema(loaded)
-        decision_threshold = _load_startup_decision_threshold()
+        decision_threshold = _load_startup_decision_threshold(
+            expected_run_id=expected_run_id
+        )
         loaded_model_version = f"v{target_ver}"
         model = loaded
         print(

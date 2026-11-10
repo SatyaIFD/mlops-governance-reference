@@ -139,17 +139,22 @@ class AMLAnomalyDetector:
         expected_sha256 = meta.get("sha256")
         if not expected_sha256:
             raise ValueError(f"Missing 'sha256' integrity digest in {meta_path}")
+
+        def _major_minor(v_str: str) -> tuple[str, ...]:
+            parts = str(v_str).strip().split(".")
+            return tuple(parts[:2])
+
         meta_sklearn = meta.get("sklearn_version")
         if not meta_sklearn:
             raise ValueError(f"Missing 'sklearn_version' stamp in {meta_path}")
-        if meta_sklearn != sklearn.__version__:
+        if _major_minor(meta_sklearn) != _major_minor(sklearn.__version__):
             raise ValueError(
                 f"scikit-learn version mismatch for {target}: artifact trained with {meta_sklearn}, runtime is {sklearn.__version__}"
             )
         meta_skops = meta.get("skops_version")
         if not meta_skops:
             raise ValueError(f"Missing 'skops_version' stamp in {meta_path}")
-        if meta_skops != skops.__version__:
+        if _major_minor(meta_skops) != _major_minor(skops.__version__):
             raise ValueError(
                 f"skops version mismatch for {target}: artifact saved with {meta_skops}, runtime is {skops.__version__}"
             )

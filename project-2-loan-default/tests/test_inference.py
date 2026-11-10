@@ -237,3 +237,25 @@ def test_p2_rejects_wrong_model_schema_and_unmatched_tokens(tmp_path, monkeypatc
             "models:/loan_default_production_model/1",
             1,
         )
+
+
+def test_startup_threshold_rejects_mismatched_mlflow_run_id(tmp_path, monkeypatch):
+    """Verifies _load_startup_decision_threshold fails closed if decision_thresholds.json mlflow_run_id mismatches the loaded model."""
+    import json
+
+    monkeypatch.delenv("LOAN_DECISION_THRESHOLD", raising=False)
+    monkeypatch.setattr("src.inference.main.PROJECT_ROOT", tmp_path)
+    art_dir = tmp_path / "artifacts"
+    art_dir.mkdir(parents=True)
+    (art_dir / "decision_thresholds.json").write_text(
+        json.dumps({"decision_threshold": 0.1379, "mlflow_run_id": "run_stale_111"}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Threshold artifact run_id mismatch"):
+        p2_main._load_startup_decision_threshold(expected_run_id="run_active_222")
+
+    assert (
+        p2_main._load_startup_decision_threshold(expected_run_id="run_stale_111")
+        == 0.1379
+    )  # nosec B101
