@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.12](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.11...v0.5.12) (2026-11-10)
+
+
+### Bug Fixes
+
+* **governance:** bind P2 threshold run_id at startup, group telemetry by policy, and bucket telemetry age ([#163](https://github.com/SatyaIFD/mlops-governance-reference/issues/163)) ([e43ab06](https://github.com/SatyaIFD/mlops-governance-reference/commit/e43ab0649dc986c76c6cfcabbe6c10cff4e40799))
+
 ## [0.5.11](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.10...v0.5.11) (2026-11-09)
 
 
