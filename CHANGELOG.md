@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.13](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.12...v0.5.13) (2026-11-10)
+
+
+### Bug Fixes
+
+* **governance:** preserve dockerfile pins, resolve thresholds from mlflow artifacts, and preserve legacy/null records ([#165](https://github.com/SatyaIFD/mlops-governance-reference/issues/165)) ([59d5817](https://github.com/SatyaIFD/mlops-governance-reference/commit/59d5817f09cf1392c1a13d0bcc0c12086580a782))
+
 ## [0.5.12](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.11...v0.5.12) (2026-11-10)
 
 
