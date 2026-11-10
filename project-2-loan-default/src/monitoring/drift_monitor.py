@@ -1,9 +1,8 @@
 """
 Real-Time Fairness & Recommendation Disparity Monitor - Project 2: Loan Default Prediction
-Evaluates telemetry logs across protected (<30) and baseline (>=30) age cohorts.
-Stores live_production_traffic strictly under live_telemetry_fairness (null when no live
-rows exist), stores synthetic runs under synthetic_telemetry_fairness, and scopes
---fail-on-breach to live_production_traffic by default.
+Evaluates telemetry logs across protected (<30 / UNDER_30) and baseline (>=30 / 30_AND_OVER) cohorts.
+Groups records by (traffic_source, model_version, decision_threshold) so retraining or threshold
+updates never pool mixed policies together.
 """
 
 import argparse
@@ -47,6 +46,14 @@ def _compute_di_95_ci(
     return [low, high]
 
 
+def _extract_policy_key(rec: dict) -> tuple[str, str]:
+    out = rec.get("inference_output", {}) or {}
+    mv = str(out.get("model_version") or "unversioned")
+    dt = out.get("decision_threshold")
+    dt_str = f"{float(dt):.4f}" if isinstance(dt, (int, float)) else "default"
+    return mv, dt_str
+
+
 def _evaluate_source_records(
     records: list[dict], source_name: str, min_cohort_size: int
 ) -> dict:
@@ -59,12 +66,27 @@ def _evaluate_source_records(
             "sample_size_valid": False,
         }
 
-    df = pd.DataFrame(records)
+    # Filter to the most recent active (model_version, decision_threshold) policy within this source
+    active_mv, active_dt = _extract_policy_key(records[-1])
+    policy_records = [
+        r for r in records if _extract_policy_key(r) == (active_mv, active_dt)
+    ]
+
+    df = pd.DataFrame(policy_records)
     payloads = pd.json_normalize(df["payload_snapshot"])
     outputs = pd.json_normalize(df["inference_output"])
     audit_df = pd.concat([payloads, outputs], axis=1)
 
-    if "Age" not in audit_df.columns:
+    if "age_bucket" in audit_df.columns:
+        is_young_mask = audit_df["age_bucket"] == "UNDER_30"
+        is_mature_mask = audit_df["age_bucket"] == "30_AND_OVER"
+    elif "Age" in audit_df.columns:
+        is_young_mask = audit_df["Age"] < 30
+        is_mature_mask = audit_df["Age"] >= 30
+    elif "age_group" in audit_df.columns:
+        is_young_mask = audit_df["age_group"] == "UNDER_30"
+        is_mature_mask = audit_df["age_group"] == "30_AND_OVER"
+    else:
         return {
             "data_source": source_name,
             "demographic_parity_status": "INCONCLUSIVE (MISSING_COHORT_FIELD)",
@@ -88,10 +110,10 @@ def _evaluate_source_records(
         }
 
     valid_decisions = {"APPROVE", "APPROVED", "DECLINE", "REJECTED"}
-    audit_df = audit_df[audit_df[decision_col].isin(valid_decisions)].copy()
+    valid_mask = audit_df[decision_col].isin(valid_decisions)
+    young_df = audit_df[valid_mask & is_young_mask]
+    mature_df = audit_df[valid_mask & is_mature_mask]
 
-    young_df = audit_df[audit_df["Age"] < 30]
-    mature_df = audit_df[audit_df["Age"] >= 30]
     n_prot = len(young_df)
     n_base = len(mature_df)
     k_prot = (
@@ -128,6 +150,8 @@ def _evaluate_source_records(
 
     return {
         "data_source": source_name,
+        "model_version": active_mv,
+        "decision_threshold": float(active_dt) if active_dt != "default" else None,
         "demographic_parity_status": fairness_status,
         "disparate_impact_ratio": di_ratio,
         "di_95_ci": ci_bounds,
@@ -150,6 +174,7 @@ def run_production_audit(
     fail_on_breach: bool = False,
     traffic_source: str | None = None,
     include_synthetic_breach: bool = False,
+    require_live_traffic: bool = False,
 ) -> dict:
     print("🕵️‍♂️ Initializing real-time governance & recommendation parity scanner...")
 
@@ -187,10 +212,12 @@ def run_production_audit(
         live_block: dict | None,
         synthetic_block: dict | None,
         by_source: dict[str, dict],
+        by_policy: dict[str, dict],
     ) -> dict:
         existing_report["live_telemetry_fairness"] = live_block
         existing_report["synthetic_telemetry_fairness"] = synthetic_block
         existing_report["live_telemetry_fairness_by_source"] = by_source
+        existing_report["live_telemetry_fairness_by_policy"] = by_policy
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(existing_report, f, indent=4)
@@ -198,9 +225,16 @@ def run_production_audit(
 
     if not log_path.exists():
         print(f"⚠️ Telemetry log ledger not found at: {log_path}")
-        return _save_blocks(None, None, {})
+        saved = _save_blocks(None, None, {}, {})
+        if require_live_traffic:
+            print(
+                "🚨 NOT_EVALUATED: --require-live-traffic set but no telemetry log exists."
+            )
+            sys.exit(2)
+        return saved
 
     grouped: dict[str, list[dict]] = {}
+    grouped_by_policy: dict[str, list[dict]] = {}
     with open(log_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
@@ -210,14 +244,27 @@ def run_production_audit(
                         rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE
                     ).strip()
                     grouped.setdefault(src, []).append(rec)
+                    mv, dt_str = _extract_policy_key(rec)
+                    pol_key = f"{src}|model={mv}|threshold={dt_str}"
+                    grouped_by_policy.setdefault(pol_key, []).append(rec)
 
     if not grouped:
         print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")
-        return _save_blocks(None, None, {})
+        saved = _save_blocks(None, None, {}, {})
+        if require_live_traffic:
+            print(
+                "🚨 NOT_EVALUATED: --require-live-traffic set but zero v2 records exist."
+            )
+            sys.exit(2)
+        return saved
 
     by_source = {
         src: _evaluate_source_records(recs, src, min_cohort_size)
         for src, recs in grouped.items()
+    }
+    by_policy = {
+        pkey: _evaluate_source_records(recs, pkey, min_cohort_size)
+        for pkey, recs in grouped_by_policy.items()
     }
 
     if traffic_source:
@@ -252,7 +299,13 @@ def run_production_audit(
             f"DI: {synthetic_block['disparate_impact_ratio']} | 95% CI: {synthetic_block['di_95_ci']}"
         )
 
-    saved = _save_blocks(live_block, synthetic_block, by_source)
+    saved = _save_blocks(live_block, synthetic_block, by_source, by_policy)
+    if require_live_traffic and live_block is None:
+        print(
+            "🚨 NOT_EVALUATED: --require-live-traffic set and no live_production_traffic records found."
+        )
+        sys.exit(2)
+
     if fail_on_breach:
         gated_blocks = (
             list(by_source.values())
@@ -263,7 +316,7 @@ def run_production_audit(
             b.get("demographic_parity_status") == "NON-COMPLIANT (BREACH)"
             for b in gated_blocks
         ):
-            print("🚨 Live demographic parity breach confirmed outside 95% CI bounds.")
+            print("🚨 Demographic parity breach confirmed outside 95% CI bounds.")
             sys.exit(1)
     return saved
 
@@ -273,12 +326,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fail-on-breach",
         action="store_true",
-        help="Exit non-zero if live_production_traffic 95% CI confirms a demographic parity breach.",
+        help="Exit non-zero if 95% CI confirms a demographic parity breach.",
     )
     parser.add_argument(
         "--include-synthetic",
         action="store_true",
-        help="Also fail on synthetic simulation breaches when --fail-on-breach is set.",
+        help="Also gate synthetic simulation traffic when --fail-on-breach is set.",
+    )
+    parser.add_argument(
+        "--require-live-traffic",
+        action="store_true",
+        help="Exit with code 2 (NOT_EVALUATED) when no live_production_traffic rows exist.",
     )
     parser.add_argument(
         "--traffic-source",
@@ -291,4 +349,5 @@ if __name__ == "__main__":
         fail_on_breach=args.fail_on_breach,
         traffic_source=args.traffic_source,
         include_synthetic_breach=args.include_synthetic,
+        require_live_traffic=args.require_live_traffic,
     )

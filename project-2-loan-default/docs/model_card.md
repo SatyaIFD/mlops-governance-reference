@@ -5,8 +5,12 @@
 
 ## ⚖️ Model Governance & Fairness Summary
 * **Demographic Parity Status:** `COMPLIANT (FAIR)`
-* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `0.9178`
-* **Mitigation Mechanism:** `Sample Reweighting (Pre-processing Demographic Parity)`
+* **Unified Validation-Calibrated Cutoff:** `0.1379`
+* **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `0.9178` (95% CI: `[0.9054, 0.9305]`)
+* **Equal Opportunity TPR Ratio:** `0.9888` (95% CI: `[0.9432, 1.0366]`)
+* **FPR Absolute Cohort Gap:** `0.0338` (Guardrail Cap: `<= 0.05`)
+* **Mitigation Mechanism:** `Sample Reweighting + Validation-Split Unified Cutoff`
+* **Residual Risk Disclosure:** Under unified cohort-blind threshold (0.1379), Equal Opportunity (TPR ratio 0.9888, 95% CI [0.9432, 1.0366]) and Four-Fifths Disparate Impact (DI 0.9178, 95% CI [0.9054, 0.9305]) pass, but a residual FPR gap of 0.0338 remains (under-30 non-defaulters declined at 26.21% vs 22.83% for 30+, approval 68.12% vs 74.22%) due to base-rate credit-history differences (Chouldechova impossibility theorem); mitigated via mandatory PENDING_HUMAN_REVIEW.
 
 ## 📊 Core Holdout Evaluation Metrics
 * **Test ROC-AUC:** `0.72`

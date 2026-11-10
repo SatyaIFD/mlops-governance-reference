@@ -242,3 +242,76 @@ def test_boundary_100_percent_baseline_applies_continuity_correction_and_priorit
         "synthetic_representative_simulation"
         in res["live_telemetry_fairness_by_source"]
     )  # nosec B101
+
+
+def test_drift_monitor_separates_different_model_versions_and_thresholds(tmp_path):
+    """Verifies that telemetry records from an older model_version/threshold are not pooled with the active policy."""
+    log_file = tmp_path / "telemetry_logs.jsonl"
+    report_file = tmp_path / "compliance_audit_report.json"
+
+    rows = []
+    # 40 old-policy records (v3, threshold 0.50) where protected cohort has 0 approvals
+    for _ in range(40):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"age_bucket": "UNDER_30"},
+                "inference_output": {
+                    "model_recommendation": "DECLINE",
+                    "model_version": "v3",
+                    "decision_threshold": 0.50,
+                },
+            }
+        )
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"age_bucket": "30_AND_OVER"},
+                "inference_output": {
+                    "model_recommendation": "APPROVE",
+                    "model_version": "v3",
+                    "decision_threshold": 0.50,
+                },
+            }
+        )
+    # 35 new-policy records (v4, threshold 0.1379) where both cohorts are approved
+    for _ in range(35):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"age_bucket": "UNDER_30"},
+                "inference_output": {
+                    "model_recommendation": "APPROVE",
+                    "model_version": "v4",
+                    "decision_threshold": 0.1379,
+                },
+            }
+        )
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"age_bucket": "30_AND_OVER"},
+                "inference_output": {
+                    "model_recommendation": "APPROVE",
+                    "model_version": "v4",
+                    "decision_threshold": 0.1379,
+                },
+            }
+        )
+    log_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    res = run_production_audit(log_path=log_file, report_path=report_file)
+    live = res["live_telemetry_fairness"]
+    assert live["model_version"] == "v4"  # nosec B101
+    assert live["decision_threshold"] == 0.1379  # nosec B101
+    assert live["protected_cohort_count"] == 35  # nosec B101
+    assert live["demographic_parity_status"] == "COMPLIANT"  # nosec B101
+    assert len(res["live_telemetry_fairness_by_policy"]) == 2  # nosec B101

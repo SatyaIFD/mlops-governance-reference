@@ -8,10 +8,10 @@ uvicorn==0.54.0
 httpx==0.28.1
 xgboost==3.4.1
 mlflow==3.18.0
-shap>=0.45.0
-matplotlib>=3.8.0
+shap==0.52.0
+matplotlib==3.11.2
 seaborn>=0.13.2
 pytest==9.1.1
-msgpack>=1.2.4
-setuptools>=84.2.1
-urllib3>=2.8.0
+msgpack==1.2.4
+setuptools==84.2.1
+urllib3==2.8.0

@@ -9,8 +9,8 @@ mlflow==3.18.0
 uvicorn==0.54.0
 pytest==9.1.1
 httpx==0.28.1
-kaggle>=1.6.0
-msgpack>=1.2.4
-setuptools>=84.2.1
-urllib3>=2.8.0
-six>=1.16.0
+kaggle==2.2.4
+msgpack==1.2.4
+setuptools==84.2.1
+urllib3==2.8.0
+six==1.17.0

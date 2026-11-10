@@ -34,6 +34,7 @@ EXPECTED_FEATURE_NAMES = [f"V{i}" for i in range(1, 29)] + [
 ]
 
 model = None
+loaded_model_version: str | None = None
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -121,7 +122,7 @@ def _load_xgboost_model_portable(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model
+    global model, loaded_model_version
     project_root = Path(__file__).resolve().parents[2]
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
@@ -153,6 +154,7 @@ async def lifespan(app: FastAPI):
         )
         _validate_loaded_model_schema(loaded)
         model = loaded
+        loaded_model_version = f"v{target_ver}"
         print(
             f"🟢 Production model loaded and verified via URI: {model_uri} (source={resolved_src})",
             flush=True,
@@ -163,6 +165,7 @@ async def lifespan(app: FastAPI):
             flush=True,
         )
         model = None
+        loaded_model_version = None
 
     yield
     print("🛑 Microservice context tearing down...", flush=True)
@@ -205,7 +208,11 @@ class InferenceResponse(BaseModel):
 def health_check():
     if model is None:
         raise HTTPException(status_code=503, detail="Model is uninitialized")
-    return {"status": "HEALTHY", "model_loaded": True}
+    return {
+        "status": "HEALTHY",
+        "model_loaded": True,
+        "model_version": loaded_model_version or "v1",
+    }
 
 
 @app.post(

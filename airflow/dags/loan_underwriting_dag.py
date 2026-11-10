@@ -40,7 +40,7 @@ with DAG(
 
     audit_fairness = BashOperator(
         task_id="audit_fairness_metrics",
-        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py --fail-on-breach",
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py --fail-on-breach --include-synthetic",
     )
 
     check_data_drift = BashOperator(

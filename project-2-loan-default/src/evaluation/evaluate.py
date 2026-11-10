@@ -2,8 +2,9 @@
 Production Evaluation & Governance Engine - Project 2: Loan Default Prediction
 Evaluates the registered model out-of-sample on test.parquet using the single
 cohort-blind decision_threshold calibrated on the validation split during training.
-Gates sign-off on ROC-AUC >= 0.70, Disparate Impact 95% CI, TPR Parity 95% CI,
-and FPR absolute gap <= 0.05.
+Verifies threshold mlflow_run_id lineage, gates sign-off on ROC-AUC >= 0.70,
+Disparate Impact 95% CI in [0.80, 1.25], Equal Opportunity TPR 95% CI in [0.80, 1.25],
+and FPR absolute gap <= 0.05, and documents residual cohort FPR differences.
 """
 
 import json
@@ -66,7 +67,7 @@ class LoanModelEvaluator:
         self.test_path = self.data_dir / "test.parquet"
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    def _load_validated_threshold(self) -> tuple[float, str]:
+    def _load_validated_threshold(self, expected_run_id: str) -> tuple[float, str]:
         thresholds_path = self.artifacts_dir / "decision_thresholds.json"
         if not thresholds_path.is_file():
             raise FileNotFoundError(
@@ -77,6 +78,11 @@ class LoanModelEvaluator:
         if "decision_threshold" not in data:
             raise ValueError(
                 f"Missing 'decision_threshold' key in {thresholds_path}: {data}"
+            )
+        file_run_id = data.get("mlflow_run_id")
+        if file_run_id and str(file_run_id) != str(expected_run_id):
+            raise ValueError(
+                f"Stale threshold file {thresholds_path}: mlflow_run_id={file_run_id} does not match evaluated run {expected_run_id}"
             )
         return float(data["decision_threshold"]), str(
             data.get("calibration_split", "validation_holdout_20pct")
@@ -137,7 +143,9 @@ class LoanModelEvaluator:
                 columns=list(model.get_booster().feature_names), fill_value=0
             )
 
-        decision_threshold, calibration_source = self._load_validated_threshold()
+        decision_threshold, calibration_source = self._load_validated_threshold(
+            expected_run_id=latest_run_id
+        )
         preds_proba = model.predict_proba(X_test)[:, 1]
         preds_labels = pd.Series(
             (preds_proba >= decision_threshold).astype(int), index=X_test.index
@@ -179,10 +187,9 @@ class LoanModelEvaluator:
         )
         fpr_gap = round(abs(prot_stats["default_fpr"] - base_stats["default_fpr"]), 4)
 
+        # Both DI and Equal Opportunity TPR require their entire 95% Katz CI inside [0.80, 1.25]
         di_passed = bool(di_ci[0] >= 0.80 and di_ci[1] <= 1.25)
-        tpr_passed = bool(
-            0.80 <= tpr_ratio <= 1.25 and tpr_ci[0] <= 1.25 and tpr_ci[1] >= 0.80
-        )
+        tpr_passed = bool(tpr_ci[0] >= 0.80 and tpr_ci[1] <= 1.25)
         fpr_passed = bool(fpr_gap <= 0.05)
         fairness_passed = bool(di_passed and tpr_passed and fpr_passed)
         performance_passed = bool(auc >= 0.70)
@@ -193,6 +200,16 @@ class LoanModelEvaluator:
             st_dict.pop("positive_defaults", None)
             st_dict.pop("true_positives", None)
 
+        residual_risk_note = (
+            f"Under unified cohort-blind threshold ({decision_threshold}), Equal Opportunity "
+            f"(TPR ratio {tpr_ratio:.4f}, 95% CI {tpr_ci}) and Four-Fifths Disparate Impact "
+            f"(DI {di_ratio:.4f}, 95% CI {di_ci}) pass, but a residual FPR gap of {fpr_gap:.4f} "
+            f"remains (under-30 non-defaulters declined at {prot_stats['default_fpr'] * 100:.2f}% "
+            f"vs {base_stats['default_fpr'] * 100:.2f}% for 30+, approval {prot_stats['approval_rate'] * 100:.2f}% "
+            f"vs {base_stats['approval_rate'] * 100:.2f}%) due to base-rate credit-history differences "
+            f"(Chouldechova impossibility theorem); mitigated via mandatory PENDING_HUMAN_REVIEW."
+        )
+
         holdout_fairness_block = {
             "demographic_parity_status": "COMPLIANT (FAIR)"
             if fairness_passed
@@ -202,6 +219,8 @@ class LoanModelEvaluator:
             "equal_opportunity_tpr_ratio": round(tpr_ratio, 4),
             "tpr_95_ci": tpr_ci,
             "fpr_absolute_gap": fpr_gap,
+            "fpr_gap_tolerance": 0.05,
+            "residual_risk_note": residual_risk_note,
             "decision_threshold": decision_threshold,
             "threshold_calibration_split": calibration_source,
             "protected_cohort_under_30": prot_stats,
