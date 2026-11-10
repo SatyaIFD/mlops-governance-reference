@@ -14,6 +14,7 @@ from pathlib import Path
 
 import mlflow
 import mlflow.xgboost
+from mlflow.tracking import MlflowClient
 import pandas as pd
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
@@ -69,6 +70,17 @@ class LoanModelEvaluator:
 
     def _load_validated_threshold(self, expected_run_id: str) -> tuple[float, str]:
         thresholds_path = self.artifacts_dir / "decision_thresholds.json"
+        try:
+            dl_path = Path(
+                mlflow.artifacts.download_artifacts(
+                    run_id=expected_run_id,
+                    artifact_path="preprocessing/decision_thresholds.json",
+                )
+            )
+            if dl_path.is_file():
+                thresholds_path = dl_path
+        except Exception as dl_err:
+            print(f"ℹ️ Using local threshold artifact ({dl_err})")
         if not thresholds_path.is_file():
             raise FileNotFoundError(
                 f"Required validation-calibrated threshold file missing at {thresholds_path}. Run train.py first."
@@ -80,9 +92,9 @@ class LoanModelEvaluator:
                 f"Missing 'decision_threshold' key in {thresholds_path}: {data}"
             )
         file_run_id = data.get("mlflow_run_id")
-        if file_run_id and str(file_run_id) != str(expected_run_id):
+        if not file_run_id or str(file_run_id) != str(expected_run_id):
             raise ValueError(
-                f"Stale threshold file {thresholds_path}: mlflow_run_id={file_run_id} does not match evaluated run {expected_run_id}"
+                f"Stale or unverified threshold file {thresholds_path}: mlflow_run_id={file_run_id} does not match evaluated run {expected_run_id}"
             )
         return float(data["decision_threshold"]), str(
             data.get("calibration_split", "validation_holdout_20pct")
@@ -123,17 +135,28 @@ class LoanModelEvaluator:
                 "❌ No active experiment found. Please run train.py first!"
             )
 
-        runs = mlflow.search_runs(
-            experiment_ids=[experiment.experiment_id],
-            order_by=["attributes.start_time DESC"],
-        )
-        if runs.empty:
-            raise ValueError(
-                "❌ No logged runs found within the experiment tracking space."
+        client = MlflowClient()
+        versions = client.search_model_versions("name='loan_default_production_model'")
+        prod_versions = [v for v in versions if v.current_stage == "Production"]
+        if prod_versions:
+            selected_mv = max(prod_versions, key=lambda v: int(v.version))
+            latest_run_id = selected_mv.run_id
+            model_uri = f"models:/loan_default_production_model/{selected_mv.version}"
+        elif versions:
+            selected_mv = max(versions, key=lambda v: int(v.version))
+            latest_run_id = selected_mv.run_id
+            model_uri = f"models:/loan_default_production_model/{selected_mv.version}"
+        else:
+            runs = mlflow.search_runs(
+                experiment_ids=[experiment.experiment_id],
+                order_by=["attributes.start_time DESC"],
             )
-
-        latest_run_id = runs.iloc[0]["run_id"]
-        model_uri = f"runs:/{latest_run_id}/fair_loan_model"
+            if runs.empty:
+                raise ValueError(
+                    "❌ No logged runs found within the experiment tracking space."
+                )
+            latest_run_id = runs.iloc[0]["run_id"]
+            model_uri = f"runs:/{latest_run_id}/fair_loan_model"
 
         print(f"🌲 Loading model binary from MLflow run context: {latest_run_id}")
         model = mlflow.xgboost.load_model(model_uri)
@@ -211,7 +234,7 @@ class LoanModelEvaluator:
         )
 
         holdout_fairness_block = {
-            "demographic_parity_status": "COMPLIANT (FAIR)"
+            "demographic_parity_status": "COMPLIANT"
             if fairness_passed
             else "NON-COMPLIANT (BREACH)",
             "disparate_impact_ratio": round(di_ratio, 4),

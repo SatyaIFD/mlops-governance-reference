@@ -38,6 +38,8 @@ with DAG(
         bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/generate_traffic.py --mode representative --count 20",
     )
 
+    # NOTE: This reference DAG streams and gates synthetic representative traffic (--include-synthetic).
+    # In production with external live traffic, pass --require-live-traffic to fail (exit 2) on missing live rows.
     audit_fairness = BashOperator(
         task_id="audit_fairness_metrics",
         bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py --fail-on-breach --include-synthetic",

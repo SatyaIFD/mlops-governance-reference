@@ -17,7 +17,7 @@ import httpx
 import pandas as pd
 from src.monitoring.observability import compute_payload_hash
 
-DEFAULT_URL = os.getenv("LOAN_API_URL", "http://localhost/api/v1/loan-sim/predict")
+DEFAULT_URL = os.getenv("LOAN_API_URL", "http://127.0.0.1:8081/api/v1/loan-sim/predict")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEST_PARQUET_PATH = PROJECT_ROOT / "data" / "processed" / "test.parquet"
 TELEMETRY_LOG_PATH = PROJECT_ROOT / "artifacts" / "telemetry_logs.jsonl"

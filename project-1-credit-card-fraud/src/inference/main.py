@@ -211,7 +211,7 @@ def health_check():
     return {
         "status": "HEALTHY",
         "model_loaded": True,
-        "model_version": loaded_model_version or "v1",
+        "model_version": loaded_model_version or "unknown",
     }
 
 

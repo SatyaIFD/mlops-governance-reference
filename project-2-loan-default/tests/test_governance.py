@@ -315,3 +315,48 @@ def test_drift_monitor_separates_different_model_versions_and_thresholds(tmp_pat
     assert live["protected_cohort_count"] == 35  # nosec B101
     assert live["demographic_parity_status"] == "COMPLIANT"  # nosec B101
     assert len(res["live_telemetry_fairness_by_policy"]) == 2  # nosec B101
+
+
+def test_drift_monitor_preserves_legacy_age_rows_in_mixed_telemetry(tmp_path):
+    """Verifies that 40 legacy Age rows + 10 new age_bucket rows under the same v4 policy are all counted (25 young, 25 mature)."""
+    log_file = tmp_path / "telemetry_logs.jsonl"
+    report_file = tmp_path / "compliance_audit_report.json"
+
+    rows = []
+    for i in range(40):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {"Age": 24 if i % 2 == 0 else 45},
+                "inference_output": {
+                    "model_recommendation": "APPROVE",
+                    "model_version": "v4",
+                    "decision_threshold": 0.1379,
+                },
+            }
+        )
+    for i in range(40):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "live_production_traffic",
+                "status_code": 200,
+                "payload_snapshot": {
+                    "age_bucket": "UNDER_30" if i % 2 == 0 else "30_AND_OVER"
+                },
+                "inference_output": {
+                    "model_recommendation": "APPROVE",
+                    "model_version": "v4",
+                    "decision_threshold": 0.1379,
+                },
+            }
+        )
+    log_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    res = run_production_audit(log_path=log_file, report_path=report_file)
+    live = res["live_telemetry_fairness"]
+    assert live["protected_cohort_count"] == 40  # nosec B101
+    assert live["baseline_cohort_count"] == 40  # nosec B101
+    assert live["demographic_parity_status"] == "COMPLIANT"  # nosec B101

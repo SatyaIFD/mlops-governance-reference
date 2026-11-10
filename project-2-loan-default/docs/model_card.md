@@ -4,7 +4,7 @@
 ---
 
 ## ⚖️ Model Governance & Fairness Summary
-* **Demographic Parity Status:** `COMPLIANT (FAIR)`
+* **Demographic Parity Status:** `COMPLIANT`
 * **Unified Validation-Calibrated Cutoff:** `0.1379`
 * **Disparate Impact Ratio (Young `<30` vs. Baseline `>=30`):** `0.9178` (95% CI: `[0.9054, 0.9305]`)
 * **Equal Opportunity TPR Ratio:** `0.9888` (95% CI: `[0.9432, 1.0366]`)

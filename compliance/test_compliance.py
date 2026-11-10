@@ -237,3 +237,25 @@ def test_gdpr_purge_crash_recovery_from_journal(tmp_path):
     assert res["db_rows_deleted"] == 2  # nosec B101
     assert not bak_file.exists()  # nosec B101
     assert not journal_file.exists()  # nosec B101
+
+
+def test_gdpr_purge_preserves_null_user_id_rows(tmp_path):
+    """Verifies that Parquet and CSV purges do not drop rows where user_id is None/NaN."""
+    db_file = tmp_path / "mlflow.db"
+    parquet_file = tmp_path / "train.parquet"
+    target_user = "USER_DELETE"
+
+    _init_mock_sqlite_db(db_file, target_user)
+    df = pd.DataFrame(
+        {
+            "user_id": [target_user, None, "USER_KEEP"],
+            "amount": [10.0, 20.0, 30.0],
+        }
+    )
+    df.to_parquet(parquet_file, index=False)
+
+    res = execute_right_to_be_forgotten(target_user, str(db_file), str(parquet_file))
+    assert res["file_rows_removed"] == 1  # nosec B101
+    remaining_df = pd.read_parquet(parquet_file)
+    assert len(remaining_df) == 2  # nosec B101
+    assert remaining_df["user_id"].isna().sum() == 1  # nosec B101

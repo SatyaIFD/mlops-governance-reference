@@ -176,7 +176,10 @@ class LoanModelTrainer:
                 "calibration_split": "validation_holdout_20pct",
                 "mlflow_run_id": run.info.run_id,
             }
-            thresholds_path = artifacts_dir / "decision_thresholds.json"
+            import tempfile
+
+            tmp_thresh_dir = Path(tempfile.mkdtemp())
+            thresholds_path = tmp_thresh_dir / "decision_thresholds.json"
             with open(thresholds_path, "w", encoding="utf-8") as f:
                 json.dump(thresholds_payload, f, indent=2)
 
@@ -230,6 +233,9 @@ class LoanModelTrainer:
                     registered_model_name="loan_default_production_model",
                     signature=signature,
                 )
+            final_thresh_path = artifacts_dir / "decision_thresholds.json"
+            with open(final_thresh_path, "w", encoding="utf-8") as f:
+                json.dump(thresholds_payload, f, indent=2)
             print("💾 Production run completely tracked in system registry.")
 
 

@@ -106,16 +106,40 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
+def _resolve_threshold_file(expected_run_id: str | None) -> Path:
+    """Resolves preprocessing/decision_thresholds.json from MLflow run artifacts first, falling back to local artifacts/."""
+    if expected_run_id:
+        try:
+            dl_path = mlflow.artifacts.download_artifacts(
+                run_id=expected_run_id,
+                artifact_path="preprocessing/decision_thresholds.json",
+            )
+            if Path(dl_path).is_file():
+                return Path(dl_path)
+        except Exception as dl_err:
+            print(f"ℹ️ MLflow threshold artifact lookup fallback: {dl_err}", flush=True)
+        mlruns_root = Path("/app/mlruns")
+        if mlruns_root.exists():
+            for cand in mlruns_root.rglob("decision_thresholds.json"):
+                if expected_run_id in str(cand):
+                    return cand
+    return PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
+
+
 def _load_startup_decision_threshold(expected_run_id: str | None = None) -> float:
-    """Loads the single validation-calibrated decision threshold once at startup and verifies its mlflow_run_id."""
+    """Loads the validation-calibrated decision threshold once at startup and strictly verifies its mlflow_run_id."""
     env_thresh = os.getenv("LOAN_DECISION_THRESHOLD", "").strip()
     if env_thresh:
         cutoff = float(env_thresh)
         if not (0.0 < cutoff < 1.0):
             raise ValueError(f"Invalid LOAN_DECISION_THRESHOLD: {cutoff}")
+        print(
+            f"⚠️ WARNING: Using LOAN_DECISION_THRESHOLD={cutoff} environment override (bypassing MLflow artifact lookup).",
+            flush=True,
+        )
         return cutoff
 
-    thresh_file = PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
+    thresh_file = _resolve_threshold_file(expected_run_id)
     if not thresh_file.is_file():
         raise FileNotFoundError(
             f"Required threshold configuration missing at {thresh_file}"
@@ -124,9 +148,11 @@ def _load_startup_decision_threshold(expected_run_id: str | None = None) -> floa
     if "decision_threshold" not in data:
         raise ValueError(f"Missing 'decision_threshold' key in {thresh_file}: {data}")
     file_run_id = data.get("mlflow_run_id")
-    if expected_run_id and file_run_id and str(file_run_id) != str(expected_run_id):
+    if not file_run_id:
+        raise ValueError(f"Missing 'mlflow_run_id' lineage key in {thresh_file}")
+    if expected_run_id and str(file_run_id) != str(expected_run_id):
         raise ValueError(
-            f"Threshold artifact run_id mismatch: decision_thresholds.json has {file_run_id}, "
+            f"Threshold artifact run_id mismatch: {thresh_file} has {file_run_id}, "
             f"but loaded model version belongs to run {expected_run_id}"
         )
     cutoff = float(data["decision_threshold"])
