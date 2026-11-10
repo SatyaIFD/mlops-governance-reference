@@ -220,17 +220,21 @@ async def lifespan(app: FastAPI):
         prod_versions = [v for v in versions if v.current_stage == "Production"]
 
         if prod_versions:
-            latest_version = max(int(v.version) for v in prod_versions)
+            selected_mv = max(prod_versions, key=lambda v: int(v.version))
+            latest_version = int(selected_mv.version)
+            expected_run_id = getattr(selected_mv, "run_id", None)
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
         elif versions:
-            latest_version = max(int(v.version) for v in versions)
+            selected_mv = max(versions, key=lambda v: int(v.version))
+            latest_version = int(selected_mv.version)
+            expected_run_id = getattr(selected_mv, "run_id", None)
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
         else:
+            latest_version = 1
+            expected_run_id = None
             model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/1")
 
-        target_ver = latest_version if (prod_versions or versions) else 1
-        mv_meta = client.get_model_version(model_name, str(target_ver))
-        expected_run_id = getattr(mv_meta, "run_id", None)
+        target_ver = latest_version
         loaded, resolved_src = _load_xgboost_model_portable(
             client, model_name, model_uri, target_ver
         )
