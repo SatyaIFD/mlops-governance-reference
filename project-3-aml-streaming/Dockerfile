@@ -13,7 +13,6 @@ RUN apt-get update && \
 
 COPY project-3-aml-streaming/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir --upgrade "msgpack>=1.2.3" "setuptools>=78.1.1" "urllib3>=2.8.0" && \
     rm -rf /usr/local/lib/python3.13/site-packages/pip* \
            /usr/local/lib/python3.13/site-packages/*.dist-info/sboms \
            /usr/local/lib/python3.13/ensurepip && \

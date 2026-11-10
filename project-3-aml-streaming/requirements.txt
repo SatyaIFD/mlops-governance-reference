@@ -2,7 +2,7 @@ pandas==2.3.3
 numpy==2.4.6
 scikit-learn==1.9.1
 pyarrow==25.0.1
-kagglehub
+kagglehub==1.0.2
 msgpack==1.2.4
 setuptools==84.2.1
 mlflow==3.18.0

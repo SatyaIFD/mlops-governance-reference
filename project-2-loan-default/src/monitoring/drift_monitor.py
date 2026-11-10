@@ -77,16 +77,23 @@ def _evaluate_source_records(
     outputs = pd.json_normalize(df["inference_output"])
     audit_df = pd.concat([payloads, outputs], axis=1)
 
+    cohort_series = pd.Series(index=audit_df.index, dtype="object")
     if "age_bucket" in audit_df.columns:
-        is_young_mask = audit_df["age_bucket"] == "UNDER_30"
-        is_mature_mask = audit_df["age_bucket"] == "30_AND_OVER"
-    elif "Age" in audit_df.columns:
-        is_young_mask = audit_df["Age"] < 30
-        is_mature_mask = audit_df["Age"] >= 30
-    elif "age_group" in audit_df.columns:
-        is_young_mask = audit_df["age_group"] == "UNDER_30"
-        is_mature_mask = audit_df["age_group"] == "30_AND_OVER"
-    else:
+        cohort_series = cohort_series.where(
+            cohort_series.notna(), audit_df["age_bucket"]
+        )
+    if "Age" in audit_df.columns:
+        age_num = pd.to_numeric(audit_df["Age"], errors="coerce")
+        age_derived = pd.Series(index=audit_df.index, dtype="object")
+        age_derived.loc[age_num < 30] = "UNDER_30"
+        age_derived.loc[age_num >= 30] = "30_AND_OVER"
+        cohort_series = cohort_series.where(cohort_series.notna(), age_derived)
+    if "age_group" in audit_df.columns:
+        cohort_series = cohort_series.where(
+            cohort_series.notna(), audit_df["age_group"]
+        )
+
+    if cohort_series.isna().all():
         return {
             "data_source": source_name,
             "demographic_parity_status": "INCONCLUSIVE (MISSING_COHORT_FIELD)",
@@ -94,6 +101,9 @@ def _evaluate_source_records(
             "di_95_ci": None,
             "sample_size_valid": False,
         }
+
+    is_young_mask = cohort_series == "UNDER_30"
+    is_mature_mask = cohort_series == "30_AND_OVER"
 
     decision_col = (
         "model_recommendation"
