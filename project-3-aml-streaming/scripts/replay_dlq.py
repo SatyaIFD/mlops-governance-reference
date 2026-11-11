@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from pathlib import Path
 
 from src.features.velocity import StreamingStateManager
@@ -20,9 +21,8 @@ def replay_dlq_events(
 ) -> dict:
     """
     Replays quarantined events from dead_letter_queue.jsonl (and any legacy dlq_event_*.json files).
-    Validates, enriches through StreamingStateManager (with event_id deduplication), scores
-    through AMLAnomalyDetector when provided, appends flagged alerts to alerts_output_path,
-    and retains only unrecovered events in the DLQ.
+    Crash-safe: retains dead_letter_queue.jsonl on disk during processing and atomically replaces
+    or removes it only after all records have been evaluated.
     """
     state_manager = state_manager or StreamingStateManager()
     jsonl_file = dlq_dir / "dead_letter_queue.jsonl"
@@ -62,28 +62,51 @@ def replay_dlq_events(
         with open(jsonl_file, "r", encoding="utf-8") as f:
             lines = [line.strip() for line in f if line.strip()]
 
-        jsonl_file.unlink()
+        # Stage failed validations during replay into a temporary ingestor so active jsonl_file is untouched until commit
+        staging_dir = dlq_dir / ".replay_staging"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        orig_dlq_log = target_ingestor.dlq_log_file
+        target_ingestor.dlq_log_file = staging_dir / "staged_dlq.jsonl"
+        if target_ingestor.dlq_log_file.exists():
+            target_ingestor.dlq_log_file.unlink()
 
-        for line in lines:
-            try:
-                record = json.loads(line)
-                raw_tx = record.get("raw_payload", {})
-                is_valid, clean_tx = target_ingestor.validate_and_route(raw_tx)
-                if is_valid and clean_tx is not None:
-                    enriched = state_manager.update_and_enrich(clean_tx)
-                    _score_and_record(enriched)
-                    replayed_clean += 1
-                else:
+        try:
+            for line in lines:
+                try:
+                    record = json.loads(line)
+                    raw_tx = record.get("raw_payload", {})
+                    is_valid, clean_tx = target_ingestor.validate_and_route(raw_tx)
+                    if is_valid and clean_tx is not None:
+                        enriched = state_manager.update_and_enrich(clean_tx)
+                        _score_and_record(enriched)
+                        replayed_clean += 1
+                    else:
+                        replayed_failed += 1
+                except Exception as e:
+                    logging.error(f"Error replaying JSONL record: {e}")
                     replayed_failed += 1
-            except Exception as e:
-                logging.error(f"Error replaying JSONL record: {e}")
-                replayed_failed += 1
-                unrecovered_records.append(line)
+                    unrecovered_records.append(line)
+
+            if target_ingestor.dlq_log_file.exists():
+                with open(target_ingestor.dlq_log_file, "r", encoding="utf-8") as sf:
+                    unrecovered_records.extend([ln.strip() for ln in sf if ln.strip()])
+                target_ingestor.dlq_log_file.unlink()
+        finally:
+            target_ingestor.dlq_log_file = orig_dlq_log
+            if staging_dir.exists():
+                try:
+                    staging_dir.rmdir()
+                except OSError as rm_err:
+                    logging.debug("Staging dir cleanup skipped: %s", rm_err)
 
         if unrecovered_records:
-            with open(jsonl_file, "a", encoding="utf-8") as f:
+            tmp_dlq = jsonl_file.with_suffix(".jsonl.tmp")
+            with open(tmp_dlq, "w", encoding="utf-8") as f:
                 for line in unrecovered_records:
                     f.write(line + "\n")
+            os.replace(tmp_dlq, jsonl_file)
+        else:
+            jsonl_file.unlink()
 
     for dlq_file in legacy_files:
         try:

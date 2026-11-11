@@ -560,3 +560,75 @@ def test_pipeline_sigterm_signal_and_version_mismatch_rejection(tmp_path, monkey
     meta_path.write_text(json.dumps(meta), encoding="utf-8")
     with pytest.raises(ValueError, match="scikit-learn version mismatch"):
         AMLAnomalyDetector().load(model_path)
+
+
+def test_dlq_replay_scores_anomalies_and_pipeline_preserves_replayed_alerts(
+    tmp_path, monkeypatch
+):
+    """Verifies replay_dlq_events scores recovered records into aml_alerts.jsonl and subsequent pipeline runs preserve them."""
+    from src.streaming.generator import _write_synthetic_saml_fallback
+    from src.streaming.pipeline import run_production_stream_pipeline
+
+    dlq_dir = tmp_path / "dlq"
+    ingestor = StreamingIngestionEngine(dlq_output_dir=dlq_dir)
+    df = pd.DataFrame(
+        {
+            "Amount": [50.0, 9250.0, 10.0, 9250.0, 120.0, 9250.0],
+            "pass_through_ratio_1h": [0.0, 0.95, 0.1, 1.0, 0.05, 0.92],
+            "is_structuring": [0, 1, 0, 1, 0, 1],
+            "velocity_acceleration": [1.0, 12.5, 0.8, 18.0, 1.1, 9.5],
+            "fan_out_count_24h": [1, 8, 1, 14, 2, 6],
+            "receiver_inflow_count_1h": [1, 5, 1, 15, 1, 7],
+            "receiver_inflow_amount_1h": [
+                50.0,
+                45000.0,
+                10.0,
+                150000.0,
+                120.0,
+                62000.0,
+            ],
+            "Is_laundering": [0, 1, 0, 1, 0, 1],
+        }
+    )
+    model_path = tmp_path / "aml_streaming_model"
+    det = AMLAnomalyDetector(threshold=0.30)
+    det.train(df)
+    det.save(model_path, mlflow_run_id="replay_score_test")
+
+    # Route a structuring payload with a bad date to DLQ, then repair the date
+    ingestor.validate_and_route(
+        {
+            "Timestamp": "BAD_TS",
+            "Sender_account": "ACC_S",
+            "Receiver_account": "ACC_R",
+            "Amount": 9250.0,
+        }
+    )
+    dlq_file = dlq_dir / "dead_letter_queue.jsonl"
+    rec = json.loads(dlq_file.read_text(encoding="utf-8").strip())
+    rec["raw_payload"]["Timestamp"] = "2025-01-01 08:00:00"
+    dlq_file.write_text(json.dumps(rec) + "\n", encoding="utf-8")
+
+    alerts_file = tmp_path / "aml_alerts.jsonl"
+    summary = replay_dlq_events(
+        dlq_dir, ingestor, detector=det, alerts_output_path=alerts_file
+    )
+    assert summary["replayed_clean"] == 1  # nosec B101
+    assert summary["scored_anomalies"] == 1  # nosec B101
+    assert not dlq_file.exists()  # nosec B101
+    assert '"source": "dlq_replay"' in alerts_file.read_text(encoding="utf-8")  # nosec B101
+
+    # Run streaming pipeline and verify the replayed alert is preserved in aml_alerts.jsonl
+    csv_path = tmp_path / "SAML-D.csv"
+    _write_synthetic_saml_fallback(csv_path, num_rows=30)
+    monkeypatch.setattr(
+        "src.streaming.pipeline.resolve_runtime_paths",
+        lambda: (
+            csv_path,
+            dlq_dir,
+            tmp_path / "pipeline_execution_report.json",
+            model_path,
+        ),
+    )
+    run_production_stream_pipeline(max_events=15, delay_seconds=0.0, warmup_events=5)
+    assert '"source": "dlq_replay"' in alerts_file.read_text(encoding="utf-8")  # nosec B101

@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+from src.monitoring.observability import iter_telemetry_log_files
 
 DEFAULT_TRAFFIC_SOURCE = "live_production_traffic"
 
@@ -233,7 +234,8 @@ def run_production_audit(
             json.dump(existing_report, f, indent=4)
         return existing_report
 
-    if not log_path.exists():
+    log_files = iter_telemetry_log_files(log_path)
+    if not log_files:
         print(f"⚠️ Telemetry log ledger not found at: {log_path}")
         saved = _save_blocks(None, None, {}, {})
         if require_live_traffic:
@@ -245,18 +247,19 @@ def run_production_audit(
 
     grouped: dict[str, list[dict]] = {}
     grouped_by_policy: dict[str, list[dict]] = {}
-    with open(log_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                rec = json.loads(line.strip())
-                if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
-                    src = str(
-                        rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE
-                    ).strip()
-                    grouped.setdefault(src, []).append(rec)
-                    mv, dt_str = _extract_policy_key(rec)
-                    pol_key = f"{src}|model={mv}|threshold={dt_str}"
-                    grouped_by_policy.setdefault(pol_key, []).append(rec)
+    for active_file in log_files:
+        with open(active_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    rec = json.loads(line.strip())
+                    if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
+                        src = str(
+                            rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE
+                        ).strip()
+                        grouped.setdefault(src, []).append(rec)
+                        mv, dt_str = _extract_policy_key(rec)
+                        pol_key = f"{src}|model={mv}|threshold={dt_str}"
+                        grouped_by_policy.setdefault(pol_key, []).append(rec)
 
     if not grouped:
         print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")

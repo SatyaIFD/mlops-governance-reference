@@ -259,3 +259,27 @@ def test_startup_threshold_rejects_mismatched_mlflow_run_id(tmp_path, monkeypatc
         p2_main._load_startup_decision_threshold(expected_run_id="run_stale_111")
         == 0.1379
     )  # nosec B101
+
+
+def test_resolve_threshold_file_with_source_prioritizes_mlruns_and_mlflow(
+    tmp_path, monkeypatch
+):
+    """Verifies _resolve_threshold_file_with_source resolves container mlruns or mlflow artifacts before local fallback."""
+    import json
+
+    run_id = "run_thresh_abc"
+    mlruns_cand = tmp_path / "2" / run_id / "artifacts" / "preprocessing"
+    mlruns_cand.mkdir(parents=True)
+    thresh_path = mlruns_cand / "decision_thresholds.json"
+    thresh_path.write_text(
+        json.dumps({"decision_threshold": 0.14, "mlflow_run_id": run_id}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "src.inference.main.Path",
+        lambda p: tmp_path if p == "/app/mlruns" else Path(p),
+    )
+    resolved_path, src_label = p2_main._resolve_threshold_file_with_source(run_id)
+    assert resolved_path == thresh_path  # nosec B101
+    assert src_label.startswith("container_mlruns:")  # nosec B101

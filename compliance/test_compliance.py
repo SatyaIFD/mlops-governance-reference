@@ -259,3 +259,29 @@ def test_gdpr_purge_preserves_null_user_id_rows(tmp_path):
     remaining_df = pd.read_parquet(parquet_file)
     assert len(remaining_df) == 2  # nosec B101
     assert remaining_df["user_id"].isna().sum() == 1  # nosec B101
+
+
+def test_gdpr_purge_succeeds_when_post_commit_vacuum_is_locked(tmp_path, monkeypatch):
+    """Verifies that a locked best-effort VACUUM after DB_COMMITTED does not roll back committed deletions."""
+    import compliance.gdpr_purge as gp
+
+    db_file = tmp_path / "mlflow.db"
+    parquet_file = tmp_path / "train.parquet"
+    target_user = "USER_VAC_LOCK"
+
+    _init_mock_sqlite_db(db_file, target_user)
+    df = pd.DataFrame({"user_id": [target_user, "USER_KEEP"], "amount": [10.0, 20.0]})
+    df.to_parquet(parquet_file, index=False)
+
+    def _locked_vacuum(conn):
+        try:
+            raise sqlite3.OperationalError("database is locked")
+        except sqlite3.Error as err:
+            gp.logging.warning(
+                "Best-effort SQLite VACUUM skipped after commit: %s", err
+            )
+
+    monkeypatch.setattr(gp, "_run_best_effort_vacuum", _locked_vacuum)
+    res = execute_right_to_be_forgotten(target_user, str(db_file), str(parquet_file))
+    assert res["db_rows_deleted"] == 2  # nosec B101
+    assert res["file_rows_removed"] == 1  # nosec B101

@@ -166,6 +166,14 @@ def _verify_purge_completion(db_file: Path, data_file: Path, target_user: str) -
                 )
 
 
+def _run_best_effort_vacuum(conn: sqlite3.Connection) -> None:
+    """Runs SQLite VACUUM as a best-effort post-commit step without invalidating committed deletes."""
+    try:
+        conn.execute("VACUUM")
+    except sqlite3.Error as vac_err:
+        logging.warning("Best-effort SQLite VACUUM skipped after commit: %s", vac_err)
+
+
 def execute_right_to_be_forgotten(
     user_id: str,
     db_path: str,
@@ -250,8 +258,6 @@ def execute_right_to_be_forgotten(
                         cur.execute(sql, (target_user,))
                         deleted += cur.rowcount
                 conn.commit()
-                if deleted > 0:
-                    conn.execute("VACUUM")
                 journal_state["state"] = "DB_COMMITTED"
                 _write_journal(journal_file, journal_state)
             except Exception as e:
@@ -263,6 +269,9 @@ def execute_right_to_be_forgotten(
                 raise PurgeError(
                     f"Database purge failed; data file rolled back: {e}"
                 ) from e
+            else:
+                if deleted > 0:
+                    _run_best_effort_vacuum(conn)
             finally:
                 conn.close()
 

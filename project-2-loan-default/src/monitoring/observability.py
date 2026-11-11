@@ -1,7 +1,7 @@
 """
 Production Observability & Telemetry Engine - Project 2: Loan Default Prediction
 Logs runtime inference request summaries, deterministic 16-field payload hashes,
-latencies, model recommendations, review states, and age buckets with bounded log rotation.
+latencies, model recommendations, review states, and age buckets with multi-archive rotation.
 """
 
 import hashlib
@@ -15,6 +15,7 @@ TELEMETRY_SCHEMA_VERSION = 2
 MAX_TELEMETRY_LOG_BYTES = int(
     os.getenv("LOAN_TELEMETRY_MAX_BYTES", str(50 * 1024 * 1024))
 )
+MAX_TELEMETRY_ARCHIVES = int(os.getenv("LOAN_TELEMETRY_MAX_ARCHIVES", "5"))
 
 
 def compute_payload_hash(payload: dict[str, Any]) -> str:
@@ -23,26 +24,52 @@ def compute_payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
+def iter_telemetry_log_files(
+    telemetry_log_path: Path, max_archives: int = MAX_TELEMETRY_ARCHIVES
+) -> list[Path]:
+    """Returns existing rotated archive files in chronological order (oldest first) followed by the active file."""
+    files: list[Path] = []
+    for idx in range(max_archives, 0, -1):
+        cand = telemetry_log_path.with_suffix(f"{telemetry_log_path.suffix}.{idx}")
+        if cand.is_file():
+            files.append(cand)
+    if telemetry_log_path.is_file():
+        files.append(telemetry_log_path)
+    return files
+
+
 class ModelObservabilityLogger:
     def __init__(
         self,
         telemetry_log_path: Path,
         max_bytes: int = MAX_TELEMETRY_LOG_BYTES,
+        max_archives: int = MAX_TELEMETRY_ARCHIVES,
     ):
         self.telemetry_log_path = telemetry_log_path
         self.max_bytes = max_bytes
+        self.max_archives = max_archives
         self.telemetry_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _rotate_if_needed(self) -> None:
         if (
             self.max_bytes > 0
+            and self.max_archives > 0
             and self.telemetry_log_path.exists()
             and self.telemetry_log_path.stat().st_size >= self.max_bytes
         ):
-            rotated = self.telemetry_log_path.with_suffix(
-                self.telemetry_log_path.suffix + ".1"
+            for idx in range(self.max_archives - 1, 0, -1):
+                src = self.telemetry_log_path.with_suffix(
+                    f"{self.telemetry_log_path.suffix}.{idx}"
+                )
+                dst = self.telemetry_log_path.with_suffix(
+                    f"{self.telemetry_log_path.suffix}.{idx + 1}"
+                )
+                if src.exists():
+                    os.replace(src, dst)
+            first_archive = self.telemetry_log_path.with_suffix(
+                f"{self.telemetry_log_path.suffix}.1"
             )
-            os.replace(self.telemetry_log_path, rotated)
+            os.replace(self.telemetry_log_path, first_archive)
 
     def log_inference_transaction(
         self,
@@ -99,12 +126,18 @@ class ModelObservabilityLogger:
             f.write(json.dumps(telemetry_entry) + "\n")
 
     def read_latest_telemetry(self, tail_count: int = 5):
-        """Reads back the newest telemetry entries to assist audit validation."""
-        if not self.telemetry_log_path.exists():
+        """Reads back the newest telemetry entries across retained archives and active log."""
+        files = iter_telemetry_log_files(
+            self.telemetry_log_path, max_archives=self.max_archives
+        )
+        if not files:
             print("ℹ️ Telemetry ledger file does not exist yet.")
             return []
 
-        with open(self.telemetry_log_path, "r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip()]
-
-        return [json.loads(line) for line in lines[-tail_count:]]
+        records: list[dict] = []
+        for fpath in files:
+            with open(fpath, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        records.append(json.loads(line.strip()))
+        return records[-tail_count:]

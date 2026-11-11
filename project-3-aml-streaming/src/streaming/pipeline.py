@@ -269,8 +269,17 @@ def run_production_stream_pipeline(
                     tx_item, [f"ERR_RECORDING_FAILURE: {rec_err}"]
                 )
 
+    preserved_replay_alerts: list[str] = []
+    if alerts_path.is_file():
+        with open(alerts_path, "r", encoding="utf-8") as existing_af:
+            for line in existing_af:
+                if '"source": "dlq_replay"' in line:
+                    preserved_replay_alerts.append(line.strip())
+
     try:
         with open(tmp_alerts_path, "w", encoding="utf-8") as alert_file:
+            for replay_line in preserved_replay_alerts:
+                alert_file.write(replay_line + "\n")
             for raw_tx in transaction_stream_generator(
                 data_path, delay_seconds=delay_seconds
             ):
