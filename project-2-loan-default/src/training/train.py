@@ -176,6 +176,7 @@ class LoanModelTrainer:
                 "calibration_split": "validation_holdout_20pct",
                 "mlflow_run_id": run.info.run_id,
             }
+            import shutil
             import tempfile
 
             tmp_thresh_dir = Path(tempfile.mkdtemp())
@@ -216,6 +217,7 @@ class LoanModelTrainer:
             mlflow.log_metric("disparate_impact_ratio", di_ratio)
             mlflow.log_artifact(str(feature_cols_path), artifact_path="preprocessing")
             mlflow.log_artifact(str(thresholds_path), artifact_path="preprocessing")
+            shutil.rmtree(tmp_thresh_dir, ignore_errors=True)
 
             signature = infer_signature(X_fit, fit_probs)
 

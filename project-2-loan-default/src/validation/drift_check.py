@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from src.monitoring.observability import iter_telemetry_log_files
 
 DEFAULT_TRAFFIC_SOURCE = "live_production_traffic"
 
@@ -116,22 +117,24 @@ class DataDriftMonitor:
 def group_telemetry_by_source(
     telemetry_log_path: Path,
 ) -> dict[str, pd.DataFrame]:
-    if not telemetry_log_path.exists():
+    log_files = iter_telemetry_log_files(telemetry_log_path)
+    if not log_files:
         return {}
     grouped: dict[str, list[dict]] = {}
-    with open(telemetry_log_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                rec = json.loads(line.strip())
-                if (
-                    rec.get("status_code") == 200
-                    and rec.get("schema_version") == 2
-                    and "payload_snapshot" in rec
-                ):
-                    src = str(
-                        rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE
-                    ).strip()
-                    grouped.setdefault(src, []).append(rec["payload_snapshot"])
+    for active_file in log_files:
+        with open(active_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    rec = json.loads(line.strip())
+                    if (
+                        rec.get("status_code") == 200
+                        and rec.get("schema_version") == 2
+                        and "payload_snapshot" in rec
+                    ):
+                        src = str(
+                            rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE
+                        ).strip()
+                        grouped.setdefault(src, []).append(rec["payload_snapshot"])
     return {src: pd.DataFrame(rows) for src, rows in grouped.items() if rows}
 
 

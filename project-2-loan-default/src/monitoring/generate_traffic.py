@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 import pandas as pd
-from src.monitoring.observability import compute_payload_hash
+from src.monitoring.observability import compute_payload_hash, iter_telemetry_log_files
 
 DEFAULT_URL = os.getenv("LOAN_API_URL", "http://127.0.0.1:8081/api/v1/loan-sim/predict")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -83,29 +83,33 @@ def _load_seen_identifiers(
 ) -> tuple[set[str], set[tuple]]:
     seen_hashes: set[str] = set()
     seen_snapshots: set[tuple] = set()
-    if not log_path.is_file():
+    log_files = iter_telemetry_log_files(log_path)
+    if not log_files:
         return seen_hashes, seen_snapshots
-    with open(log_path, "r", encoding="utf-8") as f:
-        for line_num, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            try:
-                rec = json.loads(line)
-                if rec.get("payload_hash"):
-                    seen_hashes.add(str(rec["payload_hash"]))
-                snap = rec.get("payload_snapshot")
-                if isinstance(snap, dict) and (
-                    {"Income", "CreditScore", "LoanAmount", "DTIRatio"}.issubset(snap)
-                    and ("age_bucket" in snap or "Age" in snap)
-                ):
-                    seen_snapshots.add(_snapshot_key(snap))
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                logging.warning(
-                    "Skipping malformed telemetry line %d in %s: %s",
-                    line_num,
-                    log_path.name,
-                    exc,
-                )
+    for active_file in log_files:
+        with open(active_file, "r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                    if rec.get("payload_hash"):
+                        seen_hashes.add(str(rec["payload_hash"]))
+                    snap = rec.get("payload_snapshot")
+                    if isinstance(snap, dict) and (
+                        {"Income", "CreditScore", "LoanAmount", "DTIRatio"}.issubset(
+                            snap
+                        )
+                        and ("age_bucket" in snap or "Age" in snap)
+                    ):
+                        seen_snapshots.add(_snapshot_key(snap))
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    logging.warning(
+                        "Skipping malformed telemetry line %d in %s: %s",
+                        line_num,
+                        log_path.name,
+                        exc,
+                    )
     return seen_hashes, seen_snapshots
 
 

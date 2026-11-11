@@ -68,6 +68,7 @@ model = None
 feature_columns = None
 decision_threshold: float | None = None
 loaded_model_version: str | None = None
+loaded_threshold_source: str | None = None
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -106,40 +107,52 @@ def _extract_feature_columns(loaded_model) -> list[str] | None:
     return None
 
 
-def _resolve_threshold_file(expected_run_id: str | None) -> Path:
-    """Resolves preprocessing/decision_thresholds.json from MLflow run artifacts first, falling back to local artifacts/."""
+def _resolve_threshold_file_with_source(
+    expected_run_id: str | None,
+) -> tuple[Path, str]:
+    """Resolves preprocessing/decision_thresholds.json from container mlruns, MLflow artifacts, or local artifacts/."""
     if expected_run_id:
+        mlruns_root = Path("/app/mlruns")
+        if mlruns_root.exists():
+            for cand in mlruns_root.rglob("decision_thresholds.json"):
+                if expected_run_id in str(cand):
+                    return cand, f"container_mlruns:{cand}"
         try:
             dl_path = mlflow.artifacts.download_artifacts(
                 run_id=expected_run_id,
                 artifact_path="preprocessing/decision_thresholds.json",
             )
             if Path(dl_path).is_file():
-                return Path(dl_path)
+                return Path(dl_path), f"mlflow_artifacts:{dl_path}"
         except Exception as dl_err:
             print(f"ℹ️ MLflow threshold artifact lookup fallback: {dl_err}", flush=True)
-        mlruns_root = Path("/app/mlruns")
-        if mlruns_root.exists():
-            for cand in mlruns_root.rglob("decision_thresholds.json"):
-                if expected_run_id in str(cand):
-                    return cand
-    return PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
+    local_path = PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
+    return local_path, f"local_artifacts:{local_path}"
+
+
+def _resolve_threshold_file(expected_run_id: str | None) -> Path:
+    path, _ = _resolve_threshold_file_with_source(expected_run_id)
+    return path
 
 
 def _load_startup_decision_threshold(expected_run_id: str | None = None) -> float:
     """Loads the validation-calibrated decision threshold once at startup and strictly verifies its mlflow_run_id."""
+    global loaded_threshold_source
     env_thresh = os.getenv("LOAN_DECISION_THRESHOLD", "").strip()
     if env_thresh:
         cutoff = float(env_thresh)
         if not (0.0 < cutoff < 1.0):
             raise ValueError(f"Invalid LOAN_DECISION_THRESHOLD: {cutoff}")
+        loaded_threshold_source = "env:LOAN_DECISION_THRESHOLD"
         print(
             f"⚠️ WARNING: Using LOAN_DECISION_THRESHOLD={cutoff} environment override (bypassing MLflow artifact lookup).",
             flush=True,
         )
         return cutoff
 
-    thresh_file = _resolve_threshold_file(expected_run_id)
+    thresh_file, loaded_threshold_source = _resolve_threshold_file_with_source(
+        expected_run_id
+    )
     if not thresh_file.is_file():
         raise FileNotFoundError(
             f"Required threshold configuration missing at {thresh_file}"
@@ -272,7 +285,7 @@ async def lifespan(app: FastAPI):
         model = loaded
         print(
             f"🟢 Production model loaded and verified via URI: {model_uri} "
-            f"(source={resolved_src}, version={loaded_model_version}, threshold={decision_threshold})",
+            f"(source={resolved_src}, version={loaded_model_version}, threshold={decision_threshold}, threshold_source={loaded_threshold_source})",
             flush=True,
         )
     except Exception as reg_err:
@@ -396,6 +409,7 @@ def health_check():
         "model_loaded": True,
         "model_version": loaded_model_version,
         "decision_threshold": decision_threshold,
+        "threshold_source": loaded_threshold_source or "unknown",
     }
 
 

@@ -42,7 +42,7 @@ with DAG(
     # In production with external live traffic, pass --require-live-traffic to fail (exit 2) on missing live rows.
     audit_fairness = BashOperator(
         task_id="audit_fairness_metrics",
-        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py --fail-on-breach --include-synthetic",
+        bash_command=f"set -e; cd {QUOTED_ROOT} && PYTHONPATH=project-2-loan-default python project-2-loan-default/src/monitoring/drift_monitor.py --fail-on-breach",
     )
 
     check_data_drift = BashOperator(
