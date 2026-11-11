@@ -116,18 +116,18 @@ def _resolve_threshold_file_with_source(
         if mlruns_root.exists():
             for cand in mlruns_root.rglob("decision_thresholds.json"):
                 if expected_run_id in str(cand):
-                    return cand, f"container_mlruns:{cand}"
+                    return cand, "container_mlruns"
         try:
             dl_path = mlflow.artifacts.download_artifacts(
                 run_id=expected_run_id,
                 artifact_path="preprocessing/decision_thresholds.json",
             )
             if Path(dl_path).is_file():
-                return Path(dl_path), f"mlflow_artifacts:{dl_path}"
+                return Path(dl_path), "mlflow_artifacts"
         except Exception as dl_err:
             print(f"ℹ️ MLflow threshold artifact lookup fallback: {dl_err}", flush=True)
     local_path = PROJECT_ROOT / "artifacts" / "decision_thresholds.json"
-    return local_path, f"local_artifacts:{local_path}"
+    return local_path, "local_artifacts"
 
 
 def _resolve_threshold_file(expected_run_id: str | None) -> Path:
@@ -143,7 +143,7 @@ def _load_startup_decision_threshold(expected_run_id: str | None = None) -> floa
         cutoff = float(env_thresh)
         if not (0.0 < cutoff < 1.0):
             raise ValueError(f"Invalid LOAN_DECISION_THRESHOLD: {cutoff}")
-        loaded_threshold_source = "env:LOAN_DECISION_THRESHOLD"
+        loaded_threshold_source = "env_override"
         print(
             f"⚠️ WARNING: Using LOAN_DECISION_THRESHOLD={cutoff} environment override (bypassing MLflow artifact lookup).",
             flush=True,
@@ -370,6 +370,9 @@ def prepare_single_row_features(
     """
     raw_data = pd.DataFrame([payload_dict])
     raw_data["is_young"] = (raw_data["Age"] < 30).astype(int)
+    if os.getenv("LOAN_ECOA_NEUTRALIZE_PROTECTED", "0") == "1":
+        raw_data["Age"] = 35
+        raw_data["MaritalStatus"] = "Single"
 
     categorical_cols = [
         "Education",

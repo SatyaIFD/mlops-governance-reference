@@ -84,6 +84,7 @@ def _write_report(
     actual_laundering: int,
     laundering_intercepted: int,
     status: str = "COMPLETE",
+    replayed_alerts_preserved: int = 0,
 ) -> dict:
     recall_pct = (
         round((laundering_intercepted / actual_laundering) * 100.0, 2)
@@ -110,6 +111,8 @@ def _write_report(
         "streaming_performance": {
             "total_processed": processed_count,
             "anomalies_flagged": anomaly_count,
+            "replayed_alerts_preserved": replayed_alerts_preserved,
+            "total_alerts_in_file": anomaly_count + replayed_alerts_preserved,
             "actual_laundering_events": actual_laundering,
             "laundering_intercepted": laundering_intercepted,
             "recall_percentage": recall_pct,
@@ -270,11 +273,22 @@ def run_production_stream_pipeline(
                 )
 
     preserved_replay_alerts: list[str] = []
+    seen_replay_ids: set[str] = set()
     if alerts_path.is_file():
         with open(alerts_path, "r", encoding="utf-8") as existing_af:
             for line in existing_af:
-                if '"source": "dlq_replay"' in line:
-                    preserved_replay_alerts.append(line.strip())
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                    if rec.get("source") == "dlq_replay":
+                        ev_id = str(rec.get("event_id") or "")
+                        if not ev_id or ev_id not in seen_replay_ids:
+                            preserved_replay_alerts.append(json.dumps(rec))
+                            if ev_id:
+                                seen_replay_ids.add(ev_id)
+                except json.JSONDecodeError:
+                    continue
 
     try:
         with open(tmp_alerts_path, "w", encoding="utf-8") as alert_file:
@@ -371,6 +385,7 @@ def run_production_stream_pipeline(
         actual_laundering,
         laundering_intercepted,
         status="COMPLETE",
+        replayed_alerts_preserved=len(preserved_replay_alerts),
     )
 
     print(

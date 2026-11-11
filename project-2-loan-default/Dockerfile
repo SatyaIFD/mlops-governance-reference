@@ -7,9 +7,7 @@ RUN apt-get update && \
 COPY project-2-loan-default/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     rm -rf /usr/local/lib/python3.13/site-packages/pip* \
-           /usr/local/lib/python3.13/site-packages/*.dist-info/sboms \
-           /usr/local/lib/python3.13/ensurepip && \
-    find /usr \( -iname "*spdx*" -o -iname "*cdx*" -o -iname "*sbom*" \) -delete 2>/dev/null || true
+           /usr/local/lib/python3.13/ensurepip
 COPY project-2-loan-default/ .
 COPY compliance/ ./compliance/
 RUN useradd -m -u 10001 mlopsuser

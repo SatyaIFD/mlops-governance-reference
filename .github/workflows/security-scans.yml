@@ -38,6 +38,7 @@ jobs:
           docker build -t fraud-security-test -f project-1-credit-card-fraud/Dockerfile .
           docker build -t loan-security-test -f project-2-loan-default/Dockerfile .
           docker build -t aml-security-test -f project-3-aml-streaming/Dockerfile .
+          docker build -t mlflow-security-test -f mlflow.Dockerfile .
 
       - name: Run Trivy Vulnerability Scanner (Project 1 - Fraud)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -65,6 +66,17 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'aml-security-test'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          trivyignores: '.trivyignore'
+
+      - name: Run Trivy Vulnerability Scanner (MLflow Server)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'mlflow-security-test'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true

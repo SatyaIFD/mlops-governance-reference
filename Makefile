@@ -15,7 +15,7 @@ bootstrap:
 		PYTHONPATH=project-2-loan-default python -c "from pathlib import Path; from src.ingestion.extract import LoanDataIngestionEngine; eng = LoanDataIngestionEngine(Path('project-2-loan-default/data')); eng.fetch_and_extract() if not eng.raw_data_path.exists() else None; eng.optimize_and_partition()"; \
 	fi
 	PYTHONPATH=project-1-credit-card-fraud python project-1-credit-card-fraud/src/training/train.py
-	PYTHONPATH=project-1-credit-card-fraud python project-1-credit-card-fraud/src/governance/audit.py
+	PYTHONPATH=project-1-credit-card-fraud python project-1-credit-card-fraud/src/governance/audit.py --enforce-gate
 	PYTHONPATH=project-1-credit-card-fraud python project-1-credit-card-fraud/src/validation/drift_check.py
 	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/training/train.py
 	PYTHONPATH=project-2-loan-default python project-2-loan-default/src/evaluation/evaluate.py
