@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.15](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.14...v0.5.15) (2026-11-11)
+
+
+### Bug Fixes
+
+* **governance:** complete v0.5.14 audit remediation across replay, telemetry, k8s, and p1 gates ([#169](https://github.com/SatyaIFD/mlops-governance-reference/issues/169)) ([3588037](https://github.com/SatyaIFD/mlops-governance-reference/commit/3588037775c36628bf2faa985c482068bdb2035c))
+
 ## [0.5.14](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.13...v0.5.14) (2026-11-11)
 
 
