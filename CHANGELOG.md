@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.14](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.13...v0.5.14) (2026-11-11)
+
+
+### Bug Fixes
+
+* **governance:** harden post-commit vacuum, multi-archive telemetry rotation, and crash-safe dlq replay ([#167](https://github.com/SatyaIFD/mlops-governance-reference/issues/167)) ([92e7255](https://github.com/SatyaIFD/mlops-governance-reference/commit/92e725587eea8844d52f4389ef3728267723fd59))
+
 ## [0.5.13](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.12...v0.5.13) (2026-11-10)
 
 
