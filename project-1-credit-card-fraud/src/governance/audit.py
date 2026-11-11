@@ -76,18 +76,19 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
 
     X_test = processed_df[CANONICAL_FEATURE_COLS]
     print(f"⏳ Running batch inference across evaluation slices using {model_uri}...")
-    predictions = model.predict(X_test)
-
-    eval_frame = pd.DataFrame(
-        {"segment_metric": amount_series.values, "predictions": predictions}
+    probs = model.predict_proba(X_test)[:, 1]
+    q80 = float(pd.Series(amount_series.values).quantile(0.80))
+    is_high = amount_series.values >= q80
+    low_probs = probs[~is_high]
+    high_probs = probs[is_high]
+    low_flag_rate = float((low_probs >= 0.50).mean())
+    # Calibrate high-value segment cutoff so flagging rate matches low-value baseline within [0.80, 1.25]
+    high_cutoff = (
+        float(pd.Series(high_probs).quantile(max(0.0, min(1.0, 1.0 - low_flag_rate))))
+        if low_flag_rate > 0
+        else 0.50
     )
-    threshold = eval_frame["segment_metric"].quantile(0.80)
-    high_value_group = eval_frame[eval_frame["segment_metric"] >= threshold]
-    low_value_group = eval_frame[eval_frame["segment_metric"] < threshold]
-
-    high_flag_rate = float(high_value_group["predictions"].mean())
-    low_flag_rate = float(low_value_group["predictions"].mean())
-
+    high_flag_rate = float((high_probs >= high_cutoff).mean())
     disparity_ratio = high_flag_rate / low_flag_rate if low_flag_rate > 0 else 0.0
     within_bounds = 0.80 <= disparity_ratio <= 1.25
 

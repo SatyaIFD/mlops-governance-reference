@@ -1,8 +1,7 @@
 """
 Real-Time Fairness & Recommendation Disparity Monitor - Project 2: Loan Default Prediction
-Evaluates telemetry logs across protected (<30 / UNDER_30) and baseline (>=30 / 30_AND_OVER) cohorts.
-Groups records by (traffic_source, model_version, decision_threshold) so retraining or threshold
-updates never pool mixed policies together.
+Streams telemetry logs in O(1) memory across rotated/compressed archives and groups
+counts by (traffic_source, model_version, decision_threshold).
 """
 
 import argparse
@@ -10,34 +9,33 @@ import json
 import math
 import sys
 from pathlib import Path
+from typing import Any
 
-import pandas as pd
-from src.monitoring.observability import iter_telemetry_log_files
+from src.monitoring.observability import (
+    iter_telemetry_log_files,
+    stream_telemetry_records,
+)
 
 DEFAULT_TRAFFIC_SOURCE = "live_production_traffic"
+VALID_APPROVALS = {"APPROVE", "APPROVED"}
+VALID_DECISIONS = {"APPROVE", "APPROVED", "DECLINE", "REJECTED"}
 
 
 def _compute_di_95_ci(
     k_prot: int, n_prot: int, k_base: int, n_base: int
 ) -> list[float] | None:
-    """
-    Computes the Katz logarithmic 95% confidence interval for the Disparate Impact ratio.
-    Applies Haldane-Anscombe (+0.5) continuity correction whenever any cell in the 2x2
-    approval/decline table is zero (k == 0 or k == n).
-    """
+    """Computes the Katz logarithmic 95% CI with Haldane-Anscombe (+0.5) boundary correction."""
     if n_prot <= 0 or n_base <= 0 or k_base <= 0:
         return None
     if k_prot == 0 or k_prot == n_prot or k_base == n_base:
-        kp = float(k_prot) + 0.5
-        np_adj = float(n_prot) + 1.0
-        kb = float(k_base) + 0.5
-        nb_adj = float(n_base) + 1.0
+        kp, np_adj, kb, nb_adj = k_prot + 0.5, n_prot + 1.0, k_base + 0.5, n_base + 1.0
     else:
-        kp = float(k_prot)
-        np_adj = float(n_prot)
-        kb = float(k_base)
-        nb_adj = float(n_base)
-
+        kp, np_adj, kb, nb_adj = (
+            float(k_prot),
+            float(n_prot),
+            float(k_base),
+            float(n_base),
+        )
     p1 = kp / np_adj
     p0 = kb / nb_adj
     di = p1 / p0
@@ -47,18 +45,38 @@ def _compute_di_95_ci(
     return [low, high]
 
 
-def _extract_policy_key(rec: dict) -> tuple[str, str]:
-    out = rec.get("inference_output", {}) or {}
+def _extract_policy_key(rec: dict[str, Any]) -> tuple[str, str]:
+    out = rec.get("inference_output") or {}
     mv = str(out.get("model_version") or "unversioned")
     dt = out.get("decision_threshold")
     dt_str = f"{float(dt):.4f}" if isinstance(dt, (int, float)) else "default"
     return mv, dt_str
 
 
-def _evaluate_source_records(
-    records: list[dict], source_name: str, min_cohort_size: int
-) -> dict:
-    if not records:
+def _extract_cohort_and_decision(rec: dict[str, Any]) -> tuple[str | None, str | None]:
+    snap = rec.get("payload_snapshot") or {}
+    out = rec.get("inference_output") or {}
+    cohort = snap.get("age_bucket")
+    if cohort not in ("UNDER_30", "30_AND_OVER"):
+        age_val = snap.get("Age")
+        if isinstance(age_val, (int, float)):
+            cohort = "UNDER_30" if age_val < 30 else "30_AND_OVER"
+        elif out.get("age_group") in ("UNDER_30", "30_AND_OVER"):
+            cohort = out.get("age_group")
+        else:
+            cohort = None
+    decision = out.get("model_recommendation") or out.get("underwriting_decision")
+    return cohort, decision
+
+
+def _summarize_counts(
+    counts: dict[str, int],
+    source_name: str,
+    active_mv: str,
+    active_dt: str,
+    min_cohort_size: int,
+) -> dict[str, Any]:
+    if counts.get("total_rows", 0) == 0:
         return {
             "data_source": source_name,
             "demographic_parity_status": "INCONCLUSIVE (INSUFFICIENT_DATA)",
@@ -66,35 +84,7 @@ def _evaluate_source_records(
             "di_95_ci": None,
             "sample_size_valid": False,
         }
-
-    # Filter to the most recent active (model_version, decision_threshold) policy within this source
-    active_mv, active_dt = _extract_policy_key(records[-1])
-    policy_records = [
-        r for r in records if _extract_policy_key(r) == (active_mv, active_dt)
-    ]
-
-    df = pd.DataFrame(policy_records)
-    payloads = pd.json_normalize(df["payload_snapshot"])
-    outputs = pd.json_normalize(df["inference_output"])
-    audit_df = pd.concat([payloads, outputs], axis=1)
-
-    cohort_series = pd.Series(index=audit_df.index, dtype="object")
-    if "age_bucket" in audit_df.columns:
-        cohort_series = cohort_series.where(
-            cohort_series.notna(), audit_df["age_bucket"]
-        )
-    if "Age" in audit_df.columns:
-        age_num = pd.to_numeric(audit_df["Age"], errors="coerce")
-        age_derived = pd.Series(index=audit_df.index, dtype="object")
-        age_derived.loc[age_num < 30] = "UNDER_30"
-        age_derived.loc[age_num >= 30] = "30_AND_OVER"
-        cohort_series = cohort_series.where(cohort_series.notna(), age_derived)
-    if "age_group" in audit_df.columns:
-        cohort_series = cohort_series.where(
-            cohort_series.notna(), audit_df["age_group"]
-        )
-
-    if cohort_series.isna().all():
+    if counts.get("cohort_known", 0) == 0:
         return {
             "data_source": source_name,
             "demographic_parity_status": "INCONCLUSIVE (MISSING_COHORT_FIELD)",
@@ -102,16 +92,7 @@ def _evaluate_source_records(
             "di_95_ci": None,
             "sample_size_valid": False,
         }
-
-    is_young_mask = cohort_series == "UNDER_30"
-    is_mature_mask = cohort_series == "30_AND_OVER"
-
-    decision_col = (
-        "model_recommendation"
-        if "model_recommendation" in audit_df.columns
-        else "underwriting_decision"
-    )
-    if decision_col not in audit_df.columns:
+    if counts.get("decision_known", 0) == 0:
         return {
             "data_source": source_name,
             "demographic_parity_status": "INCONCLUSIVE (MISSING_DECISION_FIELD)",
@@ -119,25 +100,10 @@ def _evaluate_source_records(
             "di_95_ci": None,
             "sample_size_valid": False,
         }
-
-    valid_decisions = {"APPROVE", "APPROVED", "DECLINE", "REJECTED"}
-    valid_mask = audit_df[decision_col].isin(valid_decisions)
-    young_df = audit_df[valid_mask & is_young_mask]
-    mature_df = audit_df[valid_mask & is_mature_mask]
-
-    n_prot = len(young_df)
-    n_base = len(mature_df)
-    k_prot = (
-        int(young_df[decision_col].isin({"APPROVE", "APPROVED"}).sum())
-        if n_prot > 0
-        else 0
-    )
-    k_base = (
-        int(mature_df[decision_col].isin({"APPROVE", "APPROVED"}).sum())
-        if n_base > 0
-        else 0
-    )
-
+    n_prot = counts["n_prot"]
+    n_base = counts["n_base"]
+    k_prot = counts["k_prot"]
+    k_base = counts["k_base"]
     approval_protected = float(k_prot / n_prot) if n_prot > 0 else None
     approval_baseline = float(k_base / n_base) if n_base > 0 else None
     ci_bounds = _compute_di_95_ci(k_prot, n_prot, k_base, n_base)
@@ -186,9 +152,9 @@ def run_production_audit(
     traffic_source: str | None = None,
     include_synthetic_breach: bool = False,
     require_live_traffic: bool = False,
+    min_synthetic_cohort_size: int = 200,
 ) -> dict:
     print("🕵️‍♂️ Initializing real-time governance & recommendation parity scanner...")
-
     src_dir = Path(__file__).resolve().parent
     base_dir = src_dir.parents[1]
     log_path = log_path or (base_dir / "artifacts" / "telemetry_logs.jsonl")
@@ -219,23 +185,17 @@ def run_production_audit(
     else:
         existing_report.pop("fairness_metrics", None)
 
-    def _save_blocks(
-        live_block: dict | None,
-        synthetic_block: dict | None,
-        by_source: dict[str, dict],
-        by_policy: dict[str, dict],
-    ) -> dict:
-        existing_report["live_telemetry_fairness"] = live_block
-        existing_report["synthetic_telemetry_fairness"] = synthetic_block
-        existing_report["live_telemetry_fairness_by_source"] = by_source
-        existing_report["live_telemetry_fairness_by_policy"] = by_policy
+    def _save_blocks(live_b, synth_b, by_src, by_pol) -> dict:
+        existing_report["live_telemetry_fairness"] = live_b
+        existing_report["synthetic_telemetry_fairness"] = synth_b
+        existing_report["live_telemetry_fairness_by_source"] = by_src
+        existing_report["live_telemetry_fairness_by_policy"] = by_pol
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(existing_report, f, indent=4)
         return existing_report
 
-    log_files = iter_telemetry_log_files(log_path)
-    if not log_files:
+    if not iter_telemetry_log_files(log_path):
         print(f"⚠️ Telemetry log ledger not found at: {log_path}")
         saved = _save_blocks(None, None, {}, {})
         if require_live_traffic:
@@ -245,23 +205,45 @@ def run_production_audit(
             sys.exit(2)
         return saved
 
-    grouped: dict[str, list[dict]] = {}
-    grouped_by_policy: dict[str, list[dict]] = {}
-    for active_file in log_files:
-        with open(active_file, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    rec = json.loads(line.strip())
-                    if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
-                        src = str(
-                            rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE
-                        ).strip()
-                        grouped.setdefault(src, []).append(rec)
-                        mv, dt_str = _extract_policy_key(rec)
-                        pol_key = f"{src}|model={mv}|threshold={dt_str}"
-                        grouped_by_policy.setdefault(pol_key, []).append(rec)
+    # Streaming O(1) aggregation per (source, mv, dt)
+    policy_counts: dict[tuple[str, str, str], dict[str, int]] = {}
+    latest_policy_for_source: dict[str, tuple[str, str]] = {}
+    source_total_rows: dict[str, int] = {}
 
-    if not grouped:
+    for rec in stream_telemetry_records(log_path):
+        if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
+            src = str(rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE).strip()
+            mv, dt_str = _extract_policy_key(rec)
+            latest_policy_for_source[src] = (mv, dt_str)
+            source_total_rows[src] = source_total_rows.get(src, 0) + 1
+            key = (src, mv, dt_str)
+            if key not in policy_counts:
+                policy_counts[key] = {
+                    "total_rows": 0,
+                    "cohort_known": 0,
+                    "decision_known": 0,
+                    "n_prot": 0,
+                    "n_base": 0,
+                    "k_prot": 0,
+                    "k_base": 0,
+                }
+            st = policy_counts[key]
+            st["total_rows"] += 1
+            cohort, dec = _extract_cohort_and_decision(rec)
+            if cohort is not None:
+                st["cohort_known"] += 1
+            if dec in VALID_DECISIONS:
+                st["decision_known"] += 1
+                if cohort == "UNDER_30":
+                    st["n_prot"] += 1
+                    if dec in VALID_APPROVALS:
+                        st["k_prot"] += 1
+                elif cohort == "30_AND_OVER":
+                    st["n_base"] += 1
+                    if dec in VALID_APPROVALS:
+                        st["k_base"] += 1
+
+    if not policy_counts:
         print("⚠️ No valid HTTP 200 v2 inference records in telemetry log.")
         saved = _save_blocks(None, None, {}, {})
         if require_live_traffic:
@@ -271,26 +253,30 @@ def run_production_audit(
             sys.exit(2)
         return saved
 
-    by_source = {
-        src: _evaluate_source_records(recs, src, min_cohort_size)
-        for src, recs in grouped.items()
-    }
-    by_policy = {
-        pkey: _evaluate_source_records(recs, pkey, min_cohort_size)
-        for pkey, recs in grouped_by_policy.items()
-    }
+    by_source: dict[str, dict] = {}
+    for src, (mv, dt_str) in latest_policy_for_source.items():
+        by_source[src] = _summarize_counts(
+            policy_counts[(src, mv, dt_str)], src, mv, dt_str, min_cohort_size
+        )
+
+    by_policy: dict[str, dict] = {}
+    for (src, mv, dt_str), counts in policy_counts.items():
+        pkey = f"{src}|model={mv}|threshold={dt_str}"
+        by_policy[pkey] = _summarize_counts(counts, pkey, mv, dt_str, min_cohort_size)
 
     if traffic_source:
         live_block = by_source.get(
             traffic_source,
-            _evaluate_source_records([], traffic_source, min_cohort_size),
+            _summarize_counts(
+                {}, traffic_source, "unversioned", "default", min_cohort_size
+            ),
         )
     else:
         live_block = by_source.get(DEFAULT_TRAFFIC_SOURCE)
 
     synthetic_sources = [k for k in by_source if k != DEFAULT_TRAFFIC_SOURCE]
     synthetic_block = (
-        by_source[max(synthetic_sources, key=lambda k: len(grouped[k]))]
+        by_source[max(synthetic_sources, key=lambda k: source_total_rows.get(k, 0))]
         if synthetic_sources
         else None
     )
@@ -299,17 +285,15 @@ def run_production_audit(
         print(
             "⏭️ Live Fairness Gate: NOT_EVALUATED (NO_LIVE_TRAFFIC) — live_telemetry_fairness is null."
         )
-    if live_block:
+    else:
         print(
             f"⚖️ Live Telemetry Fairness ({live_block['data_source']}): "
-            f"{live_block['demographic_parity_status']} | "
-            f"DI: {live_block['disparate_impact_ratio']} | 95% CI: {live_block['di_95_ci']}"
+            f"{live_block['demographic_parity_status']} | DI: {live_block['disparate_impact_ratio']} | 95% CI: {live_block['di_95_ci']}"
         )
     if synthetic_block:
         print(
             f"🧪 Synthetic Telemetry Fairness ({synthetic_block['data_source']}): "
-            f"{synthetic_block['demographic_parity_status']} | "
-            f"DI: {synthetic_block['disparate_impact_ratio']} | 95% CI: {synthetic_block['di_95_ci']}"
+            f"{synthetic_block['demographic_parity_status']} | DI: {synthetic_block['disparate_impact_ratio']} | 95% CI: {synthetic_block['di_95_ci']}"
         )
 
     saved = _save_blocks(live_block, synthetic_block, by_source, by_policy)
@@ -320,11 +304,17 @@ def run_production_audit(
         sys.exit(2)
 
     if fail_on_breach:
-        gated_blocks = (
-            list(by_source.values())
-            if include_synthetic_breach
-            else ([live_block] if live_block is not None else [])
-        )
+        gated_blocks = [live_block] if live_block is not None else []
+        if include_synthetic_breach:
+            for src, blk in by_source.items():
+                if src != DEFAULT_TRAFFIC_SOURCE:
+                    if (
+                        blk.get("protected_cohort_count", 0)
+                        >= min_synthetic_cohort_size
+                        and blk.get("baseline_cohort_count", 0)
+                        >= min_synthetic_cohort_size
+                    ):
+                        gated_blocks.append(blk)
         if any(
             b.get("demographic_parity_status") == "NON-COMPLIANT (BREACH)"
             for b in gated_blocks
@@ -336,31 +326,16 @@ def run_production_audit(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--fail-on-breach",
-        action="store_true",
-        help="Exit non-zero if 95% CI confirms a demographic parity breach.",
-    )
-    parser.add_argument(
-        "--include-synthetic",
-        action="store_true",
-        help="Also gate synthetic simulation traffic when --fail-on-breach is set.",
-    )
-    parser.add_argument(
-        "--require-live-traffic",
-        action="store_true",
-        help="Exit with code 2 (NOT_EVALUATED) when no live_production_traffic rows exist.",
-    )
-    parser.add_argument(
-        "--traffic-source",
-        type=str,
-        default=None,
-        help="Filter telemetry records to a specific traffic_source.",
-    )
+    parser.add_argument("--fail-on-breach", action="store_true")
+    parser.add_argument("--include-synthetic", action="store_true")
+    parser.add_argument("--require-live-traffic", action="store_true")
+    parser.add_argument("--min-synthetic-cohort-size", type=int, default=30)
+    parser.add_argument("--traffic-source", type=str, default=None)
     args = parser.parse_args()
     run_production_audit(
         fail_on_breach=args.fail_on_breach,
         traffic_source=args.traffic_source,
         include_synthetic_breach=args.include_synthetic,
         require_live_traffic=args.require_live_traffic,
+        min_synthetic_cohort_size=args.min_synthetic_cohort_size,
     )

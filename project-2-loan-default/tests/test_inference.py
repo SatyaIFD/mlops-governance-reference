@@ -282,4 +282,4 @@ def test_resolve_threshold_file_with_source_prioritizes_mlruns_and_mlflow(
     )
     resolved_path, src_label = p2_main._resolve_threshold_file_with_source(run_id)
     assert resolved_path == thresh_path  # nosec B101
-    assert src_label.startswith("container_mlruns:")  # nosec B101
+    assert src_label == "container_mlruns"  # nosec B101
