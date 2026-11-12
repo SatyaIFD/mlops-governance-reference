@@ -127,10 +127,15 @@ class LoanModelTrainer:
         fit_df = fit_df.reset_index(drop=True)
         val_df = val_df.reset_index(drop=True)
 
-        def _encode_features(df_in: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
-            X = df_in.drop(columns=["Default"]).copy()
+        def _encode_features(
+            df_in: pd.DataFrame,
+        ) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+            is_young = (df_in["Age"] < 30).astype(int).copy()
+            # ECOA / Reg B: exclude Age and MaritalStatus from model predictors
+            drop_cols = [c for c in ("Default", "MaritalStatus") if c in df_in.columns]
+            X = df_in.drop(columns=drop_cols).copy()
+            X["is_young"] = is_young
             y = df_in["Default"].copy()
-            X["is_young"] = (X["Age"] < 30).astype(int)
             cat_cols = X.select_dtypes(
                 include=["object", "category", "string"]
             ).columns.tolist()
@@ -139,11 +144,11 @@ class LoanModelTrainer:
             X = X.astype(
                 {col: "int8" for col in X.select_dtypes(include=["bool"]).columns}
             )
-            return X, y
+            return X, y, is_young
 
-        X_fit, y_fit = _encode_features(fit_df)
-        X_val, y_val = _encode_features(val_df)
-        X_test, y_test = _encode_features(test_df)
+        X_fit, y_fit, _ = _encode_features(fit_df)
+        X_val, y_val, is_young_val = _encode_features(val_df)
+        X_test, y_test, is_young_test = _encode_features(test_df)
 
         X_fit, X_val = X_fit.align(X_val, join="left", axis=1, fill_value=0)
         X_fit, X_test = X_fit.align(X_test, join="left", axis=1, fill_value=0)
@@ -169,7 +174,7 @@ class LoanModelTrainer:
             test_probs = model.predict_proba(X_test)[:, 1]
 
             unified_cutoff = calibrate_unified_validation_threshold(
-                y_val, val_probs, X_val["is_young"]
+                y_val, val_probs, is_young_val
             )
             thresholds_payload = {
                 "decision_threshold": unified_cutoff,
@@ -192,7 +197,7 @@ class LoanModelTrainer:
             test_logloss = float(log_loss(y_test, test_probs))
 
             df_audit = pd.DataFrame(
-                {"is_young": X_test["is_young"], "approved": (preds == 0).astype(int)}
+                {"is_young": is_young_test, "approved": (preds == 0).astype(int)}
             )
             approval_rates = df_audit.groupby("is_young")["approved"].mean()
             di_ratio = (

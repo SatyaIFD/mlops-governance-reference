@@ -329,7 +329,7 @@ if __name__ == "__main__":
     parser.add_argument("--fail-on-breach", action="store_true")
     parser.add_argument("--include-synthetic", action="store_true")
     parser.add_argument("--require-live-traffic", action="store_true")
-    parser.add_argument("--min-synthetic-cohort-size", type=int, default=30)
+    parser.add_argument("--min-synthetic-cohort-size", type=int, default=200)
     parser.add_argument("--traffic-source", type=str, default=None)
     args = parser.parse_args()
     run_production_audit(

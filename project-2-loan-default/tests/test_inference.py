@@ -29,8 +29,6 @@ EXPECTED_MOCK_FEATURES = [
     "EmploymentType_Part-time",
     "EmploymentType_Self-employed",
     "EmploymentType_Unemployed",
-    "MaritalStatus_Married",
-    "MaritalStatus_Single",
     "HasMortgage_Yes",
     "HasDependents_Yes",
     "LoanPurpose_Business",

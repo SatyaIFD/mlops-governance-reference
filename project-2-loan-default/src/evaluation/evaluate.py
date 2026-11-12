@@ -114,10 +114,11 @@ class LoanModelEvaluator:
         if "LoanID" in test_df.columns:
             test_df.drop(columns=["LoanID"], inplace=True)
 
-        X_test = test_df.drop(columns=["Default"])
+        is_young_series = (test_df["Age"] < 30).astype(int)
+        drop_cols = [c for c in ("Default", "MaritalStatus") if c in test_df.columns]
+        X_test = test_df.drop(columns=drop_cols)
+        X_test["is_young"] = is_young_series
         y_test = test_df["Default"]
-
-        X_test["is_young"] = (X_test["Age"] < 30).astype(int)
 
         cat_cols = X_test.select_dtypes(
             include=["object", "category", "string"]
@@ -178,8 +179,8 @@ class LoanModelEvaluator:
         acc = float(accuracy_score(y_test, preds_labels))
         bce_loss = float(log_loss(y_test, preds_proba))
 
-        young_mask = X_test["is_young"] == 1
-        base_mask = X_test["is_young"] == 0
+        young_mask = is_young_series == 1
+        base_mask = is_young_series == 0
         prot_stats = _cohort_confusion_rates(
             y_test[young_mask], preds_labels[young_mask]
         )

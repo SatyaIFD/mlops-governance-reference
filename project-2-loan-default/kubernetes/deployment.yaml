@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: loan-prediction-container
-        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:v0.5.14
+        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
         imagePullPolicy: IfNotPresent
         securityContext:
           readOnlyRootFilesystem: true
@@ -33,12 +33,14 @@ spec:
             drop:
               - ALL
         env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         - name: MLFLOW_TRACKING_URI
           value: "http://mlflow-service:5000"
-        - name: MODEL_URI
-          value: "models:/loan_default_production_model/Production"
         - name: LOAN_TELEMETRY_LOG_PATH
-          value: "/app/artifacts/telemetry_logs.jsonl"
+          value: "/app/artifacts/telemetry_$(POD_NAME).jsonl"
         - name: EXPECTED_API_KEY
           valueFrom:
             secretKeyRef:

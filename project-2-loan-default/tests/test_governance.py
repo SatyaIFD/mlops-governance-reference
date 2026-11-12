@@ -360,3 +360,62 @@ def test_drift_monitor_preserves_legacy_age_rows_in_mixed_telemetry(tmp_path):
     assert live["protected_cohort_count"] == 40  # nosec B101
     assert live["baseline_cohort_count"] == 40  # nosec B101
     assert live["demographic_parity_status"] == "COMPLIANT"  # nosec B101
+
+
+def test_min_synthetic_cohort_size_gates_only_large_synthetic_streams(tmp_path):
+    """Verifies that a 40-row synthetic breach does not exit 1 when min_synthetic_cohort_size=200, but exits 1 when min_synthetic_cohort_size=30."""
+    log_file = tmp_path / "telemetry_logs.jsonl"
+    report_file = tmp_path / "compliance_audit_report.json"
+    rows = []
+    for _ in range(40):
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "synthetic_representative_simulation",
+                "status_code": 200,
+                "payload_snapshot": {"age_bucket": "UNDER_30"},
+                "inference_output": {
+                    "model_recommendation": "DECLINE",
+                    "model_version": "v4",
+                    "decision_threshold": 0.14,
+                },
+            }
+        )
+        rows.append(
+            {
+                "schema_version": 2,
+                "traffic_source": "synthetic_representative_simulation",
+                "status_code": 200,
+                "payload_snapshot": {"age_bucket": "30_AND_OVER"},
+                "inference_output": {
+                    "model_recommendation": "APPROVE",
+                    "model_version": "v4",
+                    "decision_threshold": 0.14,
+                },
+            }
+        )
+    log_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    # Should NOT exit 1 when min_synthetic_cohort_size=200
+    res = run_production_audit(
+        log_path=log_file,
+        report_path=report_file,
+        fail_on_breach=True,
+        include_synthetic_breach=True,
+        min_synthetic_cohort_size=200,
+    )
+    assert (
+        res["synthetic_telemetry_fairness"]["demographic_parity_status"]
+        == "NON-COMPLIANT (BREACH)"
+    )  # nosec B101
+
+    # Should exit 1 when min_synthetic_cohort_size=30
+    with pytest.raises(SystemExit) as exc:
+        run_production_audit(
+            log_path=log_file,
+            report_path=report_file,
+            fail_on_breach=True,
+            include_synthetic_breach=True,
+            min_synthetic_cohort_size=30,
+        )
+    assert exc.value.code == 1  # nosec B101

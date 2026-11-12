@@ -48,7 +48,7 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   },
   "streaming_performance": {
     "total_processed": 100000,
-    "anomalies_flagged": 6172,
+    "anomalies_flagged": 6,172,
     "actual_laundering_events": 122,
     "laundering_intercepted": 29,
     "recall_percentage": 23.77,
