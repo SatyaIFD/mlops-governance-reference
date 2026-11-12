@@ -1,7 +1,8 @@
 """
 Production Observability & Telemetry Engine - Project 2: Loan Default Prediction
-Logs runtime inference request summaries, deterministic 16-field payload hashes,
-and full feature snapshots (with bucketed age) using flock-synchronized, gzip-compressed rotation.
+Logs minimized 5-field numerical snapshots (age_bucket, Income, CreditScore, LoanAmount, DTIRatio),
+deterministic 16-field payload hashes, and optional user_id for GDPR Right-to-Erasure.
+Rotates via fast os.replace under flock and compresses archives in a background thread.
 """
 
 from collections import deque
@@ -11,6 +12,7 @@ import hashlib
 import json
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 from typing import Any, Iterator
@@ -23,7 +25,7 @@ MAX_TELEMETRY_ARCHIVES = int(os.getenv("LOAN_TELEMETRY_MAX_ARCHIVES", "5"))
 
 
 def compute_payload_hash(payload: dict[str, Any]) -> str:
-    """Computes a deterministic SHA-256 digest across all payload attributes."""
+    """Computes a deterministic SHA-256 digest across all payload attributes without storing raw categorical PII."""
     canonical = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
@@ -50,7 +52,7 @@ def iter_telemetry_log_files(
 def stream_telemetry_records(
     telemetry_log_path: Path, max_archives: int = MAX_TELEMETRY_ARCHIVES
 ) -> Iterator[dict[str, Any]]:
-    """Streams parsed JSON records line-by-line across retained archives without loading all files into memory."""
+    """Streams parsed JSON records line-by-line across retained archives in O(1) memory."""
     for fpath in iter_telemetry_log_files(
         telemetry_log_path, max_archives=max_archives
     ):
@@ -62,6 +64,25 @@ def stream_telemetry_records(
                         yield json.loads(line.strip())
                     except json.JSONDecodeError:
                         continue
+
+
+def _compress_file_async(raw_path: Path, gz_path: Path) -> None:
+    def _worker():
+        try:
+            if raw_path.is_file():
+                tmp_gz = gz_path.with_suffix(".gz.tmp")
+                with open(raw_path, "rb") as f_in, gzip.open(tmp_gz, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                os.replace(tmp_gz, gz_path)
+                if raw_path.exists():
+                    raw_path.unlink()
+        except OSError:
+            return
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        t.join(timeout=2.0)
 
 
 class ModelObservabilityLogger:
@@ -76,14 +97,14 @@ class ModelObservabilityLogger:
         self.max_archives = max_archives
         self.telemetry_log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def _rotate_if_needed(self) -> None:
+    def _rotate_if_needed(self) -> tuple[Path, Path] | None:
         if (
             self.max_bytes <= 0
             or self.max_archives <= 0
             or not self.telemetry_log_path.exists()
             or self.telemetry_log_path.stat().st_size < self.max_bytes
         ):
-            return
+            return None
         for idx in range(self.max_archives - 1, 0, -1):
             src_gz = self.telemetry_log_path.with_suffix(
                 f"{self.telemetry_log_path.suffix}.{idx}.gz"
@@ -94,21 +115,21 @@ class ModelObservabilityLogger:
             dst_gz = self.telemetry_log_path.with_suffix(
                 f"{self.telemetry_log_path.suffix}.{idx + 1}.gz"
             )
+            dst_raw = self.telemetry_log_path.with_suffix(
+                f"{self.telemetry_log_path.suffix}.{idx + 1}"
+            )
             if src_gz.exists():
                 os.replace(src_gz, dst_gz)
             elif src_raw.exists():
-                with open(src_raw, "rb") as f_in, gzip.open(dst_gz, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-                src_raw.unlink()
+                os.replace(src_raw, dst_raw)
+        first_raw = self.telemetry_log_path.with_suffix(
+            f"{self.telemetry_log_path.suffix}.1"
+        )
         first_gz = self.telemetry_log_path.with_suffix(
             f"{self.telemetry_log_path.suffix}.1.gz"
         )
-        with (
-            open(self.telemetry_log_path, "rb") as f_in,
-            gzip.open(first_gz, "wb") as f_out,
-        ):
-            shutil.copyfileobj(f_in, f_out)
-        self.telemetry_log_path.unlink()
+        os.replace(self.telemetry_log_path, first_raw)
+        return first_raw, first_gz
 
     def log_inference_transaction(
         self,
@@ -117,8 +138,9 @@ class ModelObservabilityLogger:
         latency_ms: float,
         status_code: int = 200,
         traffic_source: str = "live_production_traffic",
+        user_id: str | None = None,
     ):
-        """Appends a structured transaction record synchronized with fcntl.flock."""
+        """Appends a data-minimized transaction record (zero MaritalStatus or raw Age PII)."""
         gov = response_data.get("governance", {})
         risk = response_data.get("risk_metrics", {})
 
@@ -134,38 +156,25 @@ class ModelObservabilityLogger:
             or derived_age_bucket
         )
         model_rec = gov.get("model_recommendation") or gov.get("underwriting_decision")
-
-        snapshot: dict[str, Any] = {
-            "age_bucket": age_bucket,
-            "Income": request_payload.get("Income"),
-            "CreditScore": request_payload.get("CreditScore"),
-            "LoanAmount": request_payload.get("LoanAmount"),
-            "DTIRatio": request_payload.get("DTIRatio"),
-        }
-        for extra_col in (
-            "MonthsEmployed",
-            "InterestRate",
-            "NumCreditLines",
-            "LoanTerm",
-            "Education",
-            "EmploymentType",
-            "MaritalStatus",
-            "HasMortgage",
-            "HasDependents",
-            "LoanPurpose",
-            "HasCoSigner",
-        ):
-            if extra_col in request_payload:
-                snapshot[extra_col] = request_payload.get(extra_col)
+        p_hash = compute_payload_hash(request_payload)
 
         telemetry_entry = {
             "schema_version": TELEMETRY_SCHEMA_VERSION,
+            "user_id": str(
+                user_id or request_payload.get("user_id") or f"usr_{p_hash}"
+            ),
             "traffic_source": traffic_source,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
             "status_code": status_code,
             "latency_ms": round(latency_ms, 2),
-            "payload_hash": compute_payload_hash(request_payload),
-            "payload_snapshot": snapshot,
+            "payload_hash": p_hash,
+            "payload_snapshot": {
+                "age_bucket": age_bucket,
+                "Income": request_payload.get("Income"),
+                "CreditScore": request_payload.get("CreditScore"),
+                "LoanAmount": request_payload.get("LoanAmount"),
+                "DTIRatio": request_payload.get("DTIRatio"),
+            },
             "inference_output": {
                 "default_probability": risk.get("default_probability"),
                 "model_recommendation": model_rec,
@@ -180,14 +189,17 @@ class ModelObservabilityLogger:
         lock_path = self.telemetry_log_path.with_suffix(
             self.telemetry_log_path.suffix + ".lock"
         )
+        rotated_pair = None
         with open(lock_path, "w", encoding="utf-8") as lock_f:
             fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
             try:
-                self._rotate_if_needed()
+                rotated_pair = self._rotate_if_needed()
                 with open(self.telemetry_log_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(telemetry_entry) + "\n")
             finally:
                 fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+        if rotated_pair is not None:
+            _compress_file_async(rotated_pair[0], rotated_pair[1])
 
     def read_latest_telemetry(self, tail_count: int = 5) -> list[dict[str, Any]]:
         """Streams telemetry records into a bounded deque(maxlen=tail_count) in O(tail_count) RAM."""

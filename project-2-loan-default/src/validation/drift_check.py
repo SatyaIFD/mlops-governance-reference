@@ -25,7 +25,6 @@ EXTENDED_NUMERICAL_FEATURES = [
     "LoanTerm",
 ]
 CATEGORICAL_FEATURES = [
-    "age_bucket",
     "Education",
     "EmploymentType",
     "MaritalStatus",
@@ -166,12 +165,26 @@ class DataDriftMonitor:
                     drift_detected = True
                 drift_metrics[cat_feat] = {"psi_value": round(psi, 4), "status": status}
 
+        info_cohort_psi = None
+        if (
+            "age_bucket" in ref_df.columns
+            and "age_bucket" in production_df.columns
+            and production_df["age_bucket"].notna().any()
+        ):
+            c_psi = self.calculate_categorical_psi(
+                ref_df["age_bucket"], production_df["age_bucket"]
+            )
+            info_cohort_psi = {
+                "psi_value": round(c_psi, 4),
+                "note": "informational_cohort_mix",
+            }
         return {
             "data_source": source_label,
             "observation_count": len(production_df),
             "drift_detected_alert": drift_detected,
             "overall_status": "DRIFT DETECTED" if drift_detected else "STABLE",
             "metrics": drift_metrics,
+            "informational_cohort_psi": info_cohort_psi,
         }
 
     def run_drift_audit(

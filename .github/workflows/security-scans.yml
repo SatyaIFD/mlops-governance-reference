@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   python-sast:
@@ -15,15 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-
       - name: Install Bandit
         run: pip install bandit==1.9.4
-
       - name: Run Bandit Security Scan
         run: bandit -c pyproject.toml -r compliance/ project-1-credit-card-fraud/src/ project-2-loan-default/src/ project-3-aml-streaming/src/ -ll
 
@@ -33,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build all 3 service images for scanning
+      - name: Build service images for scanning
         run: |
           docker build -t fraud-security-test -f project-1-credit-card-fraud/Dockerfile .
           docker build -t loan-security-test -f project-2-loan-default/Dockerfile .
@@ -83,3 +81,30 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
           trivyignores: '.trivyignore'
+
+      - name: Run Trivy Vulnerability Scanner (Airflow Standalone)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'apache/airflow:2.10.2'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          trivyignores: '.trivyignore'
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Verified MLflow Image to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_ID="ghcr.io/$REPO/mlflow-server"
+          docker tag mlflow-security-test $IMAGE_ID:latest
+          docker push $IMAGE_ID:latest

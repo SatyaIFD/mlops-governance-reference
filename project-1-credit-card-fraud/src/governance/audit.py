@@ -1,7 +1,8 @@
 """
-Governance & Segment Disparity Audit Module
-Evaluates transaction-value segment flagging disparity using the registered
-fraud_detection_xgb model and properly scaled 30-feature inputs.
+Governance & Segment Disparity Audit Module - Project 1: Credit Card Fraud Detection
+Evaluates out-of-sample transaction-value segment flagging disparity on test.parquet
+using the validation-calibrated segment_thresholds.json served by the API,
+and records uncalibrated (flat 0.50) disparity alongside deployed parity.
 """
 
 import argparse
@@ -50,18 +51,12 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
     test_data_path = BASE_DIR / "data" / "processed" / "test.parquet"
     fallback_path = BASE_DIR / "data" / "processed_features.parquet"
     target_path = test_data_path if test_data_path.exists() else fallback_path
-
     if not target_path.exists():
         print(f"❌ Processed test data not found at {target_path}")
         sys.exit(1)
 
     df = pd.read_parquet(target_path)
-
-    # Transform raw Time/Amount if dataset has not been scaled yet
     if "scaled_amount" not in df.columns or "scaled_time" not in df.columns:
-        if "Amount" not in df.columns or "Time" not in df.columns:
-            print("❌ Required feature columns missing in test dataset.")
-            sys.exit(1)
         scaler_file = BASE_DIR / "artifacts" / "scaler_params.json"
         scaler_params = (
             load_scaler_params(scaler_file) if scaler_file.exists() else None
@@ -69,36 +64,61 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
         processed_df = clean_and_transform_features(
             df, scaler_params=scaler_params, drop_duplicates=False
         )
-        amount_series = df["Amount"]
     else:
         processed_df = df
-        amount_series = df["scaled_amount"]
+
+    seg_file = BASE_DIR / "artifacts" / "segment_thresholds.json"
+    if seg_file.is_file():
+        seg_policy = json.loads(seg_file.read_text(encoding="utf-8"))
+    else:
+        seg_policy = {
+            "low_value_threshold": 0.50,
+            "high_value_threshold": 0.50,
+            "scaled_amount_q80": float(processed_df["scaled_amount"].quantile(0.80)),
+            "calibration_split": "uncalibrated_default",
+        }
 
     X_test = processed_df[CANONICAL_FEATURE_COLS]
-    print(f"⏳ Running batch inference across evaluation slices using {model_uri}...")
-    probs = model.predict_proba(X_test)[:, 1]
-    q80 = float(pd.Series(amount_series.values).quantile(0.80))
-    is_high = amount_series.values >= q80
-    low_probs = probs[~is_high]
-    high_probs = probs[is_high]
-    low_flag_rate = float((low_probs >= 0.50).mean())
-    # Calibrate high-value segment cutoff so flagging rate matches low-value baseline within [0.80, 1.25]
-    high_cutoff = (
-        float(pd.Series(high_probs).quantile(max(0.0, min(1.0, 1.0 - low_flag_rate))))
-        if low_flag_rate > 0
-        else 0.50
+    print(
+        f"⏳ Running out-of-sample batch inference across evaluation slices using {model_uri}..."
     )
-    high_flag_rate = float((high_probs >= high_cutoff).mean())
+    probs = model.predict_proba(X_test)[:, 1]
+    q80 = float(seg_policy["scaled_amount_q80"])
+    is_high = (processed_df["scaled_amount"] >= q80).to_numpy()
+
+    # 1. Deployed policy (validation-calibrated segment thresholds served by FastAPI)
+    low_cutoff = float(seg_policy["low_value_threshold"])
+    high_cutoff = float(seg_policy["high_value_threshold"])
+    high_flag_rate = float((probs[is_high] >= high_cutoff).mean())
+    low_flag_rate = float((probs[~is_high] >= low_cutoff).mean())
     disparity_ratio = high_flag_rate / low_flag_rate if low_flag_rate > 0 else 0.0
-    within_bounds = 0.80 <= disparity_ratio <= 1.25
+    within_bounds = bool(0.80 <= disparity_ratio <= 1.25)
+
+    # 2. Informational uncalibrated policy (flat 0.50 cutoff)
+    uncal_high_rate = float((probs[is_high] >= 0.50).mean())
+    uncal_low_rate = float((probs[~is_high] >= 0.50).mean())
+    uncal_ratio = uncal_high_rate / uncal_low_rate if uncal_low_rate > 0 else 0.0
 
     audit_summary = {
         "model_uri": model_uri,
         "audit_type": "transaction_amount_segment_disparity",
+        "threshold_calibration_split": seg_policy.get(
+            "calibration_split", "validation_holdout_20pct"
+        ),
+        "deployed_segment_thresholds": {
+            "low_value_threshold": low_cutoff,
+            "high_value_threshold": high_cutoff,
+            "scaled_amount_q80": q80,
+        },
         "high_value_flag_rate": round(high_flag_rate, 6),
         "low_value_flag_rate": round(low_flag_rate, 6),
         "disparate_impact_ratio": round(disparity_ratio, 4),
         "within_guardrail_bounds": within_bounds,
+        "informational_uncalibrated_050": {
+            "high_value_flag_rate": round(uncal_high_rate, 6),
+            "low_value_flag_rate": round(uncal_low_rate, 6),
+            "disparate_impact_ratio": round(uncal_ratio, 4),
+        },
     }
 
     report_path = BASE_DIR / "artifacts" / "fraud_governance_audit.json"
@@ -107,16 +127,21 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
         json.dump(audit_summary, f, indent=2)
 
     print("\n" + "=" * 55)
-    print("⚖️ TRANSACTION SEGMENT DISPARITY AUDIT (OPERATIONAL)")
+    print("⚖️ TRANSACTION SEGMENT DISPARITY AUDIT (OUT-OF-SAMPLE)")
     print("=" * 55)
-    print(f" ✅ High-Value Segment Flag Rate   : {high_flag_rate:.6f}")
-    print(f" ✅ Low-Value Segment Flag Rate    : {low_flag_rate:.6f}")
-    print(f" ✅ Segment Disparity Ratio        : {disparity_ratio:.4f}")
+    print(
+        f" ✅ Deployed High-Value Flag Rate  : {high_flag_rate:.6f} (cutoff={high_cutoff})"
+    )
+    print(
+        f" ✅ Deployed Low-Value Flag Rate   : {low_flag_rate:.6f} (cutoff={low_cutoff})"
+    )
+    print(f" ✅ Deployed Segment Disparity     : {disparity_ratio:.4f}")
+    print(f" ℹ️ Uncalibrated (0.50) Disparity  : {uncal_ratio:.4f}")
     print("=" * 55 + "\n")
 
     if enforce_gate and not within_bounds:
         print(
-            f"🚨 Governance gate tripped: ratio {disparity_ratio:.4f} outside [0.80, 1.25]."
+            f"🚨 Governance gate tripped: deployed ratio {disparity_ratio:.4f} outside [0.80, 1.25]."
         )
         sys.exit(1)
 
@@ -125,10 +150,6 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--enforce-gate",
-        action="store_true",
-        help="Exit non-zero if disparity ratio falls outside [0.80, 1.25]",
-    )
+    parser.add_argument("--enforce-gate", action="store_true")
     args = parser.parse_args()
     run_fairness_audit(enforce_gate=args.enforce_gate)

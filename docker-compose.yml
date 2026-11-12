@@ -26,7 +26,7 @@ services:
       dockerfile: project-1-credit-card-fraud/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/fraud-detection-job:latest
     container_name: mlops-fraud-api
-    user: "1000:1000"
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     group_add:
       - "1000"
     environment:
@@ -49,7 +49,7 @@ services:
       dockerfile: project-2-loan-default/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:latest
     container_name: mlops-loan-api
-    user: "1000:1000"
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     group_add:
       - "1000"
     environment:
@@ -74,7 +74,7 @@ services:
       dockerfile: project-3-aml-streaming/Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/aml-stream-api:latest
     container_name: mlops-aml-streaming
-    user: "1000:1000"
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     group_add:
       - "1000"
     environment:
@@ -106,7 +106,7 @@ services:
   airflow-standalone:
     image: apache/airflow:2.10.2
     container_name: mlops-airflow
-    user: "1000:0"
+    user: "${DOCKER_UID:-1000}:0"
     group_add:
       - "1000"
     ports:
@@ -142,7 +142,7 @@ services:
       dockerfile: mlflow.Dockerfile
     image: ghcr.io/satyaifd/mlops-governance-reference/mlflow-server:latest
     container_name: mlops-mlflow-server
-    user: "1000:1000"
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     group_add:
       - "1000"
     ports:

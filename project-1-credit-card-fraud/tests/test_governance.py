@@ -44,3 +44,20 @@ def test_leakage_free_split_and_disparity_calculation():
     ratio = high_rate / low_rate
     assert ratio > 1.25  # nosec B101
     assert ratio == pytest.approx(10.2857, rel=1e-3)  # nosec B101
+
+
+def test_segment_weights_and_validation_threshold_calibration():
+    """Verifies _compute_segment_weights and calibrate_validation_segment_thresholds balance segment flag rates."""
+    from src.training.train import (
+        _compute_segment_weights,
+        calibrate_validation_segment_thresholds,
+    )
+
+    df_x = pd.DataFrame({"scaled_amount": [0.1] * 80 + [5.0] * 20})
+    y = pd.Series([0] * 75 + [1] * 5 + [0] * 15 + [1] * 5)
+    weights = _compute_segment_weights(df_x, y)
+    assert len(weights) == 100  # nosec B101
+    probs = np.array([0.1] * 76 + [0.8] * 4 + [0.2] * 16 + [0.9] * 4)
+    pol = calibrate_validation_segment_thresholds(df_x, probs, q80=1.0)
+    assert 0.05 <= pol["high_value_threshold"] <= 0.95  # nosec B101
+    assert pol["calibration_split"] == "validation_holdout_20pct"  # nosec B101

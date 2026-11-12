@@ -3,6 +3,7 @@ Production FastAPI Application - Project 1: Credit Card Fraud Detection
 Exposes the registered fraud detection model via a high-performance REST API.
 """
 
+import json
 import math
 import os
 import secrets
@@ -35,6 +36,11 @@ EXPECTED_FEATURE_NAMES = [f"V{i}" for i in range(1, 29)] + [
 
 model = None
 loaded_model_version: str | None = None
+segment_policy: dict[str, Any] = {
+    "low_value_threshold": 0.50,
+    "high_value_threshold": 0.50,
+    "scaled_amount_q80": 0.8415,
+}
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -122,7 +128,7 @@ def _load_xgboost_model_portable(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, loaded_model_version
+    global model, loaded_model_version, segment_policy
     project_root = Path(__file__).resolve().parents[2]
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
@@ -155,6 +161,9 @@ async def lifespan(app: FastAPI):
         _validate_loaded_model_schema(loaded)
         model = loaded
         loaded_model_version = f"v{target_ver}"
+        seg_file = project_root / "artifacts" / "segment_thresholds.json"
+        if seg_file.is_file():
+            segment_policy = json.loads(seg_file.read_text(encoding="utf-8"))
         print(
             f"🟢 Production model loaded and verified via URI: {model_uri} (source={resolved_src})",
             flush=True,
@@ -229,8 +238,15 @@ def predict_fraud(payload: TransactionData):
     df = pd.DataFrame([payload.features], columns=EXPECTED_FEATURE_NAMES)
 
     def _execute_model_logic():
-        pred = int(model.predict(df)[0])
         prob = float(model.predict_proba(df)[0][1])
+        scaled_amt = float(df["scaled_amount"].iloc[0])
+        q80 = float(segment_policy.get("scaled_amount_q80", 0.8415))
+        cutoff = float(
+            segment_policy.get("high_value_threshold", 0.50)
+            if scaled_amt >= q80
+            else segment_policy.get("low_value_threshold", 0.50)
+        )
+        pred = 1 if prob >= cutoff else 0
         return pred, prob
 
     breaker_response = circuit_breaker.execute_inference(_execute_model_logic)

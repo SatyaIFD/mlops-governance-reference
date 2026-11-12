@@ -53,8 +53,6 @@ EXPECTED_LOAN_FEATURES = [
     "EmploymentType_Part-time",
     "EmploymentType_Self-employed",
     "EmploymentType_Unemployed",
-    "MaritalStatus_Married",
-    "MaritalStatus_Single",
     "HasMortgage_Yes",
     "HasDependents_Yes",
     "LoanPurpose_Business",
@@ -370,14 +368,13 @@ def prepare_single_row_features(
     """
     raw_data = pd.DataFrame([payload_dict])
     raw_data["is_young"] = (raw_data["Age"] < 30).astype(int)
-    if os.getenv("LOAN_ECOA_NEUTRALIZE_PROTECTED", "0") == "1":
-        raw_data["Age"] = 35
-        raw_data["MaritalStatus"] = "Single"
+    # ECOA / Reg B (12 CFR 1002.5(d)(1)): drop MaritalStatus before model encoding
+    if "MaritalStatus" in raw_data.columns:
+        raw_data.drop(columns=["MaritalStatus"], inplace=True)
 
     categorical_cols = [
         "Education",
         "EmploymentType",
-        "MaritalStatus",
         "HasMortgage",
         "HasDependents",
         "LoanPurpose",
