@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.16](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.15...v0.5.16) (2026-11-12)
+
+
+### Bug Fixes
+
+* **governance:** calibrate p1 segment cutoffs on validation, minimize p2 telemetry, and remove maritalstatus predictor ([#171](https://github.com/SatyaIFD/mlops-governance-reference/issues/171)) ([293d19d](https://github.com/SatyaIFD/mlops-governance-reference/commit/293d19d0c11e0e0fd34b7b3ece4e7928814c62b6))
+
 ## [0.5.15](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.14...v0.5.15) (2026-11-11)
 
 
