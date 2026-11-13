@@ -232,7 +232,15 @@ class LoanModelEvaluator:
             if non_elderly_stats["approval_rate"] > 0
             else 0.0
         )
-        elderly_not_disadvantaged = bool(elderly_di_ratio >= 1.0)
+        elderly_di_ci = _katz_95_ci(
+            elderly_stats["approved_count"],
+            elderly_stats["count"],
+            non_elderly_stats["approved_count"],
+            non_elderly_stats["count"],
+        )
+        elderly_not_disadvantaged = bool(
+            elderly_di_ratio >= 1.0 and elderly_di_ci[0] >= 1.0
+        )
         for st_e in (elderly_stats, non_elderly_stats):
             st_e.pop("approved_count", None)
             st_e.pop("positive_defaults", None)
@@ -282,7 +290,9 @@ class LoanModelEvaluator:
                 "elderly_62_plus_approval_rate": elderly_stats["approval_rate"],
                 "under_62_approval_rate": non_elderly_stats["approval_rate"],
                 "elderly_vs_under_62_approval_ratio": elderly_di_ratio,
+                "elderly_di_95_ci": elderly_di_ci,
                 "elderly_62_plus_not_disadvantaged": elderly_not_disadvantaged,
+                "regulatory_note": "Statistical non-disadvantage gate (95% CI lower bound >= 1.0 for Age >= 62 vs Age < 62); formal 12 CFR 1002.6(b)(2) empirical validation subject to compliance counsel review.",
             },
         }
 

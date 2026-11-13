@@ -64,4 +64,5 @@ jobs:
         env:
           EXPECTED_API_KEY: ci-build-verification-key
           AML_HMAC_SECRET_KEY: ci-build-verification-hmac
+          LOAN_HMAC_SECRET_KEY: ci-build-verification-loan-hmac
         run: docker compose build

@@ -30,7 +30,7 @@ Operational procedures for responding to pipeline failures, memory spikes, recal
 ---
 
 ### Playbook C: Out-of-Sample Recall Drop Below SLO (< 20%)
-* **Trigger:** Out-of-sample interception recall (`recall_percentage`) falls below the $20.0\%$ operational target (baseline `58.2%` on events 100,001–200,000).
+* **Trigger:** Out-of-sample interception recall (`recall_percentage`) falls below the $20.0\%$ operational target (baseline `23.77%` on events 100,001–200,000).
 * **Root Cause Analysis:** Emerging laundering typologies or distribution shift across the stream.
 * **Remediation:**
   1. Inspect `artifacts/pipeline_execution_report.json` and verify `model_sha256` matches `aml_streaming_model.meta.json`.

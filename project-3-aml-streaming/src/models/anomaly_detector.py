@@ -25,6 +25,7 @@ class AMLAnomalyDetector:
         self.threshold: float = float(threshold)
         self.model_sha256: str | None = None
         self.mlflow_run_id: str | None = None
+        self.training_window_end_row: int = 0
         self.model: RandomForestClassifier = RandomForestClassifier(
             n_estimators=50,
             max_depth=10,
@@ -114,6 +115,7 @@ class AMLAnomalyDetector:
                     "feature_cols": active_cols,
                     "sha256": self.model_sha256,
                     "mlflow_run_id": self.mlflow_run_id,
+                    "training_window_end_row": int(self.training_window_end_row),
                     "sklearn_version": sklearn.__version__,
                     "skops_version": skops.__version__,
                 },
@@ -176,3 +178,4 @@ class AMLAnomalyDetector:
             self.feature_cols = [str(c) for c in meta["feature_cols"]]
         self.model_sha256 = actual_sha256
         self.mlflow_run_id = meta.get("mlflow_run_id")
+        self.training_window_end_row = int(meta.get("training_window_end_row", 0))

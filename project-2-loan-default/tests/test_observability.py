@@ -69,7 +69,8 @@ def test_telemetry_multi_archive_rotation_and_reader(tmp_path):
     assert len(records) == 4  # nosec B101
 
 
-def test_categorical_psi_and_minimized_snapshot_privacy(tmp_path):
+def test_categorical_psi_and_minimized_snapshot_privacy(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOAN_HMAC_SECRET_KEY", "test-dedicated-loan-hmac-key")
     """Verifies MaritalStatus is excluded from payload_snapshot, rotated archives are .gz, and categorical PSI works."""
     import pandas as pd
     from src.validation.drift_check import DataDriftMonitor

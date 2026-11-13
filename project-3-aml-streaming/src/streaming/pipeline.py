@@ -106,6 +106,7 @@ def _write_report(
             "model_sha256": detector.model_sha256,
             "mlflow_run_id": detector.mlflow_run_id,
             "features_used": detector._get_active_feature_cols(),
+            "training_window_end_row": detector.training_window_end_row,
             "warmup_events_count": warmup_events,
         },
         "streaming_performance": {
@@ -196,6 +197,11 @@ def run_production_stream_pipeline(
 
     try:
         detector.load(model_path)
+        if warmup_events > 0 and warmup_events < detector.training_window_end_row:
+            raise ValueError(
+                f"Train/serve window overlap detected: warmup_events ({warmup_events}) < "
+                f"training_window_end_row ({detector.training_window_end_row})"
+            )
         print(
             f"✅ Loaded verified skops AML model from {model_path} (threshold={detector.threshold})."
         )

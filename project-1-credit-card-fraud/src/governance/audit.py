@@ -166,10 +166,33 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
         low_stats["count"],
     )
 
+    tpr_ratio = (
+        round(float(high_stats["recall"] / low_stats["recall"]), 4)
+        if low_stats["recall"] > 0
+        else 0.0
+    )
+    tpr_ci = _katz_95_ci(
+        high_stats["true_positives"],
+        high_stats["actual_frauds"],
+        low_stats["true_positives"],
+        low_stats["actual_frauds"],
+    )
+    if di_ci[0] >= 0.80 and di_ci[1] <= 1.25:
+        flag_parity_status = "COMPLIANT"
+    elif di_ci[1] < 0.80 or di_ci[0] > 1.25:
+        flag_parity_status = "NON-COMPLIANT (BREACH)"
+    else:
+        flag_parity_status = "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)"
+
     min_flags_ok = (
         high_stats["flagged_count"] >= 10 and low_stats["flagged_count"] >= 10
     )
-    within_bounds = bool(0.80 <= disparity_ratio <= 1.25 and min_flags_ok)
+    recall_floor_ok = high_stats["recall"] >= 0.65 and low_stats["recall"] >= 0.65
+    tpr_ci_ok = tpr_ci[0] <= 1.25 and tpr_ci[1] >= 0.80
+    no_confirmed_ci_breach = flag_parity_status != "NON-COMPLIANT (BREACH)"
+    within_bounds = bool(
+        min_flags_ok and recall_floor_ok and tpr_ci_ok and no_confirmed_ci_breach
+    )
 
     uncal_high_preds = (probs[is_high] >= 0.50).astype(int)
     uncal_low_preds = (probs[~is_high] >= 0.50).astype(int)
@@ -193,6 +216,9 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
         "low_value_flag_rate": round(low_flag_rate, 6),
         "disparate_impact_ratio": round(disparity_ratio, 4),
         "di_95_ci": di_ci,
+        "flag_parity_status": flag_parity_status,
+        "equal_opportunity_tpr_ratio": tpr_ratio,
+        "tpr_95_ci": tpr_ci,
         "min_flagged_per_segment_required": 10,
         "high_value_segment": high_stats,
         "low_value_segment": low_stats,

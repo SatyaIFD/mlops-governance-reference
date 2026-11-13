@@ -287,7 +287,7 @@ def test_gdpr_purge_succeeds_when_post_commit_vacuum_is_locked(tmp_path, monkeyp
     assert res["file_rows_removed"] == 1  # nosec B101
 
 
-def test_gdpr_purge_jsonl_and_rotated_gzip_archives(tmp_path):
+def test_gdpr_purge_jsonl_and_rotated_gzip_archives(tmp_path, monkeypatch):
     """Verifies that execute_right_to_be_forgotten purges target user across both active .jsonl and rotated .jsonl.1.gz archives."""
     import gzip
     import hashlib
@@ -299,7 +299,8 @@ def test_gdpr_purge_jsonl_and_rotated_gzip_archives(tmp_path):
     target_user = "APPLICANT_42"
     _init_mock_sqlite_db(db_file, target_user)
 
-    hmac_seed = "loan-default-hmac-key"
+    hmac_seed = "test-dedicated-loan-hmac-key"
+    monkeypatch.setenv("LOAN_HMAC_SECRET_KEY", hmac_seed)
     hmac_id = (
         "usr_hmac_"
         + hmac.new(
@@ -324,3 +325,31 @@ def test_gdpr_purge_jsonl_and_rotated_gzip_archives(tmp_path):
     with gzip.open(gz_archive, "rt", encoding="utf-8") as gz_in:
         kept_gz = [json.loads(line) for line in gz_in if line.strip()]
     assert len(kept_gz) == 1 and kept_gz[0]["user_id"] == "usr_hmac_other"  # nosec B101
+
+
+def test_gdpr_purge_rolls_back_rotated_archives_on_db_failure(tmp_path, monkeypatch):
+    """Verifies that a DB failure rolls back both the active .jsonl and rotated .jsonl.1.gz archives."""
+    import gzip
+
+    monkeypatch.setenv("LOAN_HMAC_SECRET_KEY", "test-dedicated-loan-hmac-key")
+    db_file = tmp_path / "mlflow.db"
+    jsonl_file = tmp_path / "telemetry_logs.jsonl"
+    gz_archive = tmp_path / "telemetry_logs.jsonl.1.gz"
+    target_user = "APPLICANT_ROLLBACK"
+    _init_mock_sqlite_db(db_file, target_user)
+
+    with gzip.open(gz_archive, "wt", encoding="utf-8") as gz_f:
+        gz_f.write(json.dumps({"user_id": target_user, "status_code": 200}) + "\n")
+    jsonl_file.write_text(
+        json.dumps({"user_id": target_user, "status_code": 200}) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PurgeError, match="rolled back"):
+        execute_right_to_be_forgotten(
+            target_user, str(db_file), str(jsonl_file), _inject_db_failure=True
+        )
+
+    with gzip.open(gz_archive, "rt", encoding="utf-8") as gz_in:
+        restored_gz = [json.loads(line) for line in gz_in if line.strip()]
+    assert len(restored_gz) == 1 and restored_gz[0]["user_id"] == target_user  # nosec B101

@@ -61,20 +61,25 @@ def calibrate_validation_segment_thresholds(
     q80: float,
     y_val: pd.Series | None = None,
 ) -> dict:
-    """Calibrates segment cutoffs on the held-out validation split targeting a 1.00 flag-rate ratio while preserving high-value recall."""
+    """Calibrates segment cutoffs on the held-out validation split preserving high-value recall >= 0.70 while narrowing flag-rate disparity."""
     is_high_val = (X_val["scaled_amount"] >= q80).to_numpy()
     low_probs = val_probs[~is_high_val]
     high_probs = val_probs[is_high_val]
-    low_cutoff = 0.35
-    high_cutoff = 0.65
+    low_cutoff = 0.50
+    high_cutoff = 0.50
     if len(low_probs) > 0 and len(high_probs) > 0:
-        best_pair = (0.35, 0.65)
+        best_pair = (0.50, 0.50)
         best_loss = float("inf")
-        for lc in np.linspace(0.30, 0.50, 9):
+        y_arr = y_val.to_numpy() if y_val is not None else None
+        for lc in np.linspace(0.40, 0.55, 7):
             l_rate = float((low_probs >= lc).mean())
             if l_rate <= 0:
                 continue
-            for hc in np.linspace(0.50, 0.75, 11):
+            for hc in np.linspace(0.45, 0.60, 7):
+                if y_arr is not None:
+                    h_pos = is_high_val & (y_arr == 1)
+                    if h_pos.any() and float((val_probs[h_pos] >= hc).mean()) < 0.70:
+                        continue
                 h_rate = float((high_probs >= hc).mean())
                 ratio = h_rate / l_rate
                 loss = abs(ratio - 1.0)
@@ -167,7 +172,7 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
 
         val_probs = model.predict_proba(X_val)[:, 1]
         seg_policy = calibrate_validation_segment_thresholds(
-            X_val, val_probs, q80_train
+            X_val, val_probs, q80_train, y_val=y_val
         )
         seg_policy["mlflow_run_id"] = run.info.run_id
         seg_thresh_path.parent.mkdir(parents=True, exist_ok=True)

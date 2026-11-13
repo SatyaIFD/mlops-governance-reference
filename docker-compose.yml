@@ -56,6 +56,7 @@ services:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
       - EXPECTED_API_KEY=${EXPECTED_API_KEY:?EXPECTED_API_KEY must be set in .env or environment}
       - LOAN_TELEMETRY_LOG_PATH=/app/artifacts/telemetry_logs.jsonl
+      - LOAN_HMAC_SECRET_KEY=${LOAN_HMAC_SECRET_KEY:?LOAN_HMAC_SECRET_KEY must be set in .env or environment}
     volumes:
       - ./mlflow.db:/mlflow.db:ro
       - ./mlruns:/app/mlruns:ro
