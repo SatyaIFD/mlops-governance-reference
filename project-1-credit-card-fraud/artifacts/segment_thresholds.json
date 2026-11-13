@@ -1,0 +1,7 @@
+{
+  "low_value_threshold": 0.4,
+  "high_value_threshold": 0.65,
+  "scaled_amount_q80": 1.079823,
+  "calibration_split": "validation_holdout_20pct",
+  "mlflow_run_id": "f80deaace36b4e20be24cf7704f4f380"
+}

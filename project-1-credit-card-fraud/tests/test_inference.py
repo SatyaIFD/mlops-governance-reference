@@ -13,10 +13,33 @@ from src.inference.main import app, verify_api_key
 
 
 @pytest.fixture(autouse=True)
-def mock_mlflow_model():
-    """Injects a mock model and overrides API key for baseline functional tests."""
+def mock_mlflow_model(tmp_path, monkeypatch):
+    """Injects a mock model, isolated segment_thresholds.json, and overrides API key for baseline functional tests."""
+    import json
+
+    art_dir = tmp_path / "artifacts"
+    art_dir.mkdir(parents=True, exist_ok=True)
+    default_policy = {
+        "low_value_threshold": 0.50,
+        "high_value_threshold": 0.70,
+        "scaled_amount_q80": 1.0,
+        "calibration_split": "validation_holdout_20pct",
+        "mlflow_run_id": "run_test",
+    }
+    (art_dir / "segment_thresholds.json").write_text(
+        json.dumps(default_policy), encoding="utf-8"
+    )
+    monkeypatch.setattr("src.inference.main.PROJECT_ROOT", tmp_path)
     app.dependency_overrides[verify_api_key] = lambda: None
-    with patch("src.inference.main.mlflow.xgboost.load_model") as mock_load:
+    with (
+        patch("src.inference.main.MlflowClient") as mock_client_cls,
+        patch("src.inference.main.mlflow.xgboost.load_model") as mock_load,
+    ):
+        mock_mv = MagicMock()
+        mock_mv.version = "1"
+        mock_mv.current_stage = "Production"
+        mock_mv.run_id = "run_test"
+        mock_client_cls.return_value.search_model_versions.return_value = [mock_mv]
         mock_model = MagicMock()
         mock_model.predict.return_value = [0]
         mock_model.predict_proba.return_value = [[0.9, 0.1]]
@@ -24,13 +47,7 @@ def mock_mlflow_model():
         mock_load.return_value = mock_model
 
         main.model = mock_model
-        main.segment_policy = {
-            "low_value_threshold": 0.50,
-            "high_value_threshold": 0.70,
-            "scaled_amount_q80": 1.0,
-            "calibration_split": "validation_holdout_20pct",
-            "mlflow_run_id": "run_test",
-        }
+        main.segment_policy = default_policy.copy()
         yield mock_model
 
         main.model = None
@@ -172,7 +189,7 @@ def test_segment_specific_cutoff_and_run_id_verification(tmp_path, monkeypatch):
 
     monkeypatch.setattr("src.inference.main.PROJECT_ROOT", tmp_path)
     art_dir = tmp_path / "artifacts"
-    art_dir.mkdir(parents=True)
+    art_dir.mkdir(parents=True, exist_ok=True)
     (art_dir / "segment_thresholds.json").write_text(
         json.dumps(
             {

@@ -1,0 +1,80 @@
+{
+    "data_source": "holdout_evaluation_split",
+    "observation_count": 51070,
+    "drift_detected_alert": false,
+    "overall_status": "STABLE",
+    "metrics": {
+        "CreditScore": {
+            "psi_value": 0.0003,
+            "status": "STABLE"
+        },
+        "Income": {
+            "psi_value": 0.0002,
+            "status": "STABLE"
+        },
+        "LoanAmount": {
+            "psi_value": 0.0005,
+            "status": "STABLE"
+        },
+        "DTIRatio": {
+            "psi_value": 0.0002,
+            "status": "STABLE"
+        },
+        "MonthsEmployed": {
+            "psi_value": 0.0003,
+            "status": "STABLE"
+        },
+        "InterestRate": {
+            "psi_value": 0.0002,
+            "status": "STABLE"
+        },
+        "NumCreditLines": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        },
+        "LoanTerm": {
+            "psi_value": 0.0002,
+            "status": "STABLE"
+        },
+        "Education": {
+            "psi_value": 0.0001,
+            "status": "STABLE"
+        },
+        "EmploymentType": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        },
+        "MaritalStatus": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        },
+        "HasMortgage": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        },
+        "HasDependents": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        },
+        "LoanPurpose": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        },
+        "HasCoSigner": {
+            "psi_value": 0.0,
+            "status": "STABLE"
+        }
+    },
+    "informational_cohort_psi": {
+        "psi_value": 0.0,
+        "note": "informational_cohort_mix"
+    },
+    "live_telemetry_drift": {
+        "status": "SKIPPED_INSUFFICIENT_TELEMETRY",
+        "min_rows_required": 500,
+        "observation_count": 400,
+        "counts_by_source": {
+            "synthetic_representative_simulation": 400
+        }
+    }
+}
