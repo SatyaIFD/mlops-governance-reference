@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.17](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.16...v0.5.17) (2026-11-13)
+
+
+### Bug Fixes
+
+* **governance:** bind P1 segment policy run_id, add Reg B 62+ audit, and complete K8s/GDPR archive controls ([#173](https://github.com/SatyaIFD/mlops-governance-reference/issues/173)) ([06e9556](https://github.com/SatyaIFD/mlops-governance-reference/commit/06e955678a0cbf87dc7d4abc976362f84aaa91a3))
+
 ## [0.5.16](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.15...v0.5.16) (2026-11-12)
 
 
