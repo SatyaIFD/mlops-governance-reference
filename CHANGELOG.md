@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.18](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.17...v0.5.18) (2026-11-13)
+
+
+### Bug Fixes
+
+* **governance:** eliminate p3 window overlap, add ci-aware p1 gate, and journal archive purges ([#175](https://github.com/SatyaIFD/mlops-governance-reference/issues/175)) ([70252f4](https://github.com/SatyaIFD/mlops-governance-reference/commit/70252f47b99c115884bb50ce927edb7e766b6067))
+
 ## [0.5.17](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.16...v0.5.17) (2026-11-13)
 
 
