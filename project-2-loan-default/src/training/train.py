@@ -131,10 +131,14 @@ class LoanModelTrainer:
             df_in: pd.DataFrame,
         ) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
             is_young = (df_in["Age"] < 30).astype(int).copy()
-            # ECOA / Reg B: exclude Age and MaritalStatus from model predictors
-            drop_cols = [c for c in ("Default", "MaritalStatus") if c in df_in.columns]
+            # ECOA / Reg B: exclude MaritalStatus (12 CFR 1002.5(d)(1)) and the binary cohort flag is_young
+            # from model predictors; Age is retained under 12 CFR 1002.6(b)(2)(ii) with Age>=62 protection audit.
+            drop_cols = [
+                c
+                for c in ("Default", "MaritalStatus", "is_young")
+                if c in df_in.columns
+            ]
             X = df_in.drop(columns=drop_cols).copy()
-            X["is_young"] = is_young
             y = df_in["Default"].copy()
             cat_cols = X.select_dtypes(
                 include=["object", "category", "string"]

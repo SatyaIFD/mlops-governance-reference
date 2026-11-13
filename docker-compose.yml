@@ -31,7 +31,7 @@ services:
       - "1000"
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
-      - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
+      - EXPECTED_API_KEY=${EXPECTED_API_KEY:?EXPECTED_API_KEY must be set in .env or environment}
     volumes:
       - ./mlflow.db:/mlflow.db:ro
       - ./mlruns:/app/mlruns:ro
@@ -54,7 +54,7 @@ services:
       - "1000"
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
-      - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
+      - EXPECTED_API_KEY=${EXPECTED_API_KEY:?EXPECTED_API_KEY must be set in .env or environment}
       - LOAN_TELEMETRY_LOG_PATH=/app/artifacts/telemetry_logs.jsonl
     volumes:
       - ./mlflow.db:/mlflow.db:ro
@@ -80,7 +80,7 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=sqlite:////mlflow.db
       - AML_HMAC_KEY_VERSION=${AML_HMAC_KEY_VERSION:-v1}
-      - AML_HMAC_SECRET_KEY=${AML_HMAC_SECRET_KEY:-aml-default-dev-hmac-secret-key}
+      - AML_HMAC_SECRET_KEY=${AML_HMAC_SECRET_KEY:?AML_HMAC_SECRET_KEY must be set in .env or environment}
       - AML_PSEUDONYMIZE_ACCOUNTS=${AML_PSEUDONYMIZE_ACCOUNTS:-1}
       - AML_DAEMON_MODE=0
       - AML_WARMUP_EVENTS=100000
@@ -125,7 +125,7 @@ services:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
       - _PIP_ADDITIONAL_REQUIREMENTS=pyarrow==25.0.1 httpx==0.28.1
-      - EXPECTED_API_KEY=${EXPECTED_API_KEY:-mlops-dev-secret-key}
+      - EXPECTED_API_KEY=${EXPECTED_API_KEY:?EXPECTED_API_KEY must be set in .env or environment}
       - LOAN_API_URL=http://mlops-api-gateway:8081/api/v1/loan-sim/predict
     command: standalone
     healthcheck:

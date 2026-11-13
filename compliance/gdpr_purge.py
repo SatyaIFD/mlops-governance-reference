@@ -1,5 +1,8 @@
 import argparse
 import fcntl
+import gzip
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -72,21 +75,60 @@ def _recover_pending_journal(data_file: Path) -> None:
 
 def _stream_stage_file(data_file: Path, tmp_file: Path, target_user: str) -> int:
     """Streams filtered records to tmp_file, preserving rows where user_id is NULL/NaN."""
-    if data_file.suffix == ".jsonl":
+    hmac_seed = (
+        os.getenv("LOAN_HMAC_SECRET_KEY")
+        or os.getenv("EXPECTED_API_KEY")
+        or "loan-default-hmac-key"
+    )
+    hmac_token = (
+        "usr_hmac_"
+        + hmac.new(
+            hmac_seed.encode("utf-8"), target_user.encode("utf-8"), hashlib.sha256
+        ).hexdigest()[:16]
+    )
+    target_tokens = {target_user, hmac_token}
+    if data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz"):
         original_count = 0
         kept_rows = 0
+        open_in = gzip.open if data_file.suffix == ".gz" else open
+        open_out = gzip.open if data_file.suffix == ".gz" else open
         with (
-            open(data_file, "r", encoding="utf-8") as f_in,
-            open(tmp_file, "w", encoding="utf-8") as f_out,
+            open_in(data_file, "rt", encoding="utf-8") as f_in,
+            open_out(tmp_file, "wt", encoding="utf-8") as f_out,
         ):
             for line in f_in:
                 if not line.strip():
                     continue
                 original_count += 1
                 rec = json.loads(line)
-                if str(rec.get("user_id")) != target_user:
+                if str(rec.get("user_id")) not in target_tokens:
                     f_out.write(line if line.endswith("\n") else line + "\n")
                     kept_rows += 1
+        # Also purge any rotated .jsonl.<idx> or .jsonl.<idx>.gz archives alongside data_file
+        if data_file.suffix == ".jsonl":
+            for idx in range(1, 10):
+                for cand in (
+                    data_file.with_suffix(f"{data_file.suffix}.{idx}.gz"),
+                    data_file.with_suffix(f"{data_file.suffix}.{idx}"),
+                ):
+                    if cand.is_file():
+                        c_open = gzip.open if cand.suffix == ".gz" else open
+                        c_tmp = cand.with_suffix(cand.suffix + ".tmp")
+                        with (
+                            c_open(cand, "rt", encoding="utf-8") as cf_in,
+                            c_open(c_tmp, "wt", encoding="utf-8") as cf_out,
+                        ):
+                            for cline in cf_in:
+                                if not cline.strip():
+                                    continue
+                                original_count += 1
+                                crec = json.loads(cline)
+                                if str(crec.get("user_id")) not in target_tokens:
+                                    cf_out.write(
+                                        cline if cline.endswith("\n") else cline + "\n"
+                                    )
+                                    kept_rows += 1
+                        os.replace(c_tmp, cand)
         return original_count - kept_rows
 
     if data_file.suffix == ".parquet":
@@ -157,13 +199,39 @@ def _verify_purge_completion(db_file: Path, data_file: Path, target_user: str) -
     finally:
         conn.close()
 
-    if data_file.suffix == ".jsonl":
-        with open(data_file, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip() and str(json.loads(line).get("user_id")) == target_user:
-                    raise PurgeError(
-                        f"Verification failed: target user still present in {data_file.name}"
-                    )
+    hmac_seed = (
+        os.getenv("LOAN_HMAC_SECRET_KEY")
+        or os.getenv("EXPECTED_API_KEY")
+        or "loan-default-hmac-key"
+    )
+    hmac_token = (
+        "usr_hmac_"
+        + hmac.new(
+            hmac_seed.encode("utf-8"), target_user.encode("utf-8"), hashlib.sha256
+        ).hexdigest()[:16]
+    )
+    target_tokens = {target_user, hmac_token}
+    if data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz"):
+        check_files = [data_file]
+        if data_file.suffix == ".jsonl":
+            for idx in range(1, 10):
+                for cand in (
+                    data_file.with_suffix(f"{data_file.suffix}.{idx}.gz"),
+                    data_file.with_suffix(f"{data_file.suffix}.{idx}"),
+                ):
+                    if cand.is_file():
+                        check_files.append(cand)
+        for cfile in check_files:
+            c_open = gzip.open if cfile.suffix == ".gz" else open
+            with c_open(cfile, "rt", encoding="utf-8") as f:
+                for line in f:
+                    if (
+                        line.strip()
+                        and str(json.loads(line).get("user_id")) in target_tokens
+                    ):
+                        raise PurgeError(
+                            f"Verification failed: target user still present in {cfile.name}"
+                        )
     elif data_file.suffix == ".parquet":
         dataset = ds.dataset(data_file, format="parquet")
         remaining_file = dataset.count_rows(filter=ds.field("user_id") == target_user)

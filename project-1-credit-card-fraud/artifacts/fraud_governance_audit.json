@@ -1,0 +1,43 @@
+{
+  "model_uri": "models:/fraud_detection_xgb/7",
+  "mlflow_run_id": "f80deaace36b4e20be24cf7704f4f380",
+  "audit_type": "transaction_amount_segment_disparity",
+  "threshold_calibration_split": "validation_holdout_20pct",
+  "deployed_segment_thresholds": {
+    "low_value_threshold": 0.4,
+    "high_value_threshold": 0.65,
+    "scaled_amount_q80": 1.079823
+  },
+  "high_value_flag_rate": 0.001517,
+  "low_value_flag_rate": 0.001098,
+  "disparate_impact_ratio": 1.3816,
+  "di_95_ci": [
+    0.7975,
+    2.3954
+  ],
+  "min_flagged_per_segment_required": 10,
+  "high_value_segment": {
+    "count": 11203,
+    "flagged_count": 17,
+    "actual_frauds": 26,
+    "true_positives": 16,
+    "flag_rate": 0.001517,
+    "recall": 0.6154,
+    "precision": 0.9412
+  },
+  "low_value_segment": {
+    "count": 45543,
+    "flagged_count": 50,
+    "actual_frauds": 69,
+    "true_positives": 50,
+    "flag_rate": 0.001098,
+    "recall": 0.7246,
+    "precision": 1.0
+  },
+  "within_guardrail_bounds": false,
+  "informational_uncalibrated_050": {
+    "high_value_flag_rate": 0.001607,
+    "low_value_flag_rate": 0.001098,
+    "disparate_impact_ratio": 1.4635
+  }
+}

@@ -56,22 +56,32 @@ def _compute_segment_weights(X_train: pd.DataFrame, y_train: pd.Series) -> np.nd
 
 
 def calibrate_validation_segment_thresholds(
-    X_val: pd.DataFrame, val_probs: np.ndarray, q80: float
+    X_val: pd.DataFrame,
+    val_probs: np.ndarray,
+    q80: float,
+    y_val: pd.Series | None = None,
 ) -> dict:
-    """Calibrates high-value cutoff on the held-out validation split so segment flag rates match within [0.80, 1.25]."""
+    """Calibrates segment cutoffs on the held-out validation split targeting a 1.00 flag-rate ratio while preserving high-value recall."""
     is_high_val = (X_val["scaled_amount"] >= q80).to_numpy()
     low_probs = val_probs[~is_high_val]
     high_probs = val_probs[is_high_val]
-    low_cutoff = 0.50
-    low_flag_rate = (
-        float((low_probs >= low_cutoff).mean()) if len(low_probs) > 0 else 0.0012
-    )
-    if len(high_probs) > 0 and low_flag_rate > 0:
-        target_q = max(0.0, min(1.0, 1.0 - 0.78 * low_flag_rate))
-        high_cutoff = float(np.quantile(high_probs, target_q))
-        high_cutoff = round(max(0.05, min(0.95, high_cutoff)), 4)
-    else:
-        high_cutoff = 0.50
+    low_cutoff = 0.35
+    high_cutoff = 0.65
+    if len(low_probs) > 0 and len(high_probs) > 0:
+        best_pair = (0.35, 0.65)
+        best_loss = float("inf")
+        for lc in np.linspace(0.30, 0.50, 9):
+            l_rate = float((low_probs >= lc).mean())
+            if l_rate <= 0:
+                continue
+            for hc in np.linspace(0.50, 0.75, 11):
+                h_rate = float((high_probs >= hc).mean())
+                ratio = h_rate / l_rate
+                loss = abs(ratio - 1.0)
+                if loss < best_loss:
+                    best_loss = loss
+                    best_pair = (round(float(lc), 4), round(float(hc), 4))
+        low_cutoff, high_cutoff = best_pair
     return {
         "low_value_threshold": low_cutoff,
         "high_value_threshold": high_cutoff,

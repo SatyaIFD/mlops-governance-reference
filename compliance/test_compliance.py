@@ -285,3 +285,42 @@ def test_gdpr_purge_succeeds_when_post_commit_vacuum_is_locked(tmp_path, monkeyp
     res = execute_right_to_be_forgotten(target_user, str(db_file), str(parquet_file))
     assert res["db_rows_deleted"] == 2  # nosec B101
     assert res["file_rows_removed"] == 1  # nosec B101
+
+
+def test_gdpr_purge_jsonl_and_rotated_gzip_archives(tmp_path):
+    """Verifies that execute_right_to_be_forgotten purges target user across both active .jsonl and rotated .jsonl.1.gz archives."""
+    import gzip
+    import hashlib
+    import hmac
+
+    db_file = tmp_path / "mlflow.db"
+    jsonl_file = tmp_path / "telemetry_logs.jsonl"
+    gz_archive = tmp_path / "telemetry_logs.jsonl.1.gz"
+    target_user = "APPLICANT_42"
+    _init_mock_sqlite_db(db_file, target_user)
+
+    hmac_seed = "loan-default-hmac-key"
+    hmac_id = (
+        "usr_hmac_"
+        + hmac.new(
+            hmac_seed.encode("utf-8"), target_user.encode("utf-8"), hashlib.sha256
+        ).hexdigest()[:16]
+    )
+
+    with gzip.open(gz_archive, "wt", encoding="utf-8") as gz_f:
+        gz_f.write(json.dumps({"user_id": hmac_id, "status_code": 200}) + "\n")
+        gz_f.write(json.dumps({"user_id": "usr_hmac_other", "status_code": 200}) + "\n")
+
+    jsonl_file.write_text(
+        json.dumps({"user_id": target_user, "status_code": 200})
+        + "\n"
+        + json.dumps({"user_id": None, "status_code": 200})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    res = execute_right_to_be_forgotten(target_user, str(db_file), str(jsonl_file))
+    assert res["file_rows_removed"] == 2  # nosec B101
+    with gzip.open(gz_archive, "rt", encoding="utf-8") as gz_in:
+        kept_gz = [json.loads(line) for line in gz_in if line.strip()]
+    assert len(kept_gz) == 1 and kept_gz[0]["user_id"] == "usr_hmac_other"  # nosec B101

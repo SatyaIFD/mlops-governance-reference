@@ -1,18 +1,20 @@
 """
 Governance & Segment Disparity Audit Module - Project 1: Credit Card Fraud Detection
 Evaluates out-of-sample transaction-value segment flagging disparity on test.parquet
-using the validation-calibrated segment_thresholds.json served by the API,
-and records uncalibrated (flat 0.50) disparity alongside deployed parity.
+using the run-ID verified validation-calibrated segment_thresholds.json served by the API.
+Reports per-segment recall, precision, flag counts, and Katz 95% CIs.
 """
 
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
 
 import mlflow
 import mlflow.xgboost
+import numpy as np
 import pandas as pd
 from mlflow.tracking import MlflowClient
 
@@ -27,11 +29,70 @@ from src.ingestion.utils import (
 )
 
 
+def _katz_95_ci(k1: int, n1: int, k0: int, n0: int) -> list[float]:
+    if k1 == 0 or k1 == n1 or k0 == 0 or k0 == n0:
+        a, m1, b, m0 = k1 + 0.5, n1 + 1.0, k0 + 0.5, n0 + 1.0
+    else:
+        a, m1, b, m0 = float(k1), float(n1), float(k0), float(n0)
+    p1 = a / m1
+    p0 = b / m0
+    ratio = p1 / p0
+    se = math.sqrt(max(0.0, (1.0 - p1) / a + (1.0 - p0) / b))
+    return [
+        round(ratio * math.exp(-1.96 * se), 4),
+        round(ratio * math.exp(1.96 * se), 4),
+    ]
+
+
+def _segment_metrics(y_true: np.ndarray, preds: np.ndarray) -> dict:
+    total = int(len(y_true))
+    flagged = int(preds.sum())
+    actual_pos = int((y_true == 1).sum())
+    tp = int(((y_true == 1) & (preds == 1)).sum())
+    flag_rate = round(float(flagged / total), 6) if total > 0 else 0.0
+    recall = round(float(tp / actual_pos), 4) if actual_pos > 0 else 0.0
+    precision = round(float(tp / flagged), 4) if flagged > 0 else 0.0
+    return {
+        "count": total,
+        "flagged_count": flagged,
+        "actual_frauds": actual_pos,
+        "true_positives": tp,
+        "flag_rate": flag_rate,
+        "recall": recall,
+        "precision": precision,
+    }
+
+
+def _load_verified_segment_policy(expected_run_id: str) -> dict:
+    seg_file = BASE_DIR / "artifacts" / "segment_thresholds.json"
+    try:
+        dl_path = Path(
+            mlflow.artifacts.download_artifacts(
+                run_id=expected_run_id,
+                artifact_path="preprocessing/segment_thresholds.json",
+            )
+        )
+        if dl_path.is_file():
+            seg_file = dl_path
+    except Exception as dl_err:
+        print(f"ℹ️ Using local segment threshold artifact ({dl_err})")
+    if not seg_file.is_file():
+        raise FileNotFoundError(
+            f"Required segment_thresholds.json missing at {seg_file}"
+        )
+    data = json.loads(seg_file.read_text(encoding="utf-8"))
+    file_run_id = str(data.get("mlflow_run_id") or "")
+    if file_run_id != str(expected_run_id):
+        raise ValueError(
+            f"Stale segment_thresholds.json: mlflow_run_id={file_run_id} does not match evaluated run {expected_run_id}"
+        )
+    return data
+
+
 def run_fairness_audit(enforce_gate: bool = False) -> dict:
     default_db = BASE_DIR.parent / "mlflow.db"
     if not default_db.exists() and (BASE_DIR / "mlflow.db").exists():
         default_db = BASE_DIR / "mlflow.db"
-
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", f"sqlite:///{default_db}")
     mlflow.set_tracking_uri(tracking_uri)
 
@@ -41,7 +102,14 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
         versions = client.search_model_versions(f"name='{model_name}'")
         if not versions:
             raise RuntimeError(f"No registered versions found for model '{model_name}'")
-        latest_version = max(int(v.version) for v in versions)
+        prod_versions = [v for v in versions if v.current_stage == "Production"]
+        selected_mv = (
+            max(prod_versions, key=lambda v: int(v.version))
+            if prod_versions
+            else max(versions, key=lambda v: int(v.version))
+        )
+        latest_version = int(selected_mv.version)
+        expected_run_id = selected_mv.run_id
         model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{latest_version}")
         model = mlflow.xgboost.load_model(model_uri)
     except Exception as e:
@@ -67,40 +135,51 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
     else:
         processed_df = df
 
-    seg_file = BASE_DIR / "artifacts" / "segment_thresholds.json"
-    if seg_file.is_file():
-        seg_policy = json.loads(seg_file.read_text(encoding="utf-8"))
-    else:
-        seg_policy = {
-            "low_value_threshold": 0.50,
-            "high_value_threshold": 0.50,
-            "scaled_amount_q80": float(processed_df["scaled_amount"].quantile(0.80)),
-            "calibration_split": "uncalibrated_default",
-        }
-
+    seg_policy = _load_verified_segment_policy(expected_run_id)
     X_test = processed_df[CANONICAL_FEATURE_COLS]
+    y_test = (
+        processed_df["Class"].to_numpy(dtype=int)
+        if "Class" in processed_df.columns
+        else np.zeros(len(processed_df), dtype=int)
+    )
     print(
-        f"⏳ Running out-of-sample batch inference across evaluation slices using {model_uri}..."
+        f"⏳ Running out-of-sample batch inference across evaluation slices using {model_uri} (run_id={expected_run_id})..."
     )
     probs = model.predict_proba(X_test)[:, 1]
     q80 = float(seg_policy["scaled_amount_q80"])
     is_high = (processed_df["scaled_amount"] >= q80).to_numpy()
 
-    # 1. Deployed policy (validation-calibrated segment thresholds served by FastAPI)
     low_cutoff = float(seg_policy["low_value_threshold"])
     high_cutoff = float(seg_policy["high_value_threshold"])
-    high_flag_rate = float((probs[is_high] >= high_cutoff).mean())
-    low_flag_rate = float((probs[~is_high] >= low_cutoff).mean())
-    disparity_ratio = high_flag_rate / low_flag_rate if low_flag_rate > 0 else 0.0
-    within_bounds = bool(0.80 <= disparity_ratio <= 1.25)
+    high_preds = (probs[is_high] >= high_cutoff).astype(int)
+    low_preds = (probs[~is_high] >= low_cutoff).astype(int)
 
-    # 2. Informational uncalibrated policy (flat 0.50 cutoff)
-    uncal_high_rate = float((probs[is_high] >= 0.50).mean())
-    uncal_low_rate = float((probs[~is_high] >= 0.50).mean())
+    high_stats = _segment_metrics(y_test[is_high], high_preds)
+    low_stats = _segment_metrics(y_test[~is_high], low_preds)
+    high_flag_rate = high_stats["flag_rate"]
+    low_flag_rate = low_stats["flag_rate"]
+    disparity_ratio = high_flag_rate / low_flag_rate if low_flag_rate > 0 else 0.0
+    di_ci = _katz_95_ci(
+        high_stats["flagged_count"],
+        high_stats["count"],
+        low_stats["flagged_count"],
+        low_stats["count"],
+    )
+
+    min_flags_ok = (
+        high_stats["flagged_count"] >= 10 and low_stats["flagged_count"] >= 10
+    )
+    within_bounds = bool(0.80 <= disparity_ratio <= 1.25 and min_flags_ok)
+
+    uncal_high_preds = (probs[is_high] >= 0.50).astype(int)
+    uncal_low_preds = (probs[~is_high] >= 0.50).astype(int)
+    uncal_high_rate = float(uncal_high_preds.mean())
+    uncal_low_rate = float(uncal_low_preds.mean())
     uncal_ratio = uncal_high_rate / uncal_low_rate if uncal_low_rate > 0 else 0.0
 
     audit_summary = {
         "model_uri": model_uri,
+        "mlflow_run_id": expected_run_id,
         "audit_type": "transaction_amount_segment_disparity",
         "threshold_calibration_split": seg_policy.get(
             "calibration_split", "validation_holdout_20pct"
@@ -113,6 +192,10 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
         "high_value_flag_rate": round(high_flag_rate, 6),
         "low_value_flag_rate": round(low_flag_rate, 6),
         "disparate_impact_ratio": round(disparity_ratio, 4),
+        "di_95_ci": di_ci,
+        "min_flagged_per_segment_required": 10,
+        "high_value_segment": high_stats,
+        "low_value_segment": low_stats,
         "within_guardrail_bounds": within_bounds,
         "informational_uncalibrated_050": {
             "high_value_flag_rate": round(uncal_high_rate, 6),
@@ -130,18 +213,20 @@ def run_fairness_audit(enforce_gate: bool = False) -> dict:
     print("⚖️ TRANSACTION SEGMENT DISPARITY AUDIT (OUT-OF-SAMPLE)")
     print("=" * 55)
     print(
-        f" ✅ Deployed High-Value Flag Rate  : {high_flag_rate:.6f} (cutoff={high_cutoff})"
+        f" ✅ Deployed High-Value Flag Rate  : {high_flag_rate:.6f} (cutoff={high_cutoff}, recall={high_stats['recall']:.4f}, precision={high_stats['precision']:.4f})"
     )
     print(
-        f" ✅ Deployed Low-Value Flag Rate   : {low_flag_rate:.6f} (cutoff={low_cutoff})"
+        f" ✅ Deployed Low-Value Flag Rate   : {low_flag_rate:.6f} (cutoff={low_cutoff}, recall={low_stats['recall']:.4f}, precision={low_stats['precision']:.4f})"
     )
-    print(f" ✅ Deployed Segment Disparity     : {disparity_ratio:.4f}")
+    print(
+        f" ✅ Deployed Segment Disparity     : {disparity_ratio:.4f} (95% CI={di_ci})"
+    )
     print(f" ℹ️ Uncalibrated (0.50) Disparity  : {uncal_ratio:.4f}")
     print("=" * 55 + "\n")
 
     if enforce_gate and not within_bounds:
         print(
-            f"🚨 Governance gate tripped: deployed ratio {disparity_ratio:.4f} outside [0.80, 1.25]."
+            f"🚨 Governance gate tripped: deployed ratio {disparity_ratio:.4f} outside [0.80, 1.25] or insufficient flagged count."
         )
         sys.exit(1)
 

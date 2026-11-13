@@ -22,7 +22,6 @@ EXPECTED_MOCK_FEATURES = [
     "NumCreditLines",
     "InterestRate",
     "LoanTerm",
-    "is_young",
     "Education_High School",
     "Education_Master's",
     "Education_PhD",

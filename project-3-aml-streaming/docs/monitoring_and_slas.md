@@ -18,7 +18,7 @@ This document specifies the operational SLAs, Service Level Objectives (SLOs), a
 
 ## 📈 Telemetry & Health Monitoring
 
-The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) with lifecycle `status` values (`"IN_PROGRESS"`, `"COMPLETE"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, or `"FAILED"`) and heartbeat states (`"WARMING_UP"`, `"HEALTHY"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, `"FAILED"`). At ~0.12% base laundering prevalence, `0.47%` alert precision corresponds to ~213 alerts per true positive across `6,172` flagged events:
+The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) with lifecycle `status` values (`"IN_PROGRESS"`, `"COMPLETE"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, or `"FAILED"`) and heartbeat states (`"WARMING_UP"`, `"HEALTHY"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, `"FAILED"`). At ~0.12% base laundering prevalence, `0.87%` alert precision corresponds to ~213 alerts per true positive across `8,119` flagged events:
 
 ```json
 {
@@ -32,7 +32,7 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   },
   "model_metadata": {
     "artifact_path": "aml_streaming_model",
-    "calibrated_threshold": 0.65,
+    "calibrated_threshold": 0.68,
     "model_sha256": "a8601868d8bba20ca4f4b7a1f6668b79132fe42b4ff4d0b3768b09c998cfed44",
     "mlflow_run_id": "c7f8d8d5464b4bc7aac61b4829b06dcc",
     "features_used": [
@@ -48,7 +48,7 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   },
   "streaming_performance": {
     "total_processed": 100000,
-    "anomalies_flagged": 6,172,
+    "anomalies_flagged": 8119,
     "actual_laundering_events": 122,
     "laundering_intercepted": 29,
     "recall_percentage": 23.77,

@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   python-sast:
@@ -28,6 +27,9 @@ jobs:
   container-scan:
     name: Container Vulnerability Scan (Trivy)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -108,3 +110,5 @@ jobs:
           IMAGE_ID="ghcr.io/$REPO/mlflow-server"
           docker tag mlflow-security-test $IMAGE_ID:latest
           docker push $IMAGE_ID:latest
+          docker tag mlflow-security-test $IMAGE_ID:${{ github.sha }}
+          docker push $IMAGE_ID:${{ github.sha }}

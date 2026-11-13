@@ -99,7 +99,9 @@ def test_categorical_psi_and_minimized_snapshot_privacy(tmp_path):
     recs = logger.read_latest_telemetry(tail_count=5)
     assert len(recs) == 3  # nosec B101
     assert "MaritalStatus" not in recs[-1]["payload_snapshot"]  # nosec B101
-    assert recs[-1]["user_id"] == "USR_GDPR_1"  # nosec B101
+    assert recs[-1]["user_id"].startswith("usr_hmac_")  # nosec B101
+    gz_archives = list(tmp_path.glob("telemetry_logs.jsonl.*.gz"))
+    assert len(gz_archives) >= 1  # nosec B101
 
     mon = DataDriftMonitor(
         reference_path=tmp_path / "ref.parquet", artifacts_dir=tmp_path

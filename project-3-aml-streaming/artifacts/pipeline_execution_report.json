@@ -1,0 +1,36 @@
+{
+  "execution_timestamp_utc": "2026-11-13T04:58:06.495706+00:00",
+  "status": "COMPLETE",
+  "data_governance": {
+    "total_ingested": 200000,
+    "clean_events": 200000,
+    "dlq_events": 0,
+    "data_quality_pct": 100.0
+  },
+  "model_metadata": {
+    "artifact_path": "aml_streaming_model",
+    "calibrated_threshold": 0.68,
+    "model_sha256": "a845b43b6365c93e39b818990b5e83050ca2028592589cd99bfd316987c98a99",
+    "mlflow_run_id": "5ee176c20fe84b6db6c1d811e058f51f",
+    "features_used": [
+      "Amount",
+      "pass_through_ratio_1h",
+      "is_structuring",
+      "velocity_acceleration",
+      "fan_out_count_24h",
+      "receiver_inflow_count_1h",
+      "receiver_inflow_amount_1h"
+    ],
+    "warmup_events_count": 100000
+  },
+  "streaming_performance": {
+    "total_processed": 100000,
+    "anomalies_flagged": 8119,
+    "replayed_alerts_preserved": 0,
+    "total_alerts_in_file": 8119,
+    "actual_laundering_events": 122,
+    "laundering_intercepted": 71,
+    "recall_percentage": 58.2,
+    "precision_percentage": 0.87
+  }
+}

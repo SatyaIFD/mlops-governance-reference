@@ -61,4 +61,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify Docker Compose Fleet Build
+        env:
+          EXPECTED_API_KEY: ci-build-verification-key
+          AML_HMAC_SECRET_KEY: ci-build-verification-hmac
         run: docker compose build

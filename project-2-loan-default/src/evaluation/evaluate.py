@@ -115,9 +115,11 @@ class LoanModelEvaluator:
             test_df.drop(columns=["LoanID"], inplace=True)
 
         is_young_series = (test_df["Age"] < 30).astype(int)
-        drop_cols = [c for c in ("Default", "MaritalStatus") if c in test_df.columns]
+        is_elderly_62_series = (test_df["Age"] >= 62).astype(int)
+        drop_cols = [
+            c for c in ("Default", "MaritalStatus", "is_young") if c in test_df.columns
+        ]
         X_test = test_df.drop(columns=drop_cols)
-        X_test["is_young"] = is_young_series
         y_test = test_df["Default"]
 
         cat_cols = X_test.select_dtypes(
@@ -211,11 +213,38 @@ class LoanModelEvaluator:
         )
         fpr_gap = round(abs(prot_stats["default_fpr"] - base_stats["default_fpr"]), 4)
 
+        # Reg B (12 CFR 1002.6(b)(2)(ii)) Elderly Protection Check: applicants aged >= 62 must not be disadvantaged
+        elderly_mask = is_elderly_62_series == 1
+        non_elderly_mask = is_elderly_62_series == 0
+        elderly_stats = _cohort_confusion_rates(
+            y_test[elderly_mask], preds_labels[elderly_mask]
+        )
+        non_elderly_stats = _cohort_confusion_rates(
+            y_test[non_elderly_mask], preds_labels[non_elderly_mask]
+        )
+        elderly_di_ratio = (
+            round(
+                float(
+                    elderly_stats["approval_rate"] / non_elderly_stats["approval_rate"]
+                ),
+                4,
+            )
+            if non_elderly_stats["approval_rate"] > 0
+            else 0.0
+        )
+        elderly_not_disadvantaged = bool(elderly_di_ratio >= 1.0)
+        for st_e in (elderly_stats, non_elderly_stats):
+            st_e.pop("approved_count", None)
+            st_e.pop("positive_defaults", None)
+            st_e.pop("true_positives", None)
+
         # Both DI and Equal Opportunity TPR require their entire 95% Katz CI inside [0.80, 1.25]
         di_passed = bool(di_ci[0] >= 0.80 and di_ci[1] <= 1.25)
         tpr_passed = bool(tpr_ci[0] >= 0.80 and tpr_ci[1] <= 1.25)
         fpr_passed = bool(fpr_gap <= 0.05)
-        fairness_passed = bool(di_passed and tpr_passed and fpr_passed)
+        fairness_passed = bool(
+            di_passed and tpr_passed and fpr_passed and elderly_not_disadvantaged
+        )
         performance_passed = bool(auc >= 0.70)
         governance_signoff = bool(fairness_passed and performance_passed)
 
@@ -249,6 +278,12 @@ class LoanModelEvaluator:
             "threshold_calibration_split": calibration_source,
             "protected_cohort_under_30": prot_stats,
             "baseline_cohort_30_and_over": base_stats,
+            "reg_b_elderly_62_plus_audit": {
+                "elderly_62_plus_approval_rate": elderly_stats["approval_rate"],
+                "under_62_approval_rate": non_elderly_stats["approval_rate"],
+                "elderly_vs_under_62_approval_ratio": elderly_di_ratio,
+                "elderly_62_plus_not_disadvantaged": elderly_not_disadvantaged,
+            },
         }
 
         audit_report = {
@@ -264,6 +299,7 @@ class LoanModelEvaluator:
                 "four_fifths_rule_passed": di_passed,
                 "equal_opportunity_passed": tpr_passed,
                 "fpr_parity_passed": fpr_passed,
+                "reg_b_elderly_62_plus_passed": elderly_not_disadvantaged,
                 "minimum_performance_passed": performance_passed,
                 "governance_signoff_status": "APPROVED"
                 if governance_signoff
