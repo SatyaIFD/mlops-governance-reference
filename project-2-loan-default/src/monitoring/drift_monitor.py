@@ -208,13 +208,17 @@ def run_production_audit(
     # Streaming O(1) aggregation per (source, mv, dt)
     policy_counts: dict[tuple[str, str, str], dict[str, int]] = {}
     latest_policy_for_source: dict[str, tuple[str, str]] = {}
+    latest_ts_for_source: dict[str, str] = {}
     source_total_rows: dict[str, int] = {}
 
     for rec in stream_telemetry_records(log_path):
         if rec.get("status_code") == 200 and rec.get("schema_version") == 2:
             src = str(rec.get("traffic_source") or DEFAULT_TRAFFIC_SOURCE).strip()
             mv, dt_str = _extract_policy_key(rec)
-            latest_policy_for_source[src] = (mv, dt_str)
+            rec_ts = str(rec.get("timestamp") or "")
+            if src not in latest_ts_for_source or rec_ts >= latest_ts_for_source[src]:
+                latest_ts_for_source[src] = rec_ts
+                latest_policy_for_source[src] = (mv, dt_str)
             source_total_rows[src] = source_total_rows.get(src, 0) + 1
             key = (src, mv, dt_str)
             if key not in policy_counts:

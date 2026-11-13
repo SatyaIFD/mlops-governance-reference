@@ -36,7 +36,51 @@ def _tmp_path_for(data_file: Path) -> Path:
 
 
 def _lock_path_for(data_file: Path) -> Path:
-    return data_file.with_suffix(data_file.suffix + ".purge.lock")
+    # Shares the exact .lock path used by ModelObservabilityLogger and background gzip rotation
+    return data_file.with_suffix(data_file.suffix + ".lock")
+
+
+def _compute_target_tokens(
+    target_user: str, require_hmac_key: bool = False
+) -> set[str]:
+    tokens = {target_user}
+    hmac_seed = os.getenv("LOAN_HMAC_SECRET_KEY", "").strip()
+    if not hmac_seed:
+        if require_hmac_key and not target_user.startswith("usr_hmac_"):
+            raise PurgeError(
+                "LOAN_HMAC_SECRET_KEY must be set to purge pseudonymized JSONL telemetry."
+            )
+        return tokens
+    hmac_token = (
+        "usr_hmac_"
+        + hmac.new(
+            hmac_seed.encode("utf-8"), target_user.encode("utf-8"), hashlib.sha256
+        ).hexdigest()[:16]
+    )
+    tokens.add(hmac_token)
+    return tokens
+
+
+def _discover_jsonl_targets(data_file: Path) -> list[Path]:
+    targets: list[Path] = []
+    seen: set[Path] = set()
+
+    def _add(p: Path) -> None:
+        if p.is_file() and not p.name.endswith((".lock", ".tmp", ".bak", ".json")):
+            rp = p.resolve()
+            if rp not in seen:
+                targets.append(p)
+                seen.add(rp)
+
+    _add(data_file)
+    if data_file.suffix == ".jsonl":
+        for idx in range(1, 10):
+            _add(data_file.with_suffix(f"{data_file.suffix}.{idx}.gz"))
+            _add(data_file.with_suffix(f"{data_file.suffix}.{idx}"))
+        if data_file.name == "telemetry_logs.jsonl" and data_file.parent.is_dir():
+            for pod_f in sorted(data_file.parent.glob("telemetry_*.jsonl*")):
+                _add(pod_f)
+    return targets
 
 
 def _write_journal(journal_file: Path, payload: dict) -> None:
@@ -51,85 +95,66 @@ def _write_journal(journal_file: Path, payload: dict) -> None:
 
 def _recover_pending_journal(data_file: Path) -> None:
     journal_file = _journal_path_for(data_file)
-    bak_file = _backup_path_for(data_file)
-    tmp_file = _tmp_path_for(data_file)
     if not journal_file.exists():
         return
+    companion_paths = [data_file]
     try:
         with open(journal_file, "r", encoding="utf-8") as f:
             journal = json.load(f)
         state = journal.get("state", "INITIATED")
+        if isinstance(journal.get("companion_files"), list):
+            companion_paths = [Path(p) for p in journal["companion_files"]]
     except Exception:
-        state = "FILE_SWAPPED" if bak_file.exists() else "INITIATED"
-    if tmp_file.exists():
-        tmp_file.unlink()
-    if state in ("INITIATED", "FILE_STAGED", "FILE_SWAPPED"):
-        if bak_file.exists():
-            os.replace(bak_file, data_file)
-    elif state in ("DB_COMMITTED", "VERIFIED"):
-        if bak_file.exists():
-            bak_file.unlink()
+        state = "FILE_SWAPPED" if _backup_path_for(data_file).exists() else "INITIATED"
+    for cpath in companion_paths:
+        ctmp = _tmp_path_for(cpath)
+        cbak = _backup_path_for(cpath)
+        if ctmp.exists():
+            ctmp.unlink()
+        if state in ("INITIATED", "FILE_STAGED", "FILE_SWAPPED"):
+            if cbak.exists():
+                os.replace(cbak, cpath)
+        elif state in ("DB_COMMITTED", "VERIFIED"):
+            if cbak.exists():
+                cbak.unlink()
     if journal_file.exists():
         journal_file.unlink()
 
 
-def _stream_stage_file(data_file: Path, tmp_file: Path, target_user: str) -> int:
-    """Streams filtered records to tmp_file, preserving rows where user_id is NULL/NaN."""
-    hmac_seed = (
-        os.getenv("LOAN_HMAC_SECRET_KEY")
-        or os.getenv("EXPECTED_API_KEY")
-        or "loan-default-hmac-key"
-    )
-    hmac_token = (
-        "usr_hmac_"
-        + hmac.new(
-            hmac_seed.encode("utf-8"), target_user.encode("utf-8"), hashlib.sha256
-        ).hexdigest()[:16]
-    )
-    target_tokens = {target_user, hmac_token}
+def _stage_single_jsonl(src_file: Path, tmp_file: Path, target_tokens: set[str]) -> int:
+    removed = 0
+    open_fn = gzip.open if src_file.suffix == ".gz" else open
+    with (
+        open_fn(src_file, "rt", encoding="utf-8") as f_in,
+        open_fn(tmp_file, "wt", encoding="utf-8") as f_out,
+    ):
+        for line in f_in:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            if str(rec.get("user_id")) in target_tokens:
+                removed += 1
+            else:
+                f_out.write(line if line.endswith("\n") else line + "\n")
+    return removed
+
+
+def _stream_stage_file(
+    data_file: Path,
+    tmp_file: Path,
+    target_user: str,
+    companion_files: list[Path] | None = None,
+) -> int:
+    """Streams filtered records to tmp_file(s), preserving rows where user_id is NULL/NaN."""
     if data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz"):
-        original_count = 0
-        kept_rows = 0
-        open_in = gzip.open if data_file.suffix == ".gz" else open
-        open_out = gzip.open if data_file.suffix == ".gz" else open
-        with (
-            open_in(data_file, "rt", encoding="utf-8") as f_in,
-            open_out(tmp_file, "wt", encoding="utf-8") as f_out,
-        ):
-            for line in f_in:
-                if not line.strip():
-                    continue
-                original_count += 1
-                rec = json.loads(line)
-                if str(rec.get("user_id")) not in target_tokens:
-                    f_out.write(line if line.endswith("\n") else line + "\n")
-                    kept_rows += 1
-        # Also purge any rotated .jsonl.<idx> or .jsonl.<idx>.gz archives alongside data_file
-        if data_file.suffix == ".jsonl":
-            for idx in range(1, 10):
-                for cand in (
-                    data_file.with_suffix(f"{data_file.suffix}.{idx}.gz"),
-                    data_file.with_suffix(f"{data_file.suffix}.{idx}"),
-                ):
-                    if cand.is_file():
-                        c_open = gzip.open if cand.suffix == ".gz" else open
-                        c_tmp = cand.with_suffix(cand.suffix + ".tmp")
-                        with (
-                            c_open(cand, "rt", encoding="utf-8") as cf_in,
-                            c_open(c_tmp, "wt", encoding="utf-8") as cf_out,
-                        ):
-                            for cline in cf_in:
-                                if not cline.strip():
-                                    continue
-                                original_count += 1
-                                crec = json.loads(cline)
-                                if str(crec.get("user_id")) not in target_tokens:
-                                    cf_out.write(
-                                        cline if cline.endswith("\n") else cline + "\n"
-                                    )
-                                    kept_rows += 1
-                        os.replace(c_tmp, cand)
-        return original_count - kept_rows
+        target_tokens = _compute_target_tokens(target_user, require_hmac_key=True)
+        targets = companion_files or [data_file]
+        total_removed = 0
+        for cfile in targets:
+            total_removed += _stage_single_jsonl(
+                cfile, _tmp_path_for(cfile), target_tokens
+            )
+        return total_removed
 
     if data_file.suffix == ".parquet":
         dataset = ds.dataset(data_file, format="parquet")
@@ -176,8 +201,13 @@ def _stream_stage_file(data_file: Path, tmp_file: Path, target_user: str) -> int
     return original_count - kept_rows
 
 
-def _verify_purge_completion(db_file: Path, data_file: Path, target_user: str) -> None:
-    """Verifies zero residual records exist for target_user in SQLite and batch storage."""
+def _verify_purge_completion(
+    db_file: Path,
+    data_file: Path,
+    target_user: str,
+    companion_files: list[Path] | None = None,
+) -> None:
+    """Verifies zero residual records exist for target_user in SQLite and batch/telemetry storage."""
     conn = sqlite3.connect(db_file)
     try:
         cur = conn.cursor()
@@ -199,29 +229,9 @@ def _verify_purge_completion(db_file: Path, data_file: Path, target_user: str) -
     finally:
         conn.close()
 
-    hmac_seed = (
-        os.getenv("LOAN_HMAC_SECRET_KEY")
-        or os.getenv("EXPECTED_API_KEY")
-        or "loan-default-hmac-key"
-    )
-    hmac_token = (
-        "usr_hmac_"
-        + hmac.new(
-            hmac_seed.encode("utf-8"), target_user.encode("utf-8"), hashlib.sha256
-        ).hexdigest()[:16]
-    )
-    target_tokens = {target_user, hmac_token}
     if data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz"):
-        check_files = [data_file]
-        if data_file.suffix == ".jsonl":
-            for idx in range(1, 10):
-                for cand in (
-                    data_file.with_suffix(f"{data_file.suffix}.{idx}.gz"),
-                    data_file.with_suffix(f"{data_file.suffix}.{idx}"),
-                ):
-                    if cand.is_file():
-                        check_files.append(cand)
-        for cfile in check_files:
+        target_tokens = _compute_target_tokens(target_user, require_hmac_key=True)
+        for cfile in companion_files or [data_file]:
             c_open = gzip.open if cfile.suffix == ".gz" else open
             with c_open(cfile, "rt", encoding="utf-8") as f:
                 for line in f:
@@ -276,29 +286,44 @@ def execute_right_to_be_forgotten(
         try:
             _recover_pending_journal(data_file)
             journal_file = _journal_path_for(data_file)
-            bak_file = _backup_path_for(data_file)
-            tmp_file = _tmp_path_for(data_file)
+            companion_files = (
+                _discover_jsonl_targets(data_file)
+                if (
+                    data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz")
+                )
+                else [data_file]
+            )
             journal_state = {
                 "operation_id": uuid.uuid4().hex,
                 "user_id": target_user,
                 "db_path": str(db_file.resolve()),
                 "data_path": str(data_file.resolve()),
+                "companion_files": [str(p.resolve()) for p in companion_files],
                 "state": "INITIATED",
             }
             _write_journal(journal_file, journal_state)
             try:
-                file_rows_removed = _stream_stage_file(data_file, tmp_file, target_user)
+                file_rows_removed = _stream_stage_file(
+                    data_file,
+                    _tmp_path_for(data_file),
+                    target_user,
+                    companion_files=companion_files,
+                )
                 journal_state["state"] = "FILE_STAGED"
                 _write_journal(journal_file, journal_state)
-                shutil.copy2(data_file, bak_file)
-                os.replace(tmp_file, data_file)
+                for cfile in companion_files:
+                    shutil.copy2(cfile, _backup_path_for(cfile))
+                    os.replace(_tmp_path_for(cfile), cfile)
                 journal_state["state"] = "FILE_SWAPPED"
                 _write_journal(journal_file, journal_state)
             except Exception as e:
-                if tmp_file.exists():
-                    tmp_file.unlink()
-                if bak_file.exists():
-                    os.replace(bak_file, data_file)
+                for cfile in companion_files:
+                    ctmp = _tmp_path_for(cfile)
+                    cbak = _backup_path_for(cfile)
+                    if ctmp.exists():
+                        ctmp.unlink()
+                    if cbak.exists():
+                        os.replace(cbak, cfile)
                 if journal_file.exists():
                     journal_file.unlink()
                 if isinstance(e, PurgeError):
@@ -333,8 +358,10 @@ def execute_right_to_be_forgotten(
                 _write_journal(journal_file, journal_state)
             except Exception as e:
                 conn.rollback()
-                if bak_file.exists():
-                    os.replace(bak_file, data_file)
+                for cfile in companion_files:
+                    cbak = _backup_path_for(cfile)
+                    if cbak.exists():
+                        os.replace(cbak, cfile)
                 if journal_file.exists():
                     journal_file.unlink()
                 raise PurgeError(
@@ -347,12 +374,16 @@ def execute_right_to_be_forgotten(
                 conn.close()
 
             try:
-                _verify_purge_completion(db_file, data_file, target_user)
+                _verify_purge_completion(
+                    db_file, data_file, target_user, companion_files=companion_files
+                )
                 journal_state["state"] = "VERIFIED"
                 _write_journal(journal_file, journal_state)
             finally:
-                if bak_file.exists():
-                    bak_file.unlink()
+                for cfile in companion_files:
+                    cbak = _backup_path_for(cfile)
+                    if cbak.exists():
+                        cbak.unlink()
                 if journal_file.exists():
                     journal_file.unlink()
 

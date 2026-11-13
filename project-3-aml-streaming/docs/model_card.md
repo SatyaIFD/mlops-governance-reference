@@ -39,6 +39,6 @@ The model excludes demographic attributes, operating strictly on transactional a
 
 ## 5. Out-of-Sample Performance & Operational Guardrails
 * **Alert Threshold:** `0.68` (persisted in `aml_streaming_model.meta.json` and SHA-256 verified on load).
-* **Out-of-Sample Recall:** `58.2%` (`71 / 122` laundering events intercepted; target SLO $\ge 20.0\%$).
-* **Out-of-Sample Alert Precision & Volume:** `0.87%` (`8,119` alerts written to `artifacts/aml_alerts.jsonl` across 100,000 scored events, or ~213 alerts per true positive).
+* **Out-of-Sample Recall:** `23.77%` (`29 / 122` laundering events intercepted; target SLO $\ge 20.0\%$).
+* **Out-of-Sample Alert Precision & Volume:** `0.48%` (`6,068` alerts written to `artifacts/aml_alerts.jsonl` across 100,000 scored events, or ~209 alerts per true positive).
 * **Fallback Strategy:** Malformed or failed events route to `artifacts/dlq/dead_letter_queue.jsonl` via `record_processing_failure()`.

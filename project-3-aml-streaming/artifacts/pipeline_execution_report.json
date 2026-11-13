@@ -1,17 +1,17 @@
 {
-  "execution_timestamp_utc": "2026-11-13T04:58:06.495706+00:00",
-  "status": "COMPLETE",
+  "execution_timestamp_utc": "2026-11-13T07:36:52.769365+00:00",
+  "status": "FAILED_MODEL_LOAD",
   "data_governance": {
-    "total_ingested": 200000,
-    "clean_events": 200000,
+    "total_ingested": 0,
+    "clean_events": 0,
     "dlq_events": 0,
     "data_quality_pct": 100.0
   },
   "model_metadata": {
     "artifact_path": "aml_streaming_model",
-    "calibrated_threshold": 0.68,
-    "model_sha256": "a845b43b6365c93e39b818990b5e83050ca2028592589cd99bfd316987c98a99",
-    "mlflow_run_id": "5ee176c20fe84b6db6c1d811e058f51f",
+    "calibrated_threshold": 0.5,
+    "model_sha256": "4b4fecd5d7e4c45579f53ad24c7fae262165c597f551e391698dfbe09d8b47c7",
+    "mlflow_run_id": "run_overlap_test",
     "features_used": [
       "Amount",
       "pass_through_ratio_1h",
@@ -21,16 +21,17 @@
       "receiver_inflow_count_1h",
       "receiver_inflow_amount_1h"
     ],
-    "warmup_events_count": 100000
+    "training_window_end_row": 100000,
+    "warmup_events_count": 0
   },
   "streaming_performance": {
-    "total_processed": 100000,
-    "anomalies_flagged": 8119,
+    "total_processed": 0,
+    "anomalies_flagged": 0,
     "replayed_alerts_preserved": 0,
-    "total_alerts_in_file": 8119,
-    "actual_laundering_events": 122,
-    "laundering_intercepted": 71,
-    "recall_percentage": 58.2,
-    "precision_percentage": 0.87
+    "total_alerts_in_file": 0,
+    "actual_laundering_events": 0,
+    "laundering_intercepted": 0,
+    "recall_percentage": 0.0,
+    "precision_percentage": 0.0
   }
 }

@@ -1,3 +1,6 @@
+import os
+
+os.environ.setdefault("AML_HMAC_SECRET_KEY", "test-aml-hmac-secret-key")
 import csv
 import json
 from datetime import datetime, timedelta
@@ -632,3 +635,34 @@ def test_dlq_replay_scores_anomalies_and_pipeline_preserves_replayed_alerts(
     )
     run_production_stream_pipeline(max_events=15, delay_seconds=0.0, warmup_events=5)
     assert '"source": "dlq_replay"' in alerts_file.read_text(encoding="utf-8")  # nosec B101
+
+
+def test_training_window_ends_before_scoring_starts(tmp_path, monkeypatch):
+    """Verifies that train.py default window ends at row 100,000 and pipeline rejects overlapping warmup windows."""
+    import inspect
+    from src.models.train import prepare_training_data
+    from src.streaming.pipeline import run_production_stream_pipeline
+
+    sig = inspect.signature(prepare_training_data)
+    warmup_default = sig.parameters["warmup_rows"].default
+    train_default = sig.parameters["train_rows"].default
+    assert warmup_default + train_default == 100000  # nosec B101
+
+    csv_path = tmp_path / "SAML-D.csv"
+    model_path = tmp_path / "aml_streaming_model"
+    df_train = pd.DataFrame(
+        {col: [100.0, 9100.0] * 10 for col in CANONICAL_AML_FEATURES}
+    )
+    df_train["Is_laundering"] = [0, 1] * 10
+    det = AMLAnomalyDetector(threshold=0.50)
+    det.train(df_train)
+    det.training_window_end_row = 100000
+    det.save(model_path, mlflow_run_id="run_overlap_test")
+
+    monkeypatch.setenv("AML_DATA_PATH", str(csv_path))
+    monkeypatch.setenv("AML_MODEL_PATH", str(model_path))
+    with pytest.raises(SystemExit) as exc:
+        run_production_stream_pipeline(
+            max_events=10, delay_seconds=0.0, warmup_events=50000
+        )
+    assert exc.value.code == 1  # nosec B101

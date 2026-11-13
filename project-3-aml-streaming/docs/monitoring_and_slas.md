@@ -18,7 +18,7 @@ This document specifies the operational SLAs, Service Level Objectives (SLOs), a
 
 ## 📈 Telemetry & Health Monitoring
 
-The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) with lifecycle `status` values (`"IN_PROGRESS"`, `"COMPLETE"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, or `"FAILED"`) and heartbeat states (`"WARMING_UP"`, `"HEALTHY"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, `"FAILED"`). At ~0.12% base laundering prevalence, `0.87%` alert precision corresponds to ~213 alerts per true positive across `8,119` flagged events:
+The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_report.json`) with lifecycle `status` values (`"IN_PROGRESS"`, `"COMPLETE"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, or `"FAILED"`) and heartbeat states (`"WARMING_UP"`, `"HEALTHY"`, `"FAILED_MODEL_LOAD"`, `"FAILED_ZERO_SCORED"`, `"INTERRUPTED"`, `"FAILED"`). At ~0.12% base laundering prevalence, `0.48%` alert precision corresponds to ~209 alerts per true positive across `6,068` flagged events:
 
 ```json
 {
@@ -48,11 +48,11 @@ The pipeline outputs structured JSON metadata (`artifacts/pipeline_execution_rep
   },
   "streaming_performance": {
     "total_processed": 100000,
-    "anomalies_flagged": 8119,
+    "anomalies_flagged": 6068,
     "actual_laundering_events": 122,
     "laundering_intercepted": 29,
     "recall_percentage": 23.77,
-    "precision_percentage": 0.47
+    "precision_percentage": 0.48
   }
 }
 ```

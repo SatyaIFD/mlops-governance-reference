@@ -31,8 +31,18 @@ def compute_payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
+def get_required_loan_hmac_key() -> bytes:
+    """Returns the dedicated LOAN_HMAC_SECRET_KEY bytes, raising RuntimeError if unset."""
+    raw_key = os.getenv("LOAN_HMAC_SECRET_KEY", "").strip()
+    if not raw_key:
+        raise RuntimeError(
+            "LOAN_HMAC_SECRET_KEY environment variable must be set for user_id pseudonymization."
+        )
+    return raw_key.encode("utf-8")
+
+
 def pseudonymize_user_id(raw_user_id: str | None) -> str | None:
-    """HMAC-pseudonymizes an optional applicant/user identifier, returning None when anonymous."""
+    """HMAC-pseudonymizes an optional applicant/user identifier using LOAN_HMAC_SECRET_KEY, returning None when anonymous."""
     if raw_user_id is None:
         return None
     val = str(raw_user_id).strip()
@@ -40,14 +50,8 @@ def pseudonymize_user_id(raw_user_id: str | None) -> str | None:
         return None
     if val.startswith("usr_hmac_"):
         return val
-    hmac_seed = (
-        os.getenv("LOAN_HMAC_SECRET_KEY")
-        or os.getenv("EXPECTED_API_KEY")
-        or "loan-default-hmac-key"
-    )
-    digest = hmac.new(
-        hmac_seed.encode("utf-8"), val.encode("utf-8"), hashlib.sha256
-    ).hexdigest()[:16]
+    key_bytes = get_required_loan_hmac_key()
+    digest = hmac.new(key_bytes, val.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
     return f"usr_hmac_{digest}"
 
 
@@ -72,7 +76,10 @@ def iter_telemetry_log_files(
         telemetry_log_path.parent.is_dir()
         and telemetry_log_path.name == "telemetry_logs.jsonl"
     ):
-        for pod_file in sorted(telemetry_log_path.parent.glob("telemetry_*.jsonl*")):
+        for pod_file in sorted(
+            telemetry_log_path.parent.glob("telemetry_*.jsonl*"),
+            key=lambda p: p.stat().st_mtime if p.exists() else 0.0,
+        ):
             if (
                 pod_file.is_file()
                 and not pod_file.name.endswith(".lock")
@@ -106,16 +113,27 @@ def stream_telemetry_records(
                         continue
 
 
-def _compress_file_async(raw_path: Path, gz_path: Path) -> None:
+def _compress_file_async(
+    raw_path: Path, gz_path: Path, lock_path: Path | None = None
+) -> None:
     def _worker():
         try:
-            if raw_path.is_file():
-                tmp_gz = gz_path.with_suffix(".gz.tmp")
-                with open(raw_path, "rb") as f_in, gzip.open(tmp_gz, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-                os.replace(tmp_gz, gz_path)
-                if raw_path.exists():
-                    raw_path.unlink()
+            if not raw_path.is_file():
+                return
+            tmp_gz = gz_path.with_suffix(".gz.tmp")
+            with open(raw_path, "rb") as f_in, gzip.open(tmp_gz, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            active_lock = lock_path or raw_path.with_suffix(".lock")
+            with open(active_lock, "w", encoding="utf-8") as lf:
+                fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
+                try:
+                    if raw_path.is_file():
+                        os.replace(tmp_gz, gz_path)
+                        raw_path.unlink()
+                    elif tmp_gz.exists():
+                        tmp_gz.unlink()
+                finally:
+                    fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
         except OSError:
             return
 
@@ -241,7 +259,7 @@ class ModelObservabilityLogger:
             finally:
                 fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
         if rotated_pair is not None:
-            _compress_file_async(rotated_pair[0], rotated_pair[1])
+            _compress_file_async(rotated_pair[0], rotated_pair[1], lock_path=lock_path)
 
     def read_latest_telemetry(self, tail_count: int = 5) -> list[dict[str, Any]]:
         """Streams telemetry records into a bounded deque(maxlen=tail_count) in O(tail_count) RAM."""

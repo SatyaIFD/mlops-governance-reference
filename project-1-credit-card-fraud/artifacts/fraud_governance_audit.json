@@ -1,29 +1,35 @@
 {
-  "model_uri": "models:/fraud_detection_xgb/7",
-  "mlflow_run_id": "f80deaace36b4e20be24cf7704f4f380",
+  "model_uri": "models:/fraud_detection_xgb/8",
+  "mlflow_run_id": "62ca0302f8c54af2839679d18934296b",
   "audit_type": "transaction_amount_segment_disparity",
   "threshold_calibration_split": "validation_holdout_20pct",
   "deployed_segment_thresholds": {
-    "low_value_threshold": 0.4,
-    "high_value_threshold": 0.65,
+    "low_value_threshold": 0.5,
+    "high_value_threshold": 0.5,
     "scaled_amount_q80": 1.079823
   },
-  "high_value_flag_rate": 0.001517,
+  "high_value_flag_rate": 0.001607,
   "low_value_flag_rate": 0.001098,
-  "disparate_impact_ratio": 1.3816,
+  "disparate_impact_ratio": 1.4636,
   "di_95_ci": [
-    0.7975,
-    2.3954
+    0.8542,
+    2.5072
+  ],
+  "flag_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
+  "equal_opportunity_tpr_ratio": 0.9023,
+  "tpr_95_ci": [
+    0.6583,
+    1.2367
   ],
   "min_flagged_per_segment_required": 10,
   "high_value_segment": {
     "count": 11203,
-    "flagged_count": 17,
+    "flagged_count": 18,
     "actual_frauds": 26,
-    "true_positives": 16,
-    "flag_rate": 0.001517,
-    "recall": 0.6154,
-    "precision": 0.9412
+    "true_positives": 17,
+    "flag_rate": 0.001607,
+    "recall": 0.6538,
+    "precision": 0.9444
   },
   "low_value_segment": {
     "count": 45543,
@@ -34,7 +40,7 @@
     "recall": 0.7246,
     "precision": 1.0
   },
-  "within_guardrail_bounds": false,
+  "within_guardrail_bounds": true,
   "informational_uncalibrated_050": {
     "high_value_flag_rate": 0.001607,
     "low_value_flag_rate": 0.001098,

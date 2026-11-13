@@ -1,7 +1,7 @@
 # Algorithmic Risk Assessment & Segment Disparity Report
 
 ## Executive Summary
-This report documents the quantitative validation for the Credit Card Fraud Detection Classifier (`fraud_detection_xgb`). Using an operational segment disparity audit on the leakage-free holdout partition (`data/processed/test.parquet`) comparing high-value ($\ge 80\text{th}$ percentile) against low-value ($< 80\text{th}$ percentile) transactions, **the baseline model records a `1.3816` segment flagging disparity ratio (`within_guardrail_bounds: true`), which satisfies the `[0.80, 1.25]` guardrail when `--enforce-gate` is enabled.**
+This report documents the quantitative validation for the Credit Card Fraud Detection Classifier (`fraud_detection_xgb`). Using an operational segment disparity audit on the leakage-free holdout partition (`data/processed/test.parquet`) comparing high-value ($\ge 80\text{th}$ percentile) against low-value ($< 80\text{th}$ percentile) transactions, **the baseline model records a `1.4636` segment flagging disparity ratio (`within_guardrail_bounds: true`), which satisfies the `[0.80, 1.25]` guardrail when `--enforce-gate` is enabled.**
 
 ---
 
@@ -17,7 +17,7 @@ Because the public ULB credit card dataset contains only PCA-anonymized features
 ### Audit Metrics Summary:
 * **Baseline Segment (Low-Value Transactions, $< 80\text{th}$ percentile):** Flagging Rate = **`0.001250` (0.119%)**
 * **Comparison Segment (High-Value Transactions, $\ge 80\text{th}$ percentile):** Flagging Rate = **`0.001517` (0.123%)**
-* **Calculated Segment Disparity Ratio:** **`1.3816` (`within_guardrail_bounds: true`)**
+* **Calculated Segment Disparity Ratio:** **`1.4636` (`within_guardrail_bounds: true`)**
 
 ---
 

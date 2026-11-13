@@ -40,7 +40,7 @@ def _extract_label(tx: dict) -> int:
 
 
 def prepare_training_data(
-    csv_path: Path, warmup_rows: int = 100000, train_rows: int = 50000
+    csv_path: Path, warmup_rows: int = 50000, train_rows: int = 50000
 ) -> pd.DataFrame:
     total_rows = warmup_rows + train_rows
     print(
@@ -77,7 +77,7 @@ def prepare_training_data(
 
 
 def select_empirical_threshold(y_true: np.ndarray, probs: np.ndarray) -> float:
-    """Selects the highest precision F1 threshold on validation data subject to recall >= 0.25."""
+    """Selects the probability threshold maximizing F1 on validation data subject to recall >= 0.25 (falling back to unconstrained F1)."""
     if len(np.unique(y_true)) < 2:
         return 0.40
     best_thresh = 0.40
@@ -152,6 +152,7 @@ def train_and_register():
 
         detector = AMLAnomalyDetector(threshold=optimal_threshold)
         detector.model = model
+        detector.training_window_end_row = 100000
         detector.save(skops_artifact_path, mlflow_run_id=run.info.run_id)
 
         signature = infer_signature(X_train, model.predict_proba(X_train)[:, 1])

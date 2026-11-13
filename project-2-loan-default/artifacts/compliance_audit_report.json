@@ -1,5 +1,5 @@
 {
-    "mlflow_run_id": "91704ff564ca4413b3e147716d550e02",
+    "mlflow_run_id": "066c94886b1041b493f1df5211bd448b",
     "performance_metrics": {
         "test_roc_auc": 0.7197,
         "test_accuracy": 0.731,
@@ -40,7 +40,12 @@
             "elderly_62_plus_approval_rate": 0.9101,
             "under_62_approval_rate": 0.6843,
             "elderly_vs_under_62_approval_ratio": 1.33,
-            "elderly_62_plus_not_disadvantaged": true
+            "elderly_di_95_ci": [
+                1.3175,
+                1.3426
+            ],
+            "elderly_62_plus_not_disadvantaged": true,
+            "regulatory_note": "Statistical non-disadvantage gate (95% CI lower bound >= 1.0 for Age >= 62 vs Age < 62); formal 12 CFR 1002.6(b)(2) empirical validation subject to compliance counsel review."
         }
     },
     "holdout_fairness_metrics": {
@@ -78,7 +83,12 @@
             "elderly_62_plus_approval_rate": 0.9101,
             "under_62_approval_rate": 0.6843,
             "elderly_vs_under_62_approval_ratio": 1.33,
-            "elderly_62_plus_not_disadvantaged": true
+            "elderly_di_95_ci": [
+                1.3175,
+                1.3426
+            ],
+            "elderly_62_plus_not_disadvantaged": true,
+            "regulatory_note": "Statistical non-disadvantage gate (95% CI lower bound >= 1.0 for Age >= 62 vs Age < 62); formal 12 CFR 1002.6(b)(2) empirical validation subject to compliance counsel review."
         }
     },
     "compliance": {
@@ -92,7 +102,7 @@
     "live_telemetry_fairness": null,
     "synthetic_telemetry_fairness": {
         "data_source": "synthetic_representative_simulation",
-        "model_version": "v7",
+        "model_version": "v8",
         "decision_threshold": 0.1358,
         "demographic_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
         "disparate_impact_ratio": 0.8025,
@@ -109,7 +119,7 @@
     "live_telemetry_fairness_by_source": {
         "synthetic_representative_simulation": {
             "data_source": "synthetic_representative_simulation",
-            "model_version": "v7",
+            "model_version": "v8",
             "decision_threshold": 0.1358,
             "demographic_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
             "disparate_impact_ratio": 0.8025,
@@ -125,9 +135,9 @@
         }
     },
     "live_telemetry_fairness_by_policy": {
-        "synthetic_representative_simulation|model=v7|threshold=0.1358": {
-            "data_source": "synthetic_representative_simulation|model=v7|threshold=0.1358",
-            "model_version": "v7",
+        "synthetic_representative_simulation|model=v8|threshold=0.1358": {
+            "data_source": "synthetic_representative_simulation|model=v8|threshold=0.1358",
+            "model_version": "v8",
             "decision_threshold": 0.1358,
             "demographic_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
             "disparate_impact_ratio": 0.8025,

@@ -25,12 +25,14 @@ class KeyVersionedPseudonymizer:
         secret_key: str | None = None,
     ):
         self.key_version = key_version or os.getenv("AML_HMAC_KEY_VERSION", "v1")
-        raw_secret = secret_key or os.getenv(
-            "AML_HMAC_SECRET_KEY", "aml-default-dev-hmac-secret-key"
-        )
+        raw_secret = (secret_key or os.getenv("AML_HMAC_SECRET_KEY") or "").strip()
         self._secret_bytes = raw_secret.encode("utf-8")
 
     def pseudonymize(self, account_id: Any) -> str:
+        if not self._secret_bytes:
+            raise RuntimeError(
+                "AML_HMAC_SECRET_KEY must be set when account pseudonymization is enabled."
+            )
         val = str(account_id).strip()
         if not val:
             return "hmac_empty"

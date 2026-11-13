@@ -18,11 +18,12 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
+        fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
       containers:
       - name: loan-prediction-container
-        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:v0.5.16
+        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:v0.5.17
         imagePullPolicy: IfNotPresent
         securityContext:
           readOnlyRootFilesystem: true
@@ -46,6 +47,11 @@ spec:
             secretKeyRef:
               name: loan-api-secrets
               key: expected-api-key
+        - name: LOAN_HMAC_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: loan-api-secrets
+              key: loan-hmac-secret-key
         ports:
         - containerPort: 8000
         resources:
