@@ -9,6 +9,7 @@ from collections import deque
 import fcntl
 import gzip
 import hashlib
+import hmac
 import json
 import os
 import shutil
@@ -30,11 +31,32 @@ def compute_payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
+def pseudonymize_user_id(raw_user_id: str | None) -> str | None:
+    """HMAC-pseudonymizes an optional applicant/user identifier, returning None when anonymous."""
+    if raw_user_id is None:
+        return None
+    val = str(raw_user_id).strip()
+    if not val:
+        return None
+    if val.startswith("usr_hmac_"):
+        return val
+    hmac_seed = (
+        os.getenv("LOAN_HMAC_SECRET_KEY")
+        or os.getenv("EXPECTED_API_KEY")
+        or "loan-default-hmac-key"
+    )
+    digest = hmac.new(
+        hmac_seed.encode("utf-8"), val.encode("utf-8"), hashlib.sha256
+    ).hexdigest()[:16]
+    return f"usr_hmac_{digest}"
+
+
 def iter_telemetry_log_files(
     telemetry_log_path: Path, max_archives: int = MAX_TELEMETRY_ARCHIVES
 ) -> list[Path]:
-    """Returns existing rotated archive files (.gz or plain) oldest-first followed by the active file."""
+    """Returns rotated archive files (.gz or plain), per-pod telemetry_*.jsonl* files, and the active file."""
     files: list[Path] = []
+    seen: set[Path] = set()
     for idx in range(max_archives, 0, -1):
         gz_cand = telemetry_log_path.with_suffix(
             f"{telemetry_log_path.suffix}.{idx}.gz"
@@ -42,9 +64,27 @@ def iter_telemetry_log_files(
         raw_cand = telemetry_log_path.with_suffix(f"{telemetry_log_path.suffix}.{idx}")
         if gz_cand.is_file():
             files.append(gz_cand)
+            seen.add(gz_cand.resolve())
         elif raw_cand.is_file():
             files.append(raw_cand)
-    if telemetry_log_path.is_file():
+            seen.add(raw_cand.resolve())
+    if (
+        telemetry_log_path.parent.is_dir()
+        and telemetry_log_path.name == "telemetry_logs.jsonl"
+    ):
+        for pod_file in sorted(telemetry_log_path.parent.glob("telemetry_*.jsonl*")):
+            if (
+                pod_file.is_file()
+                and not pod_file.name.endswith(".lock")
+                and not pod_file.name.endswith(".tmp")
+            ):
+                if (
+                    pod_file.resolve() not in seen
+                    and pod_file.resolve() != telemetry_log_path.resolve()
+                ):
+                    files.append(pod_file)
+                    seen.add(pod_file.resolve())
+    if telemetry_log_path.is_file() and telemetry_log_path.resolve() not in seen:
         files.append(telemetry_log_path)
     return files
 
@@ -160,8 +200,10 @@ class ModelObservabilityLogger:
 
         telemetry_entry = {
             "schema_version": TELEMETRY_SCHEMA_VERSION,
-            "user_id": str(
-                user_id or request_payload.get("user_id") or f"usr_{p_hash}"
+            "user_id": pseudonymize_user_id(
+                user_id
+                or request_payload.get("applicant_id")
+                or request_payload.get("user_id")
             ),
             "traffic_source": traffic_source,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),

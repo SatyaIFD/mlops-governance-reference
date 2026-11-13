@@ -17,7 +17,7 @@
 
 ## 3. Training & Out-of-Sample Evaluation Windows
 * **Base Dataset:** Synthetic AML Transaction Data (SAML-D)
-* **Training Window (`src/models/train.py`):** Ingests the first `100,000` events—using events `1–50,000` strictly to warm up the rolling 1h/24h state caches and events `50,001–100,000` (`40,000` train / `10,000` validation) to fit the classifier and select an empirical F1 probability cutoff (`0.65`). Note: because base laundering prevalence is ~0.1%, the 10,000-row validation slice contains roughly a dozen positives, so `0.65` is a lightweight heuristic cutoff rather than a probability-calibrated threshold.
+* **Training Window (`src/models/train.py`):** Ingests the first `100,000` events—using events `1–50,000` strictly to warm up the rolling 1h/24h state caches and events `50,001–100,000` (`40,000` train / `10,000` validation) to fit the classifier and select an empirical F1 probability cutoff (`0.68`). Note: because base laundering prevalence is ~0.1%, the 10,000-row validation slice contains roughly a dozen positives, so `0.68` is a lightweight heuristic cutoff rather than a probability-calibrated threshold.
 * **Out-of-Sample Streaming Window (`src/streaming/pipeline.py`):** Warms up `StreamingStateManager` across the entire `100,000`-event training prefix (`warmup_events_count: 100000`) before scoring events `100,001–200,000` (`total_processed: 100000`) strictly out-of-sample.
 
 ---
@@ -38,7 +38,7 @@ The model excludes demographic attributes, operating strictly on transactional a
 ---
 
 ## 5. Out-of-Sample Performance & Operational Guardrails
-* **Alert Threshold:** `0.65` (persisted in `aml_streaming_model.meta.json` and SHA-256 verified on load).
-* **Out-of-Sample Recall:** `23.77%` (`29 / 122` laundering events intercepted; target SLO $\ge 20.0\%$).
-* **Out-of-Sample Alert Precision & Volume:** `0.47%` (`6,172` alerts written to `artifacts/aml_alerts.jsonl` across 100,000 scored events, or ~213 alerts per true positive).
+* **Alert Threshold:** `0.68` (persisted in `aml_streaming_model.meta.json` and SHA-256 verified on load).
+* **Out-of-Sample Recall:** `58.2%` (`71 / 122` laundering events intercepted; target SLO $\ge 20.0\%$).
+* **Out-of-Sample Alert Precision & Volume:** `0.87%` (`8,119` alerts written to `artifacts/aml_alerts.jsonl` across 100,000 scored events, or ~213 alerts per true positive).
 * **Fallback Strategy:** Malformed or failed events route to `artifacts/dlq/dead_letter_queue.jsonl` via `record_processing_failure()`.

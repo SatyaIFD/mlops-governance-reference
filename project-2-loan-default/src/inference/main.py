@@ -46,7 +46,6 @@ EXPECTED_LOAN_FEATURES = [
     "InterestRate",
     "LoanTerm",
     "DTIRatio",
-    "is_young",
     "Education_High School",
     "Education_Master's",
     "Education_PhD",
@@ -367,10 +366,10 @@ def prepare_single_row_features(
     do not drop their sole category level, while reference categories naturally become 0.
     """
     raw_data = pd.DataFrame([payload_dict])
-    raw_data["is_young"] = (raw_data["Age"] < 30).astype(int)
-    # ECOA / Reg B (12 CFR 1002.5(d)(1)): drop MaritalStatus before model encoding
-    if "MaritalStatus" in raw_data.columns:
-        raw_data.drop(columns=["MaritalStatus"], inplace=True)
+    # ECOA / Reg B (12 CFR 1002.5(d)(1)): drop MaritalStatus and any cohort flag before model encoding
+    for col_drop in ("MaritalStatus", "is_young"):
+        if col_drop in raw_data.columns:
+            raw_data.drop(columns=[col_drop], inplace=True)
 
     categorical_cols = [
         "Education",
@@ -481,12 +480,14 @@ def predict_loan_risk(payload: LoanApplicationPayload, request: Request):
             if raw_src in ALLOWED_TRAFFIC_SOURCES
             else "unverified_client_traffic"
         )
+        applicant_id = request.headers.get("X-Applicant-ID", "").strip() or None
         obs_logger.log_inference_transaction(
             request_payload=payload_dict,
             response_data=response_body,
             latency_ms=latency_ms,
             status_code=200,
             traffic_source=validated_src,
+            user_id=applicant_id,
         )
     except Exception as log_err:
         print(f"⚠️ Telemetry logging warning: {log_err}", flush=True)

@@ -40,7 +40,7 @@ def _extract_label(tx: dict) -> int:
 
 
 def prepare_training_data(
-    csv_path: Path, warmup_rows: int = 50000, train_rows: int = 50000
+    csv_path: Path, warmup_rows: int = 100000, train_rows: int = 50000
 ) -> pd.DataFrame:
     total_rows = warmup_rows + train_rows
     print(
@@ -77,17 +77,26 @@ def prepare_training_data(
 
 
 def select_empirical_threshold(y_true: np.ndarray, probs: np.ndarray) -> float:
-    """Selects the probability threshold maximizing F1 on validation data (defaulting to 0.40 if degenerate)."""
+    """Selects the highest precision F1 threshold on validation data subject to recall >= 0.25."""
     if len(np.unique(y_true)) < 2:
         return 0.40
     best_thresh = 0.40
     best_f1 = -1.0
-    for candidate in np.linspace(0.25, 0.75, 11):
+    for candidate in np.linspace(0.25, 0.75, 21):
         preds = (probs >= candidate).astype(int)
+        pos = int((y_true == 1).sum())
+        rec = float(((preds == 1) & (y_true == 1)).sum() / pos) if pos > 0 else 0.0
         score = float(f1_score(y_true, preds, zero_division=0))
-        if score > best_f1:
+        if rec >= 0.25 and score >= best_f1:
             best_f1 = score
             best_thresh = float(round(candidate, 2))
+    if best_f1 < 0:
+        for candidate in np.linspace(0.25, 0.75, 11):
+            preds = (probs >= candidate).astype(int)
+            score = float(f1_score(y_true, preds, zero_division=0))
+            if score > best_f1:
+                best_f1 = score
+                best_thresh = float(round(candidate, 2))
     return best_thresh
 
 
