@@ -62,3 +62,18 @@ PYTHONPATH=project-2-loan-default python project-2-loan-default/src/validation/d
 PYTHONPATH=project-2-loan-default python project-2-loan-default/src/governance/audit.py
 
 ```
+
+---
+
+## ☸️ Kubernetes Deployment & Secret Provisioning
+
+Before applying the Kubernetes manifests in `project-2-loan-default/kubernetes/`, create the `loan-api-secrets` Secret out-of-band in the target namespace:
+
+```bash
+kubectl create secret generic loan-api-secrets \
+  --from-literal=expected-api-key="$(openssl rand -hex 32)" \
+  --from-literal=loan-hmac-secret-key="$(openssl rand -hex 32)"
+
+kubectl apply -f project-2-loan-default/kubernetes/service.yaml
+kubectl apply -f project-2-loan-default/kubernetes/deployment.yaml
+```

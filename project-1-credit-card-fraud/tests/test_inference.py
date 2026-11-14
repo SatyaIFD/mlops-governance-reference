@@ -14,21 +14,7 @@ from src.inference.main import app, verify_api_key
 
 @pytest.fixture(autouse=True)
 def mock_mlflow_model(tmp_path, monkeypatch):
-    """Injects a mock model, isolated segment_thresholds.json, and overrides API key for baseline functional tests."""
-    import json
-
-    art_dir = tmp_path / "artifacts"
-    art_dir.mkdir(parents=True, exist_ok=True)
-    default_policy = {
-        "low_value_threshold": 0.50,
-        "high_value_threshold": 0.70,
-        "scaled_amount_q80": 1.0,
-        "calibration_split": "validation_holdout_20pct",
-        "mlflow_run_id": "run_test",
-    }
-    (art_dir / "segment_thresholds.json").write_text(
-        json.dumps(default_policy), encoding="utf-8"
-    )
+    """Injects a mock model and overrides API key for baseline functional tests."""
     monkeypatch.setattr("src.inference.main.PROJECT_ROOT", tmp_path)
     app.dependency_overrides[verify_api_key] = lambda: None
     with (
@@ -47,11 +33,9 @@ def mock_mlflow_model(tmp_path, monkeypatch):
         mock_load.return_value = mock_model
 
         main.model = mock_model
-        main.segment_policy = default_policy.copy()
         yield mock_model
 
         main.model = None
-        main.segment_policy = None
         app.dependency_overrides.clear()
 
 

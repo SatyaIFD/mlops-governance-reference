@@ -1,7 +1,7 @@
 """
 Model Training & Orchestration Module - Project 1: Credit Card Fraud Detection
 Fits preprocessing strictly on the training split, splits train into 80% fit and 20% validation,
-applies segment-aware sample weights, and logs ROC-AUC, PR-AUC, F1, Precision, Recall, and Accuracy to MLflow.
+fits an XGBoost classifier on the leakage-free scaled features, and logs ROC-AUC, PR-AUC, F1, Precision, Recall, and Accuracy to MLflow.
 """
 
 import sys
@@ -9,7 +9,6 @@ from pathlib import Path
 
 import mlflow
 import mlflow.xgboost
-import numpy as np
 import pandas as pd
 import xgboost as xgb
 from mlflow.tracking import MlflowClient
@@ -32,25 +31,6 @@ from src.ingestion.utils import (
     split_and_scale_without_leakage,
 )
 from src.training.data_splitter import prepare_stratified_splits
-
-
-def _compute_segment_weights(X_train: pd.DataFrame, y_train: pd.Series) -> np.ndarray:
-    """Computes inverse joint-probability weights across (>=80th pct amount) and Class."""
-    q80 = float(X_train["scaled_amount"].quantile(0.80))
-    is_high = (X_train["scaled_amount"] >= q80).to_numpy()
-    y_arr = y_train.to_numpy()
-    n_total = len(y_arr)
-    weights = np.ones(n_total, dtype=float)
-    for seg_flag in (True, False):
-        seg_mask = is_high == seg_flag
-        n_seg = int(seg_mask.sum())
-        for cls_val in (0, 1):
-            cell_mask = seg_mask & (y_arr == cls_val)
-            n_cls = int((y_arr == cls_val).sum())
-            n_cell = int(cell_mask.sum())
-            if n_cell > 0 and n_seg > 0 and n_cls > 0:
-                weights[cell_mask] = (n_seg * n_cls) / (n_total * n_cell)
-    return weights
 
 
 def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
@@ -104,7 +84,6 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
         random_state=42,
         stratify=y_train_full,
     )
-    sample_weights = _compute_segment_weights(X_fit, y_fit)
 
     with mlflow.start_run() as run:
         print(f"🚀 Training scaled model inside active run: {run.info.run_id}")
@@ -121,7 +100,6 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
         model.fit(
             X_fit,
             y_fit,
-            sample_weight=sample_weights,
             eval_set=[(X_val, y_val)],
             verbose=False,
         )

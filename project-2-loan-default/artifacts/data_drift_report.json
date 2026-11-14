@@ -70,11 +70,39 @@
         "note": "informational_cohort_mix"
     },
     "live_telemetry_drift": {
-        "status": "SKIPPED_INSUFFICIENT_TELEMETRY",
-        "min_rows_required": 500,
-        "observation_count": 400,
-        "counts_by_source": {
-            "synthetic_representative_simulation": 400
+        "status": "STABLE",
+        "primary_source": "live_production_traffic",
+        "observation_count": 600,
+        "drift_detected_alert": false,
+        "by_source": {
+            "live_production_traffic": {
+                "data_source": "telemetry:live_production_traffic",
+                "observation_count": 600,
+                "drift_detected_alert": false,
+                "overall_status": "STABLE",
+                "metrics": {
+                    "CreditScore": {
+                        "psi_value": 0.0273,
+                        "status": "STABLE"
+                    },
+                    "Income": {
+                        "psi_value": 0.0177,
+                        "status": "STABLE"
+                    },
+                    "LoanAmount": {
+                        "psi_value": 0.0356,
+                        "status": "STABLE"
+                    },
+                    "DTIRatio": {
+                        "psi_value": 0.0109,
+                        "status": "STABLE"
+                    }
+                },
+                "informational_cohort_psi": {
+                    "psi_value": 0.328,
+                    "note": "informational_cohort_mix"
+                }
+            }
         }
     }
 }

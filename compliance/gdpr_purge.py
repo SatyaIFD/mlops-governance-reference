@@ -1,4 +1,5 @@
 import argparse
+from contextlib import ExitStack, contextmanager
 import fcntl
 import gzip
 import hashlib
@@ -35,23 +36,34 @@ def _tmp_path_for(data_file: Path) -> Path:
     return data_file.with_suffix(data_file.suffix + ".tmp")
 
 
-from contextlib import contextmanager
-
-
 def _lock_path_for(data_file: Path) -> Path:
     return data_file.with_suffix(data_file.suffix + ".purge.lock")
 
 
 @contextmanager
-def _writer_swap_lock(data_file: Path):
-    """Acquires the telemetry writer lock (.lock) strictly for the sub-millisecond os.replace swap."""
-    wlock = data_file.with_suffix(data_file.suffix + ".lock")
-    with open(wlock, "w", encoding="utf-8") as wf:
-        fcntl.flock(wf.fileno(), fcntl.LOCK_EX)
+def _writer_swap_lock(companion_files: list[Path]):
+    """Acquires the telemetry writer lock (.lock) across all active JSONL files strictly for delta catch-up and os.replace."""
+    lock_paths = sorted(
+        {
+            (
+                p.with_suffix(".jsonl.lock")
+                if p.name.endswith(".jsonl.gz")
+                else p.with_suffix(p.suffix + ".lock")
+            ).resolve()
+            for p in companion_files
+        }
+    )
+    with ExitStack() as stack:
+        handles = [
+            stack.enter_context(open(lp, "w", encoding="utf-8")) for lp in lock_paths
+        ]
+        for h in handles:
+            fcntl.flock(h.fileno(), fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(wf.fileno(), fcntl.LOCK_UN)
+            for h in reversed(handles):
+                fcntl.flock(h.fileno(), fcntl.LOCK_UN)
 
 
 def _compute_target_tokens(
@@ -135,14 +147,28 @@ def _recover_pending_journal(data_file: Path) -> None:
         journal_file.unlink()
 
 
-def _stage_single_jsonl(src_file: Path, tmp_file: Path, target_tokens: set[str]) -> int:
+def _stage_single_jsonl(
+    src_file: Path, tmp_file: Path, target_tokens: set[str]
+) -> tuple[int, int]:
     removed = 0
-    open_fn = gzip.open if src_file.suffix == ".gz" else open
-    with (
-        open_fn(src_file, "rt", encoding="utf-8") as f_in,
-        open_fn(tmp_file, "wt", encoding="utf-8") as f_out,
-    ):
-        for line in f_in:
+    if src_file.suffix == ".gz":
+        with (
+            gzip.open(src_file, "rt", encoding="utf-8") as f_in,
+            gzip.open(tmp_file, "wt", encoding="utf-8") as f_out,
+        ):
+            for line in f_in:
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                if str(rec.get("user_id")) in target_tokens:
+                    removed += 1
+                else:
+                    f_out.write(line if line.endswith("\n") else line + "\n")
+        return removed, src_file.stat().st_size
+
+    with open(src_file, "rb") as f_in, open(tmp_file, "w", encoding="utf-8") as f_out:
+        for raw_line in f_in:
+            line = raw_line.decode("utf-8")
             if not line.strip():
                 continue
             rec = json.loads(line)
@@ -150,7 +176,41 @@ def _stage_single_jsonl(src_file: Path, tmp_file: Path, target_tokens: set[str])
                 removed += 1
             else:
                 f_out.write(line if line.endswith("\n") else line + "\n")
-    return removed
+        end_offset = f_in.tell()
+    return removed, end_offset
+
+
+def _catch_up_appended_jsonl_delta(
+    cfile: Path,
+    bak_file: Path,
+    tmp_file: Path,
+    staged_offset: int,
+    target_tokens: set[str],
+) -> int:
+    """Reads any bytes appended to a plain .jsonl file since staged_offset under the writer lock."""
+    if cfile.suffix == ".gz" or not cfile.is_file():
+        return 0
+    curr_size = cfile.stat().st_size
+    if curr_size <= staged_offset:
+        return 0
+    removed_delta = 0
+    with open(cfile, "rb") as f_in:
+        f_in.seek(staged_offset)
+        delta_bytes = f_in.read()
+    if not delta_bytes:
+        return 0
+    with open(bak_file, "ab") as f_bak:
+        f_bak.write(delta_bytes)
+    with open(tmp_file, "a", encoding="utf-8") as f_tmp:
+        for line in delta_bytes.decode("utf-8").splitlines(keepends=True):
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            if str(rec.get("user_id")) in target_tokens:
+                removed_delta += 1
+            else:
+                f_tmp.write(line if line.endswith("\n") else line + "\n")
+    return removed_delta
 
 
 def _stream_stage_file(
@@ -158,6 +218,7 @@ def _stream_stage_file(
     tmp_file: Path,
     target_user: str,
     companion_files: list[Path] | None = None,
+    staged_offsets: dict[Path, int] | None = None,
 ) -> int:
     """Streams filtered records to tmp_file(s), preserving rows where user_id is NULL/NaN."""
     if data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz"):
@@ -165,9 +226,12 @@ def _stream_stage_file(
         targets = companion_files or [data_file]
         total_removed = 0
         for cfile in targets:
-            total_removed += _stage_single_jsonl(
+            rem, end_off = _stage_single_jsonl(
                 cfile, _tmp_path_for(cfile), target_tokens
             )
+            total_removed += rem
+            if staged_offsets is not None:
+                staged_offsets[cfile] = end_off
         return total_removed
 
     if data_file.suffix == ".parquet":
@@ -283,6 +347,7 @@ def execute_right_to_be_forgotten(
     db_path: str,
     data_path: str,
     _inject_db_failure: bool = False,
+    _on_staged_hook=None,
 ) -> dict:
     target_user = str(user_id).strip()
     if not target_user:
@@ -300,13 +365,13 @@ def execute_right_to_be_forgotten(
         try:
             _recover_pending_journal(data_file)
             journal_file = _journal_path_for(data_file)
-            companion_files = (
-                _discover_jsonl_targets(data_file)
-                if (
-                    data_file.suffix == ".jsonl" or data_file.name.endswith(".jsonl.gz")
-                )
-                else [data_file]
+            is_jsonl = data_file.suffix == ".jsonl" or data_file.name.endswith(
+                ".jsonl.gz"
             )
+            companion_files = (
+                _discover_jsonl_targets(data_file) if is_jsonl else [data_file]
+            )
+            staged_offsets: dict[Path, int] = {}
             journal_state = {
                 "operation_id": uuid.uuid4().hex,
                 "user_id": target_user,
@@ -322,12 +387,30 @@ def execute_right_to_be_forgotten(
                     _tmp_path_for(data_file),
                     target_user,
                     companion_files=companion_files,
+                    staged_offsets=staged_offsets,
                 )
+                # Copy backups BEFORE acquiring the telemetry writer lock
+                for cfile in companion_files:
+                    shutil.copy2(cfile, _backup_path_for(cfile))
                 journal_state["state"] = "FILE_STAGED"
                 _write_journal(journal_file, journal_state)
-                with _writer_swap_lock(data_file):
+                if _on_staged_hook is not None:
+                    _on_staged_hook()
+                target_tokens = (
+                    _compute_target_tokens(target_user, require_hmac_key=True)
+                    if is_jsonl
+                    else {target_user}
+                )
+                with _writer_swap_lock(companion_files):
                     for cfile in companion_files:
-                        shutil.copy2(cfile, _backup_path_for(cfile))
+                        if is_jsonl and cfile in staged_offsets:
+                            file_rows_removed += _catch_up_appended_jsonl_delta(
+                                cfile,
+                                _backup_path_for(cfile),
+                                _tmp_path_for(cfile),
+                                staged_offsets[cfile],
+                                target_tokens,
+                            )
                         os.replace(_tmp_path_for(cfile), cfile)
                 journal_state["state"] = "FILE_SWAPPED"
                 _write_journal(journal_file, journal_state)
@@ -373,7 +456,7 @@ def execute_right_to_be_forgotten(
                 _write_journal(journal_file, journal_state)
             except Exception as e:
                 conn.rollback()
-                with _writer_swap_lock(data_file):
+                with _writer_swap_lock(companion_files):
                     for cfile in companion_files:
                         cbak = _backup_path_for(cfile)
                         if cbak.exists():

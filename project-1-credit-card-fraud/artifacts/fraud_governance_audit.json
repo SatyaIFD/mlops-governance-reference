@@ -1,40 +1,58 @@
 {
-  "model_uri": "models:/fraud_detection_xgb/9",
-  "mlflow_run_id": "36a57bbbca254d5e91c2c2f201169b52",
+  "model_uri": "models:/fraud_detection_xgb/10",
+  "mlflow_run_id": "5f2a0bbf1bcc41808a7b9ab50b861540",
   "served_decision_threshold": 0.5,
   "audit_type": "operational_segment_performance_and_informational_flag_rate",
   "performance_metrics": {
-    "test_roc_auc": 0.9626,
-    "test_pr_auc": 0.8192
+    "test_roc_auc": 0.9659,
+    "test_pr_auc": 0.8166,
+    "overall_recall": 0.7158,
+    "overall_recall_95_ci": [
+      0.6181,
+      0.7967
+    ],
+    "overall_precision": 0.9855
   },
   "high_value_segment": {
     "count": 11203,
     "flagged_count": 18,
     "actual_frauds": 26,
+    "fraud_prevalence_pct": 0.232,
     "true_positives": 17,
     "flag_rate": 0.001607,
     "recall": 0.6538,
+    "recall_95_ci": [
+      0.4622,
+      0.8059
+    ],
     "precision": 0.9444
   },
   "low_value_segment": {
     "count": 45543,
-    "flagged_count": 50,
+    "flagged_count": 51,
     "actual_frauds": 69,
-    "true_positives": 50,
-    "flag_rate": 0.001098,
-    "recall": 0.7246,
+    "fraud_prevalence_pct": 0.152,
+    "true_positives": 51,
+    "flag_rate": 0.00112,
+    "recall": 0.7391,
+    "recall_95_ci": [
+      0.6249,
+      0.8281
+    ],
     "precision": 1.0
   },
   "informational_segment_flag_rate_telemetry": {
     "high_value_flag_rate": 0.001607,
-    "low_value_flag_rate": 0.001098,
-    "disparate_impact_ratio": 1.4636,
+    "low_value_flag_rate": 0.00112,
+    "high_value_fraud_prevalence_pct": 0.232,
+    "low_value_fraud_prevalence_pct": 0.152,
+    "disparate_impact_ratio": 1.4348,
     "di_95_ci": [
-      0.8542,
-      2.5072
+      0.8387,
+      2.4546
     ],
     "within_80_125_band": false,
-    "note": "Informational operational metric only; transaction amount tier is not a protected demographic attribute and higher-amount tiers exhibit higher base fraud prevalence (0.232% vs 0.151%)."
+    "note": "Informational operational metric only; transaction amount tier is not a protected demographic attribute and higher-amount tiers exhibit higher base fraud prevalence (0.232% vs 0.152%)."
   },
   "performance_gate_passed": true
 }
