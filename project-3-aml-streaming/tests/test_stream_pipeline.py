@@ -549,7 +549,7 @@ def test_pipeline_sigterm_signal_and_version_mismatch_rejection(tmp_path, monkey
     )
     with pytest.raises(SystemExit) as sig_exc:
         run_production_stream_pipeline(
-            max_events=10, delay_seconds=0.0, warmup_events=0
+            max_events=10, delay_seconds=0.0, warmup_events=4
         )
     assert sig_exc.value.code == 130  # nosec B101
     rep = json.loads(report_path.read_text(encoding="utf-8"))
@@ -633,7 +633,7 @@ def test_dlq_replay_scores_anomalies_and_pipeline_preserves_replayed_alerts(
             model_path,
         ),
     )
-    run_production_stream_pipeline(max_events=15, delay_seconds=0.0, warmup_events=5)
+    run_production_stream_pipeline(max_events=15, delay_seconds=0.0, warmup_events=6)
     assert '"source": "dlq_replay"' in alerts_file.read_text(encoding="utf-8")  # nosec B101
 
 
