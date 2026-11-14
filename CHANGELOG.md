@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.20](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.19...v0.5.20) (2026-11-14)
+
+
+### Bug Fixes
+
+* **governance:** add purge delta catch-up, wilson recall ci gate, and live telemetry evaluation ([#179](https://github.com/SatyaIFD/mlops-governance-reference/issues/179)) ([3e37bb8](https://github.com/SatyaIFD/mlops-governance-reference/commit/3e37bb84f23fbe938f6014dcfa5ccc3208b1e306))
+
 ## [0.5.19](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.18...v0.5.19) (2026-11-14)
 
 
