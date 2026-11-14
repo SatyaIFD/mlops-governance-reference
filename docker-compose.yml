@@ -128,6 +128,7 @@ services:
       - _PIP_ADDITIONAL_REQUIREMENTS=pyarrow==25.0.1 httpx==0.28.1
       - EXPECTED_API_KEY=${EXPECTED_API_KEY:?EXPECTED_API_KEY must be set in .env or environment}
       - LOAN_API_URL=http://mlops-api-gateway:8081/api/v1/loan-sim/predict
+      - LOAN_HMAC_SECRET_KEY=${LOAN_HMAC_SECRET_KEY:?LOAN_HMAC_SECRET_KEY must be set in .env or environment}
     command: standalone
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/health || exit 1"]

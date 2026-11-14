@@ -50,8 +50,16 @@ def pseudonymize_user_id(raw_user_id: str | None) -> str | None:
         return None
     if val.startswith("usr_hmac_"):
         return val
-    key_bytes = get_required_loan_hmac_key()
-    digest = hmac.new(key_bytes, val.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+    raw_key = os.getenv("LOAN_HMAC_SECRET_KEY", "").strip()
+    if not raw_key:
+        print(
+            "⚠️ LOAN_HMAC_SECRET_KEY unset; logging telemetry with user_id=None.",
+            flush=True,
+        )
+        return None
+    digest = hmac.new(
+        raw_key.encode("utf-8"), val.encode("utf-8"), hashlib.sha256
+    ).hexdigest()[:16]
     return f"usr_hmac_{digest}"
 
 

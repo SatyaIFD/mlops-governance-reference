@@ -23,7 +23,10 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from mlflow.tracking import MlflowClient
 from pydantic import BaseModel, ConfigDict, Field
-from src.monitoring.observability import ModelObservabilityLogger
+from src.monitoring.observability import (
+    ModelObservabilityLogger,
+    get_required_loan_hmac_key,
+)
 
 from compliance.dora_circuit_breaker import MLSystemCircuitBreaker
 from compliance.eu_ai_act_hitl_router import enforce_human_in_the_loop
@@ -275,6 +278,8 @@ async def lifespan(app: FastAPI):
             client, model_name, model_uri, target_ver
         )
         feature_columns = _validate_loaded_model_schema(loaded)
+        if os.getenv("LOAN_REQUIRE_HMAC_KEY_ON_STARTUP", "1") == "1":
+            get_required_loan_hmac_key()
         decision_threshold = _load_startup_decision_threshold(
             expected_run_id=expected_run_id
         )

@@ -113,7 +113,11 @@ def train_and_register():
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("aml_streaming_detection")
 
-    df = prepare_training_data(data_path)
+    warmup_rows = 50000
+    train_rows = 50000
+    df = prepare_training_data(
+        data_path, warmup_rows=warmup_rows, train_rows=train_rows
+    )
     if df["Is_laundering"].nunique() < 2:
         raise RuntimeError(
             "Training dataset contains only a single class; cannot fit a valid binary classifier."
@@ -152,7 +156,7 @@ def train_and_register():
 
         detector = AMLAnomalyDetector(threshold=optimal_threshold)
         detector.model = model
-        detector.training_window_end_row = 100000
+        detector.training_window_end_row = warmup_rows + train_rows
         detector.save(skops_artifact_path, mlflow_run_id=run.info.run_id)
 
         signature = infer_signature(X_train, model.predict_proba(X_train)[:, 1])

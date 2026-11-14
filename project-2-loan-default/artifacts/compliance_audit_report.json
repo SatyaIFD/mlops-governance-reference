@@ -1,5 +1,5 @@
 {
-    "mlflow_run_id": "066c94886b1041b493f1df5211bd448b",
+    "mlflow_run_id": "066fd7d0fd4e4a58bed39ef73e13ee33",
     "performance_metrics": {
         "test_roc_auc": 0.7197,
         "test_accuracy": 0.731,
@@ -102,7 +102,7 @@
     "live_telemetry_fairness": null,
     "synthetic_telemetry_fairness": {
         "data_source": "synthetic_representative_simulation",
-        "model_version": "v8",
+        "model_version": "v9",
         "decision_threshold": 0.1358,
         "demographic_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
         "disparate_impact_ratio": 0.8025,
@@ -119,7 +119,7 @@
     "live_telemetry_fairness_by_source": {
         "synthetic_representative_simulation": {
             "data_source": "synthetic_representative_simulation",
-            "model_version": "v8",
+            "model_version": "v9",
             "decision_threshold": 0.1358,
             "demographic_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
             "disparate_impact_ratio": 0.8025,
@@ -135,9 +135,9 @@
         }
     },
     "live_telemetry_fairness_by_policy": {
-        "synthetic_representative_simulation|model=v8|threshold=0.1358": {
-            "data_source": "synthetic_representative_simulation|model=v8|threshold=0.1358",
-            "model_version": "v8",
+        "synthetic_representative_simulation|model=v9|threshold=0.1358": {
+            "data_source": "synthetic_representative_simulation|model=v9|threshold=0.1358",
+            "model_version": "v9",
             "decision_threshold": 0.1358,
             "demographic_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
             "disparate_impact_ratio": 0.8025,

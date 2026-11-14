@@ -42,6 +42,7 @@ EXPECTED_MOCK_FEATURES = [
 def mock_mlflow_model(tmp_path, monkeypatch):
     """Injects a mock model with the exact 25 training one-hot columns and isolates telemetry logs."""
     monkeypatch.setenv("LOAN_TELEMETRY_LOG_PATH", str(tmp_path / "telemetry.jsonl"))
+    monkeypatch.setenv("LOAN_HMAC_SECRET_KEY", "test-loan-hmac-key")
     app.dependency_overrides[verify_api_key] = lambda: None
 
     with patch("src.inference.main.mlflow.xgboost.load_model") as mock_load:

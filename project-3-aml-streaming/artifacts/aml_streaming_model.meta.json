@@ -1,0 +1,17 @@
+{
+  "threshold": 0.68,
+  "feature_cols": [
+    "Amount",
+    "pass_through_ratio_1h",
+    "is_structuring",
+    "velocity_acceleration",
+    "fan_out_count_24h",
+    "receiver_inflow_count_1h",
+    "receiver_inflow_amount_1h"
+  ],
+  "sha256": "1fa3b9c3455016567d8b2ca7019c940824e7d08434af1ca6706be48bd9cac9ab",
+  "mlflow_run_id": "253ada0528764dd8acdae6816535e220",
+  "training_window_end_row": 100000,
+  "sklearn_version": "1.9.1",
+  "skops_version": "0.16.0"
+}
