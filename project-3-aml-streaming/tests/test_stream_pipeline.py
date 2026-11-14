@@ -549,7 +549,7 @@ def test_pipeline_sigterm_signal_and_version_mismatch_rejection(tmp_path, monkey
     )
     with pytest.raises(SystemExit) as sig_exc:
         run_production_stream_pipeline(
-            max_events=10, delay_seconds=0.0, warmup_events=0
+            max_events=10, delay_seconds=0.0, warmup_events=4
         )
     assert sig_exc.value.code == 130  # nosec B101
     rep = json.loads(report_path.read_text(encoding="utf-8"))
@@ -633,7 +633,7 @@ def test_dlq_replay_scores_anomalies_and_pipeline_preserves_replayed_alerts(
             model_path,
         ),
     )
-    run_production_stream_pipeline(max_events=15, delay_seconds=0.0, warmup_events=5)
+    run_production_stream_pipeline(max_events=15, delay_seconds=0.0, warmup_events=6)
     assert '"source": "dlq_replay"' in alerts_file.read_text(encoding="utf-8")  # nosec B101
 
 
@@ -659,10 +659,23 @@ def test_training_window_ends_before_scoring_starts(tmp_path, monkeypatch):
     det.training_window_end_row = 100000
     det.save(model_path, mlflow_run_id="run_overlap_test")
 
-    monkeypatch.setenv("AML_DATA_PATH", str(csv_path))
-    monkeypatch.setenv("AML_MODEL_PATH", str(model_path))
+    monkeypatch.setattr(
+        "src.streaming.pipeline.resolve_runtime_paths",
+        lambda: (
+            csv_path,
+            tmp_path / "dlq",
+            tmp_path / "pipeline_execution_report.json",
+            model_path,
+        ),
+    )
     with pytest.raises(SystemExit) as exc:
         run_production_stream_pipeline(
             max_events=10, delay_seconds=0.0, warmup_events=50000
         )
+    assert exc.value.code == 1  # nosec B101
+    with pytest.raises(SystemExit) as exc_zero:
+        run_production_stream_pipeline(
+            max_events=10, delay_seconds=0.0, warmup_events=0
+        )
+    assert exc_zero.value.code == 1  # nosec B101
     assert exc.value.code == 1  # nosec B101

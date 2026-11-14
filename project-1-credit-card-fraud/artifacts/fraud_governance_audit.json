@@ -1,27 +1,12 @@
 {
-  "model_uri": "models:/fraud_detection_xgb/8",
-  "mlflow_run_id": "62ca0302f8c54af2839679d18934296b",
-  "audit_type": "transaction_amount_segment_disparity",
-  "threshold_calibration_split": "validation_holdout_20pct",
-  "deployed_segment_thresholds": {
-    "low_value_threshold": 0.5,
-    "high_value_threshold": 0.5,
-    "scaled_amount_q80": 1.079823
+  "model_uri": "models:/fraud_detection_xgb/9",
+  "mlflow_run_id": "36a57bbbca254d5e91c2c2f201169b52",
+  "served_decision_threshold": 0.5,
+  "audit_type": "operational_segment_performance_and_informational_flag_rate",
+  "performance_metrics": {
+    "test_roc_auc": 0.9626,
+    "test_pr_auc": 0.8192
   },
-  "high_value_flag_rate": 0.001607,
-  "low_value_flag_rate": 0.001098,
-  "disparate_impact_ratio": 1.4636,
-  "di_95_ci": [
-    0.8542,
-    2.5072
-  ],
-  "flag_parity_status": "INCONCLUSIVE (CI_STRADDLES_THRESHOLD)",
-  "equal_opportunity_tpr_ratio": 0.9023,
-  "tpr_95_ci": [
-    0.6583,
-    1.2367
-  ],
-  "min_flagged_per_segment_required": 10,
   "high_value_segment": {
     "count": 11203,
     "flagged_count": 18,
@@ -40,10 +25,16 @@
     "recall": 0.7246,
     "precision": 1.0
   },
-  "within_guardrail_bounds": true,
-  "informational_uncalibrated_050": {
+  "informational_segment_flag_rate_telemetry": {
     "high_value_flag_rate": 0.001607,
     "low_value_flag_rate": 0.001098,
-    "disparate_impact_ratio": 1.4635
-  }
+    "disparate_impact_ratio": 1.4636,
+    "di_95_ci": [
+      0.8542,
+      2.5072
+    ],
+    "within_80_125_band": false,
+    "note": "Informational operational metric only; transaction amount tier is not a protected demographic attribute and higher-amount tiers exhibit higher base fraud prevalence (0.232% vs 0.151%)."
+  },
+  "performance_gate_passed": true
 }

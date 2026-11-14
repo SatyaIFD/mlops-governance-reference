@@ -170,38 +170,14 @@ def test_portable_mlflow3_model_id_fallback(tmp_path, monkeypatch):
     assert "m-abc123" in resolved_src  # nosec B101
 
 
-def test_segment_specific_cutoff_and_run_id_verification(tmp_path, monkeypatch):
-    """Verifies that /predict applies low_value_threshold vs high_value_threshold based on scaled_amount_q80 and verifies mlflow_run_id."""
-    import json
-
-    # Probability 0.60 is >= low_value_threshold (0.50) but < high_value_threshold (0.70)
+def test_served_050_threshold_behavior():
+    """Verifies that /predict flags at probability >= 0.50 and /health exposes decision_threshold."""
     main.model.predict_proba.return_value = [[0.40, 0.60]]
-    low_amt_features = [0.0] * 28 + [0.2, 0.0]  # scaled_amount = 0.2 < 1.0
-    high_amt_features = [0.0] * 28 + [2.5, 0.0]  # scaled_amount = 2.5 >= 1.0
     with TestClient(app) as client:
-        res_low = client.post("/predict", json={"features": low_amt_features})
-        assert res_low.status_code == 200  # nosec B101
-        assert res_low.json()["prediction"] == 1  # nosec B101
-
-        res_high = client.post("/predict", json={"features": high_amt_features})
-        assert res_high.status_code == 200  # nosec B101
-        assert res_high.json()["prediction"] == 0  # nosec B101
-
-    monkeypatch.setattr("src.inference.main.PROJECT_ROOT", tmp_path)
-    art_dir = tmp_path / "artifacts"
-    art_dir.mkdir(parents=True, exist_ok=True)
-    (art_dir / "segment_thresholds.json").write_text(
-        json.dumps(
-            {
-                "low_value_threshold": 0.35,
-                "high_value_threshold": 0.65,
-                "scaled_amount_q80": 1.08,
-                "mlflow_run_id": "run_good_123",
-            }
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(ValueError, match="Segment threshold run_id mismatch"):
-        main._load_startup_segment_policy(expected_run_id="run_wrong_999")
-    loaded_pol = main._load_startup_segment_policy(expected_run_id="run_good_123")
-    assert loaded_pol["high_value_threshold"] == 0.65  # nosec B101
+        res_pos = client.post("/predict", json={"features": [0.0] * 30})
+        assert res_pos.status_code == 200 and res_pos.json()["prediction"] == 1  # nosec B101
+        main.model.predict_proba.return_value = [[0.70, 0.30]]
+        res_neg = client.post("/predict", json={"features": [0.0] * 30})
+        assert res_neg.status_code == 200 and res_neg.json()["prediction"] == 0  # nosec B101
+        h = client.get("/health").json()
+        assert h["decision_threshold"] == 0.50  # nosec B101

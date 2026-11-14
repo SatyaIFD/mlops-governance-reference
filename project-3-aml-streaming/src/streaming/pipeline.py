@@ -197,7 +197,7 @@ def run_production_stream_pipeline(
 
     try:
         detector.load(model_path)
-        if warmup_events > 0 and warmup_events < detector.training_window_end_row:
+        if warmup_events < detector.training_window_end_row:
             raise ValueError(
                 f"Train/serve window overlap detected: warmup_events ({warmup_events}) < "
                 f"training_window_end_row ({detector.training_window_end_row})"

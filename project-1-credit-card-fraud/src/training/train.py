@@ -1,11 +1,9 @@
 """
 Model Training & Orchestration Module - Project 1: Credit Card Fraud Detection
 Fits preprocessing strictly on the training split, splits train into 80% fit and 20% validation,
-calibrates segment_thresholds.json on validation (never touching test.parquet),
-and logs ROC-AUC, PR-AUC, F1, Precision, Recall, and Accuracy to MLflow.
+applies segment-aware sample weights, and logs ROC-AUC, PR-AUC, F1, Precision, Recall, and Accuracy to MLflow.
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -55,46 +53,6 @@ def _compute_segment_weights(X_train: pd.DataFrame, y_train: pd.Series) -> np.nd
     return weights
 
 
-def calibrate_validation_segment_thresholds(
-    X_val: pd.DataFrame,
-    val_probs: np.ndarray,
-    q80: float,
-    y_val: pd.Series | None = None,
-) -> dict:
-    """Calibrates segment cutoffs on the held-out validation split preserving high-value recall >= 0.70 while narrowing flag-rate disparity."""
-    is_high_val = (X_val["scaled_amount"] >= q80).to_numpy()
-    low_probs = val_probs[~is_high_val]
-    high_probs = val_probs[is_high_val]
-    low_cutoff = 0.50
-    high_cutoff = 0.50
-    if len(low_probs) > 0 and len(high_probs) > 0:
-        best_pair = (0.50, 0.50)
-        best_loss = float("inf")
-        y_arr = y_val.to_numpy() if y_val is not None else None
-        for lc in np.linspace(0.40, 0.55, 7):
-            l_rate = float((low_probs >= lc).mean())
-            if l_rate <= 0:
-                continue
-            for hc in np.linspace(0.45, 0.60, 7):
-                if y_arr is not None:
-                    h_pos = is_high_val & (y_arr == 1)
-                    if h_pos.any() and float((val_probs[h_pos] >= hc).mean()) < 0.70:
-                        continue
-                h_rate = float((high_probs >= hc).mean())
-                ratio = h_rate / l_rate
-                loss = abs(ratio - 1.0)
-                if loss < best_loss:
-                    best_loss = loss
-                    best_pair = (round(float(lc), 4), round(float(hc), 4))
-        low_cutoff, high_cutoff = best_pair
-    return {
-        "low_value_threshold": low_cutoff,
-        "high_value_threshold": high_cutoff,
-        "scaled_amount_q80": round(q80, 6),
-        "calibration_split": "validation_holdout_20pct",
-    }
-
-
 def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
     mlflow.set_tracking_uri(tracking_uri)
     data_path = Path(processed_data_file).resolve()
@@ -103,7 +61,6 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
     )
     raw_csv_path = project_root / "data" / "creditcard.csv"
     scaler_artifact_path = project_root / "artifacts" / "scaler_params.json"
-    seg_thresh_path = project_root / "artifacts" / "segment_thresholds.json"
     processed_dir = project_root / "data" / "processed"
 
     mlruns_dir = project_root.parent / "mlruns"
@@ -147,7 +104,6 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
         random_state=42,
         stratify=y_train_full,
     )
-    q80_train = float(X_fit["scaled_amount"].quantile(0.80))
     sample_weights = _compute_segment_weights(X_fit, y_fit)
 
     with mlflow.start_run() as run:
@@ -170,26 +126,8 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
             verbose=False,
         )
 
-        val_probs = model.predict_proba(X_val)[:, 1]
-        seg_policy = calibrate_validation_segment_thresholds(
-            X_val, val_probs, q80_train, y_val=y_val
-        )
-        seg_policy["mlflow_run_id"] = run.info.run_id
-        seg_thresh_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(seg_thresh_path, "w", encoding="utf-8") as f:
-            json.dump(seg_policy, f, indent=2)
-
         probs = model.predict_proba(X_test)[:, 1]
-        is_high_test = (
-            X_test["scaled_amount"] >= seg_policy["scaled_amount_q80"]
-        ).to_numpy()
-        cutoffs = np.where(
-            is_high_test,
-            seg_policy["high_value_threshold"],
-            seg_policy["low_value_threshold"],
-        )
-        preds = (probs >= cutoffs).astype(int)
-
+        preds = (probs >= 0.50).astype(int)
         accuracy = float((preds == y_test).mean())
         roc_auc = float(roc_auc_score(y_test, probs))
         pr_auc = float(average_precision_score(y_test, probs))
@@ -212,16 +150,13 @@ def execute_training_pipeline(processed_data_file: str, tracking_uri: str):
             mlflow.log_artifact(
                 str(scaler_artifact_path), artifact_path="preprocessing"
             )
-        mlflow.log_artifact(str(seg_thresh_path), artifact_path="preprocessing")
 
         mlflow.xgboost.log_model(
             xgb_model=model,
             artifact_path="model",
             registered_model_name="fraud_detection_xgb",
         )
-        print(
-            "🟢 Model binaries and validation-calibrated segment thresholds logged and registered."
-        )
+        print("🟢 Model binaries successfully logged and registered.")
 
 
 if __name__ == "__main__":

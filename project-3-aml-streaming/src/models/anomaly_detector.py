@@ -79,6 +79,7 @@ class AMLAnomalyDetector:
         target_col = "Is_laundering" if "Is_laundering" in df.columns else "Target"
         y = df[target_col].astype(int)
         self.model.fit(X, y)
+        self.training_window_end_row = max(1, int(len(df)))
         if hasattr(self.model, "n_jobs"):
             self.model.n_jobs = 1
 
@@ -178,4 +179,11 @@ class AMLAnomalyDetector:
             self.feature_cols = [str(c) for c in meta["feature_cols"]]
         self.model_sha256 = actual_sha256
         self.mlflow_run_id = meta.get("mlflow_run_id")
-        self.training_window_end_row = int(meta.get("training_window_end_row", 0))
+        if (
+            "training_window_end_row" not in meta
+            or int(meta["training_window_end_row"]) <= 0
+        ):
+            raise ValueError(
+                f"Missing or invalid 'training_window_end_row' in {meta_path}"
+            )
+        self.training_window_end_row = int(meta["training_window_end_row"])

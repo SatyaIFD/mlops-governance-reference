@@ -1,7 +1,0 @@
-{
-  "low_value_threshold": 0.5,
-  "high_value_threshold": 0.5,
-  "scaled_amount_q80": 1.079823,
-  "calibration_split": "validation_holdout_20pct",
-  "mlflow_run_id": "62ca0302f8c54af2839679d18934296b"
-}

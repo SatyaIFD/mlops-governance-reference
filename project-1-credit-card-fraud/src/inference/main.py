@@ -1,10 +1,8 @@
 """
 Production FastAPI Application - Project 1: Credit Card Fraud Detection
-Exposes the registered fraud detection model and run-ID verified validation-calibrated
-segment thresholds via a high-performance REST API.
+Exposes the registered fraud detection model via a high-performance REST API.
 """
 
-import json
 import math
 import os
 import secrets
@@ -35,11 +33,11 @@ EXPECTED_FEATURE_NAMES = [f"V{i}" for i in range(1, 29)] + [
     "scaled_amount",
     "scaled_time",
 ]
+DECISION_THRESHOLD = 0.50
 
 model = None
 loaded_model_version: str | None = None
-loaded_threshold_source: str | None = None
-segment_policy: dict[str, Any] | None = None
+loaded_run_id: str | None = None
 circuit_breaker = MLSystemCircuitBreaker(failure_threshold=3, recovery_timeout_s=30.0)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -76,65 +74,6 @@ def _validate_loaded_model_schema(loaded_model) -> None:
         raise ValueError(
             f"Loaded model feature schema mismatch. Expected {EXPECTED_FEATURE_NAMES}, got {model_features}"
         )
-
-
-def _resolve_segment_policy_with_source(
-    expected_run_id: str | None,
-) -> tuple[Path, str]:
-    """Resolves preprocessing/segment_thresholds.json from container mlruns, MLflow artifacts, or local artifacts/."""
-    if expected_run_id:
-        mlruns_root = Path("/app/mlruns")
-        if mlruns_root.exists():
-            for cand in mlruns_root.rglob("segment_thresholds.json"):
-                if expected_run_id in str(cand):
-                    return cand, "container_mlruns"
-        try:
-            dl_path = mlflow.artifacts.download_artifacts(
-                run_id=expected_run_id,
-                artifact_path="preprocessing/segment_thresholds.json",
-            )
-            if Path(dl_path).is_file():
-                return Path(dl_path), "mlflow_artifacts"
-        except Exception as dl_err:
-            print(f"ℹ️ MLflow segment threshold lookup fallback: {dl_err}", flush=True)
-    local_path = PROJECT_ROOT / "artifacts" / "segment_thresholds.json"
-    return local_path, "local_artifacts"
-
-
-def _load_startup_segment_policy(expected_run_id: str | None = None) -> dict[str, Any]:
-    """Loads segment_thresholds.json at startup and strictly verifies its mlflow_run_id against the loaded model."""
-    global loaded_threshold_source
-    policy_file, loaded_threshold_source = _resolve_segment_policy_with_source(
-        expected_run_id
-    )
-    if not policy_file.is_file():
-        raise FileNotFoundError(
-            f"Required segment threshold artifact missing at {policy_file}"
-        )
-    data = json.loads(policy_file.read_text(encoding="utf-8"))
-    for req_key in (
-        "low_value_threshold",
-        "high_value_threshold",
-        "scaled_amount_q80",
-        "mlflow_run_id",
-    ):
-        if req_key not in data:
-            raise ValueError(f"Missing required key '{req_key}' in {policy_file}")
-    file_run_id = str(data["mlflow_run_id"])
-    if expected_run_id and file_run_id != str(expected_run_id):
-        raise ValueError(
-            f"Segment threshold run_id mismatch: {policy_file} has {file_run_id}, "
-            f"but loaded model belongs to run {expected_run_id}"
-        )
-    return {
-        "low_value_threshold": float(data["low_value_threshold"]),
-        "high_value_threshold": float(data["high_value_threshold"]),
-        "scaled_amount_q80": float(data["scaled_amount_q80"]),
-        "calibration_split": str(
-            data.get("calibration_split", "validation_holdout_20pct")
-        ),
-        "mlflow_run_id": file_run_id,
-    }
 
 
 def _load_xgboost_model_portable(
@@ -181,7 +120,7 @@ def _load_xgboost_model_portable(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, loaded_model_version, segment_policy, loaded_threshold_source
+    global model, loaded_model_version, loaded_run_id
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
         db_path = PROJECT_ROOT.parent / "mlflow.db"
@@ -199,7 +138,7 @@ async def lifespan(app: FastAPI):
         else:
             selected_mv = None
         target_ver = int(selected_mv.version) if selected_mv is not None else 1
-        expected_run_id = (
+        loaded_run_id = (
             getattr(selected_mv, "run_id", None) if selected_mv is not None else None
         )
         model_uri = os.getenv("MODEL_URI", f"models:/{model_name}/{target_ver}")
@@ -207,22 +146,21 @@ async def lifespan(app: FastAPI):
             client, model_name, model_uri, target_ver
         )
         _validate_loaded_model_schema(loaded)
-        segment_policy = _load_startup_segment_policy(expected_run_id=expected_run_id)
         model = loaded
         loaded_model_version = f"v{target_ver}"
         print(
             f"🟢 Production model loaded and verified via URI: {model_uri} "
-            f"(source={resolved_src}, version={loaded_model_version}, threshold_source={loaded_threshold_source})",
+            f"(source={resolved_src}, version={loaded_model_version}, threshold={DECISION_THRESHOLD})",
             flush=True,
         )
     except Exception as reg_err:
         print(
-            f"⚠️ Model registry load or threshold verification failed ({reg_err}).",
+            f"⚠️ Model registry load or schema verification failed ({reg_err}).",
             flush=True,
         )
         model = None
         loaded_model_version = None
-        segment_policy = None
+        loaded_run_id = None
     yield
     print("🛑 Microservice context tearing down...", flush=True)
 
@@ -262,20 +200,13 @@ class InferenceResponse(BaseModel):
 
 @app.get("/health")
 def health_check():
-    if model is None or segment_policy is None:
-        raise HTTPException(
-            status_code=503, detail="Model or segment threshold policy is uninitialized"
-        )
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model is uninitialized")
     return {
         "status": "HEALTHY",
         "model_loaded": True,
         "model_version": loaded_model_version or "unknown",
-        "threshold_source": loaded_threshold_source or "unknown",
-        "segment_thresholds": {
-            "low_value_threshold": segment_policy["low_value_threshold"],
-            "high_value_threshold": segment_policy["high_value_threshold"],
-            "scaled_amount_q80": segment_policy["scaled_amount_q80"],
-        },
+        "decision_threshold": DECISION_THRESHOLD,
     }
 
 
@@ -285,23 +216,15 @@ def health_check():
     dependencies=[Depends(verify_api_key)],
 )
 def predict_fraud(payload: TransactionData):
-    if model is None or segment_policy is None:
+    if model is None:
         raise HTTPException(
-            status_code=503,
-            detail="Inference engine or segment threshold policy is uninitialized.",
+            status_code=503, detail="Inference engine is uninitialized."
         )
     df = pd.DataFrame([payload.features], columns=EXPECTED_FEATURE_NAMES)
 
     def _execute_model_logic():
         prob = float(model.predict_proba(df)[0][1])
-        scaled_amt = float(df["scaled_amount"].iloc[0])
-        q80 = float(segment_policy["scaled_amount_q80"])
-        cutoff = float(
-            segment_policy["high_value_threshold"]
-            if scaled_amt >= q80
-            else segment_policy["low_value_threshold"]
-        )
-        pred = 1 if prob >= cutoff else 0
+        pred = 1 if prob >= DECISION_THRESHOLD else 0
         return pred, prob
 
     breaker_response = circuit_breaker.execute_inference(_execute_model_logic)

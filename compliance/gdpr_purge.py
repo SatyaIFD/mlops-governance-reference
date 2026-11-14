@@ -35,9 +35,23 @@ def _tmp_path_for(data_file: Path) -> Path:
     return data_file.with_suffix(data_file.suffix + ".tmp")
 
 
+from contextlib import contextmanager
+
+
 def _lock_path_for(data_file: Path) -> Path:
-    # Shares the exact .lock path used by ModelObservabilityLogger and background gzip rotation
-    return data_file.with_suffix(data_file.suffix + ".lock")
+    return data_file.with_suffix(data_file.suffix + ".purge.lock")
+
+
+@contextmanager
+def _writer_swap_lock(data_file: Path):
+    """Acquires the telemetry writer lock (.lock) strictly for the sub-millisecond os.replace swap."""
+    wlock = data_file.with_suffix(data_file.suffix + ".lock")
+    with open(wlock, "w", encoding="utf-8") as wf:
+        fcntl.flock(wf.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(wf.fileno(), fcntl.LOCK_UN)
 
 
 def _compute_target_tokens(
@@ -311,9 +325,10 @@ def execute_right_to_be_forgotten(
                 )
                 journal_state["state"] = "FILE_STAGED"
                 _write_journal(journal_file, journal_state)
-                for cfile in companion_files:
-                    shutil.copy2(cfile, _backup_path_for(cfile))
-                    os.replace(_tmp_path_for(cfile), cfile)
+                with _writer_swap_lock(data_file):
+                    for cfile in companion_files:
+                        shutil.copy2(cfile, _backup_path_for(cfile))
+                        os.replace(_tmp_path_for(cfile), cfile)
                 journal_state["state"] = "FILE_SWAPPED"
                 _write_journal(journal_file, journal_state)
             except Exception as e:
@@ -358,10 +373,11 @@ def execute_right_to_be_forgotten(
                 _write_journal(journal_file, journal_state)
             except Exception as e:
                 conn.rollback()
-                for cfile in companion_files:
-                    cbak = _backup_path_for(cfile)
-                    if cbak.exists():
-                        os.replace(cbak, cfile)
+                with _writer_swap_lock(data_file):
+                    for cfile in companion_files:
+                        cbak = _backup_path_for(cfile)
+                        if cbak.exists():
+                            os.replace(cbak, cfile)
                 if journal_file.exists():
                     journal_file.unlink()
                 raise PurgeError(
