@@ -353,3 +353,43 @@ def test_gdpr_purge_rolls_back_rotated_archives_on_db_failure(tmp_path, monkeypa
     with gzip.open(gz_archive, "rt", encoding="utf-8") as gz_in:
         restored_gz = [json.loads(line) for line in gz_in if line.strip()]
     assert len(restored_gz) == 1 and restored_gz[0]["user_id"] == target_user  # nosec B101
+
+
+def test_gdpr_purge_preserves_concurrent_appends_between_stage_and_swap(
+    tmp_path, monkeypatch
+):
+    """Verifies that telemetry records appended after staging and before the swap lock are preserved."""
+    monkeypatch.setenv("LOAN_HMAC_SECRET_KEY", "test-dedicated-loan-hmac-key")
+    db_file = tmp_path / "mlflow.db"
+    jsonl_file = tmp_path / "telemetry_logs.jsonl"
+    target_user = "APPLICANT_CONCURRENT"
+    _init_mock_sqlite_db(db_file, target_user)
+
+    jsonl_file.write_text(
+        json.dumps({"user_id": target_user, "seq": 1})
+        + "\n"
+        + json.dumps({"user_id": "usr_hmac_keep1", "seq": 2})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def _simulate_live_api_append_during_staging():
+        with open(jsonl_file, "a", encoding="utf-8") as f:
+            f.write(
+                json.dumps({"user_id": "usr_hmac_concurrent_keep2", "seq": 3}) + "\n"
+            )
+            f.write(json.dumps({"user_id": target_user, "seq": 4}) + "\n")
+
+    res = execute_right_to_be_forgotten(
+        target_user,
+        str(db_file),
+        str(jsonl_file),
+        _on_staged_hook=_simulate_live_api_append_during_staging,
+    )
+    assert res["file_rows_removed"] == 2  # nosec B101
+    kept = [
+        json.loads(line)
+        for line in jsonl_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert [r["seq"] for r in kept] == [2, 3]  # nosec B101

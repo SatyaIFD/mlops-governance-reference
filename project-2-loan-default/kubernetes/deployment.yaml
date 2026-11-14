@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: loan-prediction-container
-        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:v0.5.19
+        image: ghcr.io/satyaifd/mlops-governance-reference/loan-default-job:v0.5.20
         imagePullPolicy: IfNotPresent
         securityContext:
           readOnlyRootFilesystem: true
