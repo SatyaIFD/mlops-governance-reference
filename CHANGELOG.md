@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.19](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.18...v0.5.19) (2026-11-14)
+
+
+### Bug Fixes
+
+* **governance:** isolate P3 overlap test, gate P1 on recall/PR-AUC, and narrow purge lock scope ([#177](https://github.com/SatyaIFD/mlops-governance-reference/issues/177)) ([c6f918d](https://github.com/SatyaIFD/mlops-governance-reference/commit/c6f918de011e7ff92289169fd8c4a111c782dff8))
+
 ## [0.5.18](https://github.com/SatyaIFD/mlops-governance-reference/compare/v0.5.17...v0.5.18) (2026-11-13)
 
 
